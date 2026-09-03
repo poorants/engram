@@ -39,11 +39,22 @@ SUFFIXES = (".md", ".dbml")
 
 
 def last_commit_dates(root: Path) -> dict[str, str]:
-    """Each file's last commit time. The log is walked ONCE rather than running
-    git log per file (hundreds of files that way costs seconds; this costs
-    milliseconds). Returns {} when the tree is not a git repo."""
+    """Each file's last commit time, keyed by path relative to ``root``.
+
+    The log is walked ONCE rather than running git log per file (hundreds of
+    files that way costs seconds; this costs milliseconds). Returns {} when the
+    tree is not a git repo.
+
+    ``--relative`` is not a nicety: git prints paths from the REPOSITORY root,
+    and the tree being imported is often a subdirectory of one (a brain kept in
+    ``<repo>/brain``). Without it every key is prefixed, nothing matches, and
+    the import silently succeeds with all two hundred documents stamped at the
+    moment it ran — the exact failure this function exists to prevent, and one
+    that looks like nothing went wrong.
+    """
     try:
-        out = subprocess.run(["git", "-C", str(root), "log", "--format=%x01%cI", "--name-only"],
+        out = subprocess.run(["git", "-C", str(root), "log", "--relative",
+                              "--format=%x01%cI", "--name-only", "--", "."],
                              capture_output=True, text=True, timeout=60)
     except (OSError, subprocess.SubprocessError):
         return {}

@@ -72,7 +72,19 @@ def _path_words(path: str) -> str:
 
 def rederive(cur: psycopg.Cursor, doc_id: int, d: dict) -> int:
     """Rebuild one document's derived data. It IS derived, so deleting and
-    recreating is the right move here — unlike the body, which has no other copy."""
+    recreating is the right move here — unlike the body, which has no other copy.
+
+    The title and area are derived too, and they are rebuilt here rather than
+    only on the write path. Leaving them out made `rederive_all` a partial
+    rebuild that looked total: a fix to how titles are read from a body could
+    not be applied to documents already stored, and the only way to correct
+    them was to re-send every body from files the store is supposed to have
+    replaced.
+    """
+    cur.execute("UPDATE docs SET title = %s, area = %s,"
+                " tsv = array_to_tsvector(%s) WHERE id = %s",
+                (d["title"], d["area"],
+                 lexemes(d["title"] + " " + _path_words(d["path"])), doc_id))
     cur.execute("DELETE FROM chunks WHERE doc_id = %s", (doc_id,))
     cur.execute("DELETE FROM links  WHERE src    = %s", (doc_id,))
 
@@ -301,8 +313,8 @@ def import_docs(conn: psycopg.Connection, raw_docs: list[dict], author: str = "i
 
 
 def rederive_all(conn: psycopg.Connection) -> dict:
-    """Rebuild the derived data (chunks, lexemes, edges) of every live document
-    from its body.
+    """Rebuild the derived data (title, area, chunks, lexemes, edges) of every
+    live document from its body and path.
 
     **Bodies and history are untouched.** This is the path to take after
     changing the chunking or link rules — "full re-index" became a dangerous

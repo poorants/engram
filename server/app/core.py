@@ -226,6 +226,33 @@ def link_source(md: str) -> str:
     return _INLINE_CODE.sub("", _CODE_FENCE_BLOCK.sub("", md))
 
 
+# A YAML front-matter block: three dashes, the block, three dashes, all at the
+# very start. Anything else that merely contains a `---` line is a horizontal
+# rule and must not match.
+_FRONT_MATTER = re.compile(r"\A---[ \t]*\r?\n(.*?)\r?\n---[ \t]*(?:\r?\n|\Z)", re.DOTALL)
+_FM_TITLE = re.compile(r"^title:[ \t]*(.+?)[ \t]*$", re.MULTILINE)
+
+
+def derive_title(md: str) -> str:
+    """The document's name, from its own text.
+
+    Front matter is handled rather than ignored. A document that opens with one
+    has `---` as its first non-blank line, and taking that literally produced a
+    store where thirteen career notes were all called "---" — sorted together,
+    indistinguishable in search results, and each one's real title sitting
+    unread on the next line. So: if the block declares a title, that is the
+    title; otherwise the search continues after the block, where the heading is.
+    """
+    m = _FRONT_MATTER.match(md)
+    if m:
+        declared = _FM_TITLE.search(m.group(1))
+        if declared:
+            return declared.group(1).strip().strip("\"'")
+        md = md[m.end():]
+    first = next((l for l in md.splitlines() if l.strip()), "")
+    return first.lstrip("# ").strip()
+
+
 def parse_text(rel: str, md: str) -> dict:
     """Interpret a document from its path string and body alone.
 
@@ -234,8 +261,7 @@ def parse_text(rel: str, md: str) -> dict:
     """
     name = rel.rsplit("/", 1)[-1]
     if name.endswith(".md"):
-        first = next((l for l in md.splitlines() if l.strip()), "")
-        title = first.lstrip("# ").strip() or name.removesuffix(".md")
+        title = derive_title(md) or name.removesuffix(".md")
     else:
         # A non-markdown text document (dbml and friends) starts with a comment,
         # which cannot serve as a title. The filename is the name.

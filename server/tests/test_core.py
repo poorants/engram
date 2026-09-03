@@ -134,6 +134,29 @@ def test_title_comes_from_the_first_heading_and_falls_back_to_the_filename():
     assert parse_text("acme/shared/resources/schema.dbml", "// a comment\n")["title"] == "schema.dbml"
 
 
+def test_front_matter_does_not_become_the_title():
+    """A document opening with front matter has `---` as its first non-blank
+    line. Taking that literally names every such document "---"."""
+    p = "acme/webapp/areas/x.md"
+    declared = "---\ntitle: 감사 추적 체계 설계\nstatus: draft\n---\n\n본문\n"
+    assert parse_text(p, declared)["title"] == "감사 추적 체계 설계"
+
+    # No title key: the heading after the block is the name.
+    heading = "---\nstatus: draft\n---\n\n# Real Title\n\nbody\n"
+    assert parse_text(p, heading)["title"] == "Real Title"
+
+    # Quoted values are unwrapped.
+    quoted = '---\ntitle: "Quoted: with a colon"\n---\n\nbody\n'
+    assert parse_text(p, quoted)["title"] == "Quoted: with a colon"
+
+    # A horizontal rule further down is not front matter.
+    rule = "# Heading\n\nsome text\n\n---\n\nmore\n"
+    assert parse_text(p, rule)["title"] == "Heading"
+
+    # Front matter and nothing else falls back to the filename.
+    assert parse_text(p, "---\nstatus: draft\n---\n")["title"] == "x"
+
+
 # -- query construction ------------------------------------------------------
 
 def test_query_drops_function_words_but_the_index_keeps_them():
