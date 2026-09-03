@@ -32,15 +32,34 @@ jobs:
             dist/SHA256SUMS
           generate_release_notes: true
           body: |
-            ## Install
+            ## Install the client
 
+            Binary, MCP server, skill and capture hooks — one command. Paste the
+            store address and token that `server/setup.sh` printed.
+
+            **Linux · macOS**
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh \
+              | sh -s -- --store http://<host>:8081 --token <write token>
             ```
 
-            Then point it at a store and prove it works:
+            **Windows**
+            ```powershell
+            $env:ENGRAM_STORE_URL = 'http://<host>:8081'
+            $env:ENGRAM_TOKEN     = '<write token>'
+            irm https://raw.githubusercontent.com/${{ github.repository }}/main/install.ps1 | iex
+            ```
+
+            Run either with no arguments to install the binary alone.
+
+            ## No store yet?
+
+            The store is Postgres in Docker — Linux or macOS, once, for everyone:
 
             ```bash
-            engram store set http://<host>:8081 --token <write token>
-            engram store doctor
+            git clone https://github.com/${{ github.repository }} && cd engram/server
+            ./setup.sh --owners <your-github-org>
             ```
+
+            Checksums for every asset are in `SHA256SUMS`; both installers verify
+            against it and refuse to install on a mismatch.

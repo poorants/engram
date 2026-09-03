@@ -3,19 +3,41 @@
 FastAPI and Postgres 17. The deployment is one compose file: no systemd unit for
 the service, no nginx, no virtualenv on the host.
 
+**Linux or macOS, with Docker.** The store is not supported on Windows; Windows
+machines are clients of a store running elsewhere. This is installed **once, for
+everyone** — the per-person half is [`install.sh` / `install.ps1`](../docs/install.md)
+at the repository root.
+
 ## Bring one up
+
+```bash
+./setup.sh --owners <your-github-org>
+```
+
+That generates both secrets, writes `.env`, brings the stack up, waits until it
+actually answers, and prints the client install one-liner with the address and
+the write token already filled in. Re-running it is safe: an existing `.env` is
+kept, so it doubles as "bring the store back up".
+
+| Option | |
+|---|---|
+| `--owners <a,b>` | the owner groups this store admits (asked for if omitted) |
+| `--port <n>` | published port (default 8081) |
+| `--tz <zone>` | zone revision timestamps display in (default UTC) |
+| `--data <dir>` | where the database files live (default `./data`) |
+| `--no-start` | write `.env` and stop |
+| `--force` | rewrite `.env` — **this rotates both secrets** |
+
+`--force` on a store that has data in it will break every client's token and
+leave the database password not matching the existing data directory. It is for
+starting over, not for changing a setting; edit `.env` for that.
+
+By hand, if you would rather:
 
 ```bash
 cp .env.example .env      # fill in the two secrets and ENGRAM_OWNERS
 docker compose up -d
 curl -s localhost:8081/healthz
-```
-
-Then point a client at it:
-
-```bash
-engram store set http://<this host>:8081 --token "$ENGRAM_INGEST_TOKEN"
-engram store doctor
 ```
 
 Open `http://<host>:8081` in a browser for the viewer — the same index and the

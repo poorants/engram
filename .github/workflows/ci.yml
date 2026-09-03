@@ -24,7 +24,7 @@ jobs:
       - run: go test ./... -race
       - name: build every release target
         run: |
-          for p in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64; do
+          for p in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
             CGO_ENABLED=0 GOOS=${p%/*} GOARCH=${p#*/} go build -o /dev/null ./cmd/engram
           done
 
@@ -51,3 +51,29 @@ jobs:
         run: python -m compileall -q skills/engram/scripts
       - name: the plugin manifest must be valid JSON
         run: python -c "import json;json.load(open('.claude-plugin/marketplace.json'))"
+
+  # The installers are the first thing a stranger runs, and nothing else in this
+  # repository exercises them. A syntax error here is invisible until it is in
+  # somebody's terminal.
+  installers:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: posix syntax
+        run: |
+          for f in install.sh server/setup.sh server/deploy/backup.sh; do
+            sh -n "$f" || exit 1
+          done
+      - name: shellcheck
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
+          shellcheck -s sh install.sh server/setup.sh
+      - name: the help text must render without a release
+        run: sh install.sh --help && sh server/setup.sh --help
+      - name: powershell syntax
+        shell: pwsh
+        run: |
+          $errs = $null
+          [void][System.Management.Automation.Language.Parser]::ParseFile(
+            (Resolve-Path ./install.ps1), [ref]$null, [ref]$errs)
+          if ($errs) { $errs | ForEach-Object { Write-Error $_.Message }; exit 1 }

@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Security vulnerability
+    url: https://github.com/poorants/engram/security/advisories/new
+    about: Report privately. Do not open a public issue — see SECURITY.md for what is in scope.
+  - name: Setup is not working
+    url: https://github.com/poorants/engram/blob/main/docs/troubleshooting.md
+    about: Exit codes 3 and 4, store doctor failures, missing brain_* tools, PATH problems.
+  - name: Why does it work this way?
+    url: https://github.com/poorants/engram/blob/main/docs/design.md
+    about: No delete, no write queue, lexical search, one ranking — the reasons, before you file.

@@ -1,0 +1,31 @@
+# Line endings are not a style question here — a shell script checked out with
+# CRLF fails on the shebang line with an error that names a file nobody wrote
+# ("/usr/bin/env: 'sh\r': No such file or directory"). Contributors on Windows
+# have core.autocrlf=true by default, so this has to be pinned, not left to
+# each clone.
+
+* text=auto eol=lf
+
+# Anything executed by a POSIX shell, or read by a Linux container, is LF.
+*.sh        text eol=lf
+*.py        text eol=lf
+*.go        text eol=lf
+*.sql       text eol=lf
+*.yml       text eol=lf
+*.yaml      text eol=lf
+*.json      text eol=lf
+*.md        text eol=lf
+Makefile    text eol=lf
+Dockerfile  text eol=lf
+.env.example text eol=lf
+
+# PowerShell reads either, but CRLF is what a Windows editor produces and what
+# every other .ps1 on the machine looks like.
+*.ps1       text eol=crlf
+
+# Binary: never touched, never diffed as text.
+*.png       binary
+*.jpg       binary
+*.webp      binary
+*.gz        binary
+*.zip       binary

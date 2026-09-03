@@ -1,0 +1,77 @@
+name: Bug report
+description: Something does not work the way it says it does
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Before filing: a few behaviours that look like bugs are documented
+        decisions — no delete, no offline cache or write queue, unauthenticated
+        reads, a spoofable byline. See [docs/design.md](https://github.com/poorants/engram/blob/main/docs/design.md).
+        [Troubleshooting](https://github.com/poorants/engram/blob/main/docs/troubleshooting.md)
+        covers the common setup failures.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which part
+      options:
+        - client (the engram binary / CLI)
+        - MCP server (the brain_* tools in a session)
+        - store (server/, Postgres, the viewer)
+        - skill (skills/engram, its hooks)
+        - installer (install.sh, install.ps1, server/setup.sh)
+        - not sure
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - Linux
+        - macOS (Apple Silicon)
+        - macOS (Intel)
+        - Windows
+    validations:
+      required: true
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what you got instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. engram put ./resources/x.md --note "..."
+        2. ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: diagnostics
+    attributes:
+      label: Diagnostics
+      description: |
+        Output of `engram version` and `engram store doctor`. If a command
+        failed, its **exit code** — 3 (the store refused this path's owner
+        group) and 4 (the store was unreachable) mean quite different things.
+        Redact the token if it appears anywhere.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: |
+        For store problems, `docker compose logs app` from `server/`.
+        For MCP problems, `claude mcp list`.

@@ -2,7 +2,8 @@
 # way: no cgo, no runtime, nothing to install alongside it.
 VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
-PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64
+# The client runs everywhere; the store (Postgres) is Linux/macOS only.
+PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
 .PHONY: build test lint install clean dist server-up server-down server-logs bench bench-seed
 

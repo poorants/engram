@@ -1,0 +1,62 @@
+name: Feature request
+description: Something engram should do and does not
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Several things are **decided**, with reasons written down in
+        [docs/design.md](https://github.com/poorants/engram/blob/main/docs/design.md):
+        no delete, no offline cache or write queue, one ranking for the viewer
+        and the tools, lexical search by default, not multi-tenant, one
+        transport client.
+
+        Proposing to change one of those is welcome — argue with the reason, not
+        around it, and say what it would cost.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: The problem
+      description: |
+        What went wrong in real use. Not the feature — the situation that made
+        you want it.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What you would like it to do
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Which part would change
+      options:
+        - client (the engram binary / CLI)
+        - MCP server (the brain_* tools)
+        - store (server/, ranking, the viewer)
+        - skill (workflows, references, hooks)
+        - installers / setup
+        - not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What you tried instead
+      description: |
+        Existing flags, a different workflow, doing it by hand. If a workaround
+        exists and is merely annoying, say so — that is useful information about
+        how much this is worth.
+
+  - type: checkboxes
+    id: decided
+    attributes:
+      label: Decided design
+      options:
+        - label: This would change one of the decided design points listed above, and I have said what it costs.
