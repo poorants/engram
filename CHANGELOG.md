@@ -8,6 +8,8 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+## [0.2.0] — 2026-09-04
+
 ### Added
 - `install.ps1` — the Windows client installer. The client (binary, CLI, MCP
   server, skill) now supports Linux, macOS and Windows; the store remains
@@ -53,8 +55,19 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
   the token file is not written unless `--token` is given. The command now
   probes with the token already configured (`--token`, else `ENGRAM_TOKEN`,
   else `store.token`) and reports `token: kept` and where it came from.
+- `make lint` no longer fails on every run under `dash` (Debian/Ubuntu `/bin/sh`).
+  The gofmt check ended in `| (! read)`, and `read` with no variable is a
+  bashism — the recipe died with `read: arg count` whatever gofmt found, so the
+  target reported nothing useful in either direction.
 
-## [0.1.0] — unreleased
+## [0.1.1] — 2026-09-03
+
+### Added
+- The release workflow installs what it just built, on every OS the install
+  instructions claim, so a broken asset name or archive layout fails the release
+  rather than the first person to follow the README.
+
+## [0.1.0] — 2026-09-03
 
 First public release. Extracted from three private repositories, made general,
 and measured against its own bench.
@@ -71,5 +84,7 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/poorants/engram/compare/v0.1.1...v0.2.0
+[0.1.1]: https://github.com/poorants/engram/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/poorants/engram/releases/tag/v0.1.0

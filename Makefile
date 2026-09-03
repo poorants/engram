@@ -15,8 +15,15 @@ build:
 test:
 	go test ./...
 
+# `read` with no variable is a bashism: dash exits "read: arg count" and takes
+# the recipe down with it, so this target failed loudly on every Debian/Ubuntu
+# /bin/sh regardless of what gofmt found. Capture the list instead and decide on
+# it — the exit status then means what it says.
 lint:
-	gofmt -l . | tee /dev/stderr | (! read)
+	@unformatted=$$(gofmt -l .); \
+	if [ -n "$$unformatted" ]; then \
+	  echo "gofmt would rewrite:" >&2; echo "$$unformatted" >&2; exit 1; \
+	fi
 	go vet ./...
 
 install: build
