@@ -164,9 +164,6 @@ if [ "$NO_START" -eq 1 ]; then
 fi
 
 # ------------------------------------------------------------- compose --------
-command -v docker >/dev/null 2>&1 || die "docker is required — https://docs.docker.com/get-docker/"
-docker compose version >/dev/null 2>&1 || die "docker compose v2 is required (this is 'docker compose', not 'docker-compose')"
-
 printf 'setup: building and starting...\n'
 docker compose up -d --build
 
@@ -176,7 +173,7 @@ docker compose up -d --build
 printf 'setup: waiting for the store to answer'
 i=0
 while [ "$i" -lt 60 ]; do
-  if curl -fsS "http://127.0.0.1:$PORT/healthz" >/dev/null 2>&1; then
+  if probe "http://127.0.0.1:$PORT/healthz"; then
     printf ' ok\n'
     break
   fi
