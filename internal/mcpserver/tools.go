@@ -119,7 +119,7 @@ func Register(server *mcp.Server, cfg brain.Config, authorOf AuthorFunc) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "brain_put",
 		Description: "Save a document to the shared brain (create and update are the same call — an upsert). The previous body stays in revisions, so a write is reversible. " +
-			"Needs the write token. A path whose owner group the store does not admit is refused with 403 — that document belongs in engram's local file brain. " +
+			"Needs the store token. A path whose owner group the store does not admit is refused with 403 — that document belongs in engram's local file brain. " +
 			"An unchanged body is reported as 'unchanged' rather than written again.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in putIn) (*mcp.CallToolResult, any, error) {
@@ -150,7 +150,7 @@ func Register(server *mcp.Server, cfg brain.Config, authorOf AuthorFunc) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "brain_move",
 		Description: "Move a document — rename, reclassify, or archive. The old path is kept as an alias, so links written elsewhere keep resolving. " +
-			"The brain has no delete: a finished document is moved to archives. Needs the write token.",
+			"The brain has no delete: a finished document is moved to archives. Needs the store token.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in moveIn) (*mcp.CallToolResult, any, error) {
 		if in.DryRun {

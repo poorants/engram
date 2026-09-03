@@ -111,7 +111,7 @@ func TestTokenIsNotWrittenIntoTheConfigFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	if string(b) != "" && contains(string(b), "s3cret") {
-		t.Fatal("the write token was written into config.json")
+		t.Fatal("the store token was written into config.json")
 	}
 	info, err := os.Stat(filepath.Join(dir, TokenName))
 	if err != nil {

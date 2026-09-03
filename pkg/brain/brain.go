@@ -3,9 +3,16 @@
 //
 // The store's contract, mirrored here rather than reinterpreted:
 //
-//   - Reads (search/get/revisions/integrity) need no token. Writes (put/move)
-//     send X-Engram-Token and fail loudly without it — there is no queue and no
-//     fallback; an unreachable store is an error, never absorbed.
+//   - The store has ONE credential, sent as X-Engram-Token. It answers "may
+//     this caller use this store at all" and is not a permission system: it
+//     grants reads and writes alike. So the token goes on every request this
+//     client makes, not only on writes — a store with reads closed (the
+//     default) would otherwise reject a search from a client holding the very
+//     credential being asked for. Writes additionally refuse locally when this
+//     machine has none, which names the missing setting instead of relaying a
+//     401 that reads as a wrong token.
+//   - There is no queue and no fallback; an unreachable store is an error,
+//     never absorbed.
 //   - A document address is <owner>/<repo>/ (the document root — two coordinates
 //     the store keeps as columns) plus up to maxDepth segments below it, the
 //     first of which is a PARA area — or the file itself, which is how a repo hub
@@ -43,17 +50,18 @@ import (
 	"time"
 )
 
-// Config is everything the client needs. A zero Token is a legitimate read-only
-// configuration; a zero BaseURL is not usable and every call says so.
+// Config is everything the client needs. A zero BaseURL is not usable and every
+// call says so.
 type Config struct {
 	// BaseURL is the store origin (scheme://host[:port]). There is deliberately
 	// no default: a built-in address is a machine that exists on one network and
 	// nowhere else, and a client that silently points at it fails in a way that
 	// looks like an outage rather than like a missing setting.
 	BaseURL string
-	// Token is the store's shared write token (header X-Engram-Token). Empty
-	// means read-only: search/get/revisions/integrity work, put/move refuse with
-	// the remedy.
+	// Token is the store's one credential (header X-Engram-Token). Empty is a
+	// legitimate configuration but a limited one: writes refuse locally, and
+	// reads reach only a store that was deliberately configured to serve them
+	// unauthenticated (ENGRAM_PUBLIC_READS).
 	Token string
 	// Timeout bounds one request. Zero means DefaultTimeout.
 	Timeout time.Duration
@@ -64,7 +72,8 @@ type Config struct {
 // that the store is down.
 const DefaultTimeout = 10 * time.Second
 
-// TokenHeader carries the write token. Reads never send it.
+// TokenHeader carries the store's credential. Every request sends it when this
+// machine has one, because the store may require it for reads as well.
 const TokenHeader = "X-Engram-Token"
 
 // ErrNoStore means no store address is configured. It is a setup error, not an
@@ -72,11 +81,11 @@ const TokenHeader = "X-Engram-Token"
 // their configuration.
 var ErrNoStore = errors.New("no store address configured — run `engram store set <url>` (or set ENGRAM_STORE_URL)")
 
-// ErrNoToken means this machine is set up read-only and the call needs to
-// write. Like ErrNoStore it is a setup error, reported here rather than as the
-// store's 401 — "token mismatch" reads as a wrong token and sends people to
-// rotate a credential that was never set in the first place.
-var ErrNoToken = errors.New("no write token on this machine — run `engram store set <url> --token <t>` (or set ENGRAM_TOKEN)")
+// ErrNoToken means this machine has no token and the call cannot proceed
+// without one. Like ErrNoStore it is a setup error, reported here rather than
+// as the store's 401 — a rejection from the store reads as a wrong token and
+// sends people to rotate a credential that was never set in the first place.
+var ErrNoToken = errors.New("no store token on this machine — run `engram store set <url> --token <t>` (or set ENGRAM_TOKEN)")
 
 // Client is a thin wrapper over the store's REST API.
 type Client struct {
@@ -86,7 +95,7 @@ type Client struct {
 }
 
 // New builds a store client from the resolved configuration. A client with no
-// token is a legitimate read-only client; writes then fail with the remedy.
+// token can still be constructed; calls that need one fail with the remedy.
 func New(cfg Config) *Client {
 	timeout := cfg.Timeout
 	if timeout <= 0 {
@@ -102,7 +111,8 @@ func New(cfg Config) *Client {
 // BaseURL is the store origin this client talks to (quoted in reports).
 func (c *Client) BaseURL() string { return c.baseURL }
 
-// CanWrite reports whether this client carries the write token.
+// CanWrite reports whether this client carries the store's token. It is named
+// for what the caller uses it to decide; the token is not write-specific.
 func (c *Client) CanWrite() bool { return c.token != "" }
 
 // Configured reports whether a store address is set at all.
@@ -120,13 +130,13 @@ func (e *APIError) Error() string {
 	base := fmt.Sprintf("[store %s %s] HTTP %d", e.Method, e.Path, e.Status)
 	switch e.Status {
 	case http.StatusUnauthorized:
-		return base + " — write token rejected; check ENGRAM_TOKEN / `engram store set --token`. (" + e.Message + ")"
+		return base + " — the store did not accept this machine's token; check ENGRAM_TOKEN / `engram store set --token`. (" + e.Message + ")"
 	case http.StatusForbidden:
 		return base + " — the store does not admit this path's owner group; knowledge from this repo belongs in a local file brain. (" + e.Message + ")"
 	case http.StatusNotFound:
 		return base + " — no such document. Paths are <owner>/<repo>/<area>/<name>.md; a repo hub is <owner>/<repo>/README.md. (" + e.Message + ")"
 	case http.StatusServiceUnavailable:
-		return base + " — the store cannot accept writes (its ingest token is unset, or its database is unreachable). (" + e.Message + ")"
+		return base + " — the store is up but its database is not. (" + e.Message + ")"
 	default:
 		return base + " — " + e.Message
 	}
@@ -156,20 +166,17 @@ func (e *TransportError) Unwrap() error { return e.Err }
 // sent as JSON when non-nil.
 //
 // requiresToken says the call CANNOT succeed without one, which is what makes
-// "you have no token" a better error than the store's 401. It does not decide
-// whether the header is sent: the token goes on every request whenever this
-// machine has one, because a store may be configured to require it for reads
-// too (ENGRAM_READ_AUTH=required). Sending it only on writes would mean a
-// read-authenticated store rejects searches from a client that is holding the
-// very credential it is asking for.
+// "this machine has no token" a better error than relaying the store's 401. It
+// does not decide whether the header is sent: the token goes on every request
+// whenever this machine has one, because the store requires it for reads too
+// unless that deployment set ENGRAM_PUBLIC_READS.
 func (c *Client) do(ctx context.Context, method, path string, q url.Values, body any, requiresToken bool, out any) error {
 	if c.baseURL == "" {
 		return ErrNoStore
 	}
-	// Answer locally rather than letting the store say 401. "this machine has
-	// no write token" names what to fix; "token mismatch" from the server
-	// reads as the token being wrong, which sends people to rotate a
-	// credential that was simply never set.
+	// Answer locally rather than relaying the store's 401. "this machine has no
+	// token" names what to fix; a rejection from the server reads as the token
+	// being wrong, which sends people to rotate one that was never set.
 	if requiresToken && c.token == "" {
 		return ErrNoToken
 	}
@@ -341,7 +348,7 @@ func (c *Client) PreparePut(path, body, note, author string) (PutTarget, error) 
 		return PutTarget{}, ErrNoStore
 	}
 	if !c.CanWrite() {
-		return PutTarget{}, fmt.Errorf("no write token (read-only) — run `engram store set <url> --token <token>`")
+		return PutTarget{}, ErrNoToken
 	}
 	return PutTarget{Path: path, Bytes: len(body), Note: note, Author: author}, nil
 }
@@ -374,7 +381,7 @@ func (c *Client) PrepareMove(path, to, author string) (PutTarget, error) {
 		return PutTarget{}, ErrNoStore
 	}
 	if !c.CanWrite() {
-		return PutTarget{}, fmt.Errorf("no write token (read-only) — run `engram store set <url> --token <token>`")
+		return PutTarget{}, ErrNoToken
 	}
 	return PutTarget{Path: to, Author: author}, nil
 }
@@ -469,12 +476,13 @@ func Unreachable(err error) bool {
 }
 
 // tokenProbePath is deliberately not a legal document address. The store checks
-// the write token BEFORE it looks at the address, so this request comes back
+// the token BEFORE it looks at the address, so this request comes back
 // 401 when the token is wrong and 400 when the token was fine and only the path
 // was not — which is exactly the question, answered without writing anything.
 const tokenProbePath = "engram-token-probe"
 
-// VerifyToken proves the write token is accepted, without creating a document.
+// VerifyToken proves this machine's token is accepted, without creating a
+// document.
 //
 // It exists because "the store is up" and "I can write to it" are different
 // facts, and a setup check that only proves the first one lets someone finish
@@ -486,7 +494,7 @@ func (c *Client) VerifyToken(ctx context.Context) error {
 		return ErrNoStore
 	}
 	if !c.CanWrite() {
-		return fmt.Errorf("no write token — run `engram store set <url> --token <token>`")
+		return ErrNoToken
 	}
 	payload := map[string]string{"body": "engram token probe", "note": "token probe", "author": "engram"}
 	err := c.do(ctx, http.MethodPut, "/api/doc/"+tokenProbePath, nil, payload, true, nil)

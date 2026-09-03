@@ -246,7 +246,7 @@ func storeDoctor(args []string) int {
 
 func storeUnset(args []string) int {
 	fs := flag.NewFlagSet("store unset", flag.ContinueOnError)
-	forget := fs.Bool("forget-token", false, "also delete the stored write token")
+	forget := fs.Bool("forget-token", false, "also delete the stored token")
 	if err := fs.Parse(args); err != nil {
 		return exitError
 	}
@@ -257,7 +257,7 @@ func storeUnset(args []string) int {
 	}
 	fmt.Printf("store designation removed (%s)\n", path)
 	if *forget {
-		fmt.Println("write token deleted")
+		fmt.Println("token deleted")
 	}
 	return exitOK
 }

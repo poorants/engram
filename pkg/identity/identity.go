@@ -1,6 +1,6 @@
 // Package identity answers one question: who is writing?
 //
-// The store records an `author` on every revision, but its write token is a
+// The store records an `author` on every revision, but its token is a
 // single SHARED credential — so `author` is a CLAIM the client makes, not
 // something the server can verify. That distinction decides the whole design
 // here: this package exists to make the claim HONEST BY DEFAULT, not to make it

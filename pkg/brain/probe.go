@@ -18,9 +18,9 @@ func Probe(ctx context.Context, cfg Config) (string, error) {
 	if !h.OK {
 		return "", fmt.Errorf("the store at %s cannot reach its database", c.BaseURL())
 	}
-	mode := "write token present"
+	mode := "token present"
 	if !c.CanWrite() {
-		mode = "read-only — no write token"
+		mode = "no token — writes refused, reads only if this store serves public ones"
 	}
 	return fmt.Sprintf("%s — %d documents, %s", c.BaseURL(), h.Docs, mode), nil
 }

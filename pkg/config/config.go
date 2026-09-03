@@ -9,7 +9,7 @@
 // somewhere it should not be.
 //
 //	<config dir>/engram/config.json   settings (address, cached owner list, author)
-//	<config dir>/engram/store.token   the write token, mode 0600
+//	<config dir>/engram/store.token   the store's token, mode 0600
 //
 // <config dir> is $ENGRAM_CONFIG_DIR, else $CLAUDE_CONFIG_DIR, else ~/.claude —
 // the same ladder the skill's workspace.py walks, so both halves land on one
@@ -19,7 +19,7 @@
 // point at a different store without editing anything:
 //
 //	ENGRAM_STORE_URL   the store origin
-//	ENGRAM_TOKEN       the write token
+//	ENGRAM_TOKEN       the store's token (it authorises reads as well)
 //	ENGRAM_AUTHOR      the byline stamped on revisions
 package config
 
@@ -46,7 +46,9 @@ type Config struct {
 	// then fails with brain.ErrNoStore rather than against a built-in address
 	// that exists on one network and nowhere else.
 	StoreURL string
-	// Token is the shared write token. Empty is a legitimate read-only setup.
+	// Token is the store's one shared credential — it authorises reads as well
+	// as writes. Empty is a legitimate setup, but a limited one: writes refuse,
+	// and reads reach only a store serving public ones.
 	Token string
 	// Author is an explicit byline (ENGRAM_AUTHOR or the config file). Empty
 	// means "resolve it" — see package identity for the order.
@@ -241,7 +243,8 @@ func UnsetStore(forgetToken bool) (string, error) {
 	return path, nil
 }
 
-// WriteToken stores the write token beside the config at 0600.
+// WriteToken stores the store's token beside the config at 0600. It is named
+// for what it does to the file, not for what the token permits.
 func WriteToken(token string) (string, error) {
 	p := TokenPath()
 	if err := os.MkdirAll(filepath.Dir(p), 0o700); err != nil {
