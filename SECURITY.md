@@ -44,10 +44,14 @@ client said. Forging a byline is possible by design; proving identity would mean
 accounts, issuing and revocation, which is a different system. Reports that
 amount to "the author field can be spoofed" are known.
 
-**Deployment is expected to be on a trusted network.** The compose file publishes
-one port over plain HTTP. Exposing it to the internet without a reverse proxy
-doing TLS and access control is a deployment mistake, not a vulnerability in this
-code.
+**Transport is the deployer's decision.** The default publishes one port over
+plain HTTP, which is right for a trusted network — whoever can reach the port is
+already inside — and is the only default that can work on a host with no public
+name. A host with a public IP gets TLS with `setup.sh --tls`; a host that has
+none is served by the proxy or private network it already has
+([server/README.md](server/README.md), "Reaching it from outside"). Exposing the
+plaintext port to the internet is a deployment mistake, not a vulnerability in
+this code; the token then travels in the clear, and that is what `--tls` is for.
 
 ## What is in scope
 
@@ -62,8 +66,10 @@ code.
   or install something other than the verified release asset — checksum
   verification that can be skipped, or an archive that can write outside the
   install directory.
-- **Token disclosure**: the write token appearing in `config.json`, in logs, in
+- **Token disclosure**: the token appearing in `config.json`, in logs, in
   process arguments visible to other users, or in a file that is not `0600`.
+  The session cookie failing to be `HttpOnly`, or failing to be `Secure` when
+  the request arrived over HTTPS.
 - **Remote code execution** anywhere, including through the skill's hooks.
 - Anything that lets a **read** reach content the store never admitted.
 
@@ -77,7 +83,7 @@ code.
 
 ## Handling of secrets, for reference
 
-The write token is written to `~/.claude/engram/store.token` at mode `0600`,
+The token is written to `~/.claude/engram/store.token` at mode `0600`,
 deliberately not into `config.json` — that is a file people open and paste from.
 On the server both secrets live in `server/.env`, which is gitignored and never
 committed. `server/setup.sh` generates them with `openssl rand -hex 24`, or

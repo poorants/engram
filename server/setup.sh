@@ -19,9 +19,13 @@
 #   ./setup.sh                      # asks for the owner groups
 #   ./setup.sh --owners acme,contoso
 #   ./setup.sh --owners acme --port 9000 --tz Asia/Seoul
+#   ./setup.sh --owners acme --tls   # public host: HTTPS on <public-ip>.sslip.io
 #
 # Re-running is safe: an existing .env is never overwritten (--force to start
-# over), so this doubles as "bring the store back up".
+# over), so this doubles as "bring the store back up". The one setting that IS
+# applied to an existing .env is --tls, because turning TLS on later is the
+# normal order of events — the store is brought up, then moved to a public
+# address — and should not cost the secrets.
 set -eu
 
 cd "$(dirname "$0")"
@@ -33,6 +37,8 @@ DATA=""
 FORCE=0
 NO_START=0
 PUBLIC_READS=false
+TLS=0
+DOMAIN=""
 
 usage() {
   cat <<'USAGE'
@@ -42,6 +48,7 @@ usage: ./setup.sh [options]
   --port <n>       published port (default 8081)
   --tz <zone>      zone revision timestamps display in (default UTC)
   --data <dir>     where the database files live (default ./data)
+  --tls [name]     serve HTTPS — for a host with a PUBLIC IP, see below
   --force          overwrite an existing .env — THIS ROTATES BOTH SECRETS
   --public-reads   serve reads to callers with no token — LAN only, see below
   --no-start       write .env and stop; do not run docker compose
@@ -53,6 +60,14 @@ Reads require the token by default, and the viewer asks for it once, keeping a
 session cookie. --public-reads serves reads to anyone who can reach the port,
 which is sound only on a network where everyone who can is already allowed to
 read everything in the store.
+
+--tls puts Caddy in front of the store with a Let's Encrypt certificate and
+publishes the store on 443 only. It needs a name that resolves to this host and
+ports 80 and 443 free; with no name given, <public-ip>.sslip.io is used, which
+needs no domain registration. It cannot work on a host without a public IP (a
+LAN or a home server behind NAT), and says so rather than trying. If this host
+already runs a reverse proxy, do not use --tls: point that proxy at the store
+instead — README.md, "Reaching it from outside".
 USAGE
 }
 
@@ -62,6 +77,10 @@ while [ $# -gt 0 ]; do
     --port)   PORT="${2:?--port needs a value}"; shift 2 ;;
     --tz)     TZ_VALUE="${2:?--tz needs a value}"; shift 2 ;;
     --data)   DATA="${2:?--data needs a value}"; shift 2 ;;
+    --tls)
+      TLS=1; shift
+      # An optional value: the next word is the name unless it is another option.
+      if [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; then DOMAIN="$1"; shift; fi ;;
     --force)  FORCE=1; shift ;;
     --public-reads) PUBLIC_READS=true; shift ;;
     --no-start) NO_START=1; shift ;;
@@ -88,14 +107,16 @@ done
 [ -z "$missing" ] || die "missing required tools:$missing (install coreutils)"
 
 # The health check needs one of these. Named now, not in sixty seconds.
+# fetch prints the body; probe only says whether the URL answered.
 if command -v curl >/dev/null 2>&1; then
-  probe() { curl -fsS "$1" >/dev/null 2>&1; }
+  fetch() { curl -fsS --max-time 10 "$1" 2>/dev/null; }
 elif command -v wget >/dev/null 2>&1; then
-  probe() { wget -qO- "$1" >/dev/null 2>&1; }
+  fetch() { wget -qO- --timeout=10 "$1" 2>/dev/null; }
 else
   die "either curl or wget is required to check that the store came up
   (apt-get install curl, or dnf install curl)"
 fi
+probe() { fetch "$1" >/dev/null; }
 
 # Randomness for the two secrets. A secret this file generates has to be
 # unguessable even when openssl is absent, so there are two real sources and no
@@ -123,6 +144,58 @@ if [ "$NO_START" -eq 0 ]; then
   docker info >/dev/null 2>&1 \
     || die "the docker daemon is not reachable — is it running, and is this user
   in the docker group? (sudo usermod -aG docker \$USER, then log back in)"
+fi
+
+# --------------------------------------------------------- tls preflight ------
+# A certificate is issued to a name that the CA can reach on port 80. Every
+# way that can fail is checked here, because the alternative is Caddy retrying
+# issuance in a loop while the store looks up and answers nothing — and the
+# cause ("your network is not visible from outside") is only in its logs.
+#
+# The default name is <public-ip>.sslip.io. The address a public service sees
+# this host as is not proof that it is this host's: behind NAT it is the
+# router's, the name would resolve to the router, and no challenge would ever
+# arrive. So the address has to appear on one of this machine's own interfaces.
+if [ "$TLS" -eq 1 ]; then
+  if [ -z "$DOMAIN" ]; then
+    PUBLIC_IP=$(fetch https://api.ipify.org || fetch https://ifconfig.me/ip || true)
+    case "$PUBLIC_IP" in
+      *[!0-9.]*|"") die "could not determine this host's public IP (is it online?) —
+  pass the name yourself: --tls <name-that-resolves-to-this-host>" ;;
+    esac
+    if command -v ip >/dev/null 2>&1; then
+      local_ips=$(ip -o -4 addr show 2>/dev/null | sed -n 's/.* inet \([0-9.]*\).*/\1/p')
+    elif command -v ifconfig >/dev/null 2>&1; then
+      local_ips=$(ifconfig 2>/dev/null | sed -n 's/.*inet \(addr:\)\{0,1\}\([0-9.]*\).*/\2/p')
+    else
+      local_ips=""
+    fi
+    case " $(printf '%s' "$local_ips" | tr '\n' ' ') " in
+      *" $PUBLIC_IP "*) ;;
+      *) die "this host has no public IP: the address the internet sees ($PUBLIC_IP)
+  is not on any interface here, so this machine is behind NAT and a certificate
+  cannot be issued to it. Either the store stays on plain HTTP (right for a
+  trusted network — whoever can reach the port is already inside), or reach it
+  through Tailscale or a DNS-01 certificate for a domain you own; both are in
+  README.md, \"Reaching it from outside\"." ;;
+    esac
+    DOMAIN=$(printf '%s' "$PUBLIC_IP" | tr . -).sslip.io
+  fi
+
+  # Caddy needs both ports. A host that already has something on them is
+  # running a reverse proxy, and the answer there is that proxy, not a second.
+  listening() {
+    if command -v ss >/dev/null 2>&1; then ss -ltn 2>/dev/null
+    elif command -v netstat >/dev/null 2>&1; then netstat -an 2>/dev/null | grep -i listen
+    fi
+  }
+  for p in 80 443; do
+    if listening | grep -Eq "[.:]${p}[[:space:]]"; then
+      die "port $p is already in use — this host runs something that holds it,
+  most likely a reverse proxy. Do not use --tls here; add a site to that proxy
+  pointing at the store instead (README.md, \"Reaching it from outside\")."
+    fi
+  done
 fi
 
 # ---------------------------------------------------------------- .env --------
@@ -162,11 +235,36 @@ ENV
   printf 'setup: wrote .env (mode 600) — owners: %s\n' "$OWNERS"
 fi
 
+# Set KEY=VALUE in .env, replacing the line if the key is there and appending
+# it if not — so that a setting can be turned on after the fact without the
+# file being rewritten and the secrets in it lost.
+set_env() {
+  if grep -q "^$1=" .env; then
+    sed -i.bak "s|^$1=.*|$1=$2|" .env && rm -f .env.bak
+  else
+    printf '%s=%s\n' "$1" "$2" >> .env
+  fi
+}
+
+if [ "$TLS" -eq 1 ]; then
+  # Three lines, and they are what "TLS is on" means for this deployment:
+  # Caddy is part of the stack, it serves this name, and the plaintext port is
+  # reachable from this machine only.
+  set_env COMPOSE_PROFILES tls
+  set_env ENGRAM_DOMAIN "$DOMAIN"
+  set_env ENGRAM_BIND 127.0.0.1
+  printf 'setup: TLS on — https://%s\n' "$DOMAIN"
+fi
+
 # Read back what is actually in the file, so the values printed at the end are
 # the running store's and not the ones this run happened to generate.
 TOKEN=$(sed -n 's/^ENGRAM_TOKEN=//p' .env | head -1)
 PORT=$(sed -n 's/^ENGRAM_PORT=//p' .env | head -1)
 PORT="${PORT:-8081}"
+DOMAIN=$(sed -n 's/^ENGRAM_DOMAIN=//p' .env | head -1)
+if grep -q '^COMPOSE_PROFILES=.*tls' .env && [ -n "$DOMAIN" ]; then
+  TLS=1
+fi
 
 if [ "$NO_START" -eq 1 ]; then
   # The backticks are prose quoting a command, not a substitution.
@@ -198,31 +296,62 @@ if [ "$i" -ge 60 ]; then
   die "the store did not answer on port $PORT within 60s — check: docker compose logs app"
 fi
 
-HOST=$(hostname 2>/dev/null || echo '<this host>')
+if [ "$TLS" -eq 1 ]; then
+  # The certificate is obtained on first start and takes a moment; a setup that
+  # stopped at the plaintext check would hand back an address that does not
+  # answer yet. Issuance failing outright is Caddy's to explain, so the timeout
+  # points at its logs.
+  printf 'setup: waiting for https://%s (certificate issuance)' "$DOMAIN"
+  i=0
+  while [ "$i" -lt 120 ]; do
+    if probe "https://$DOMAIN/healthz"; then
+      printf ' ok\n'
+      break
+    fi
+    i=$((i + 1))
+    printf '.'
+    sleep 1
+  done
+  if [ "$i" -ge 120 ]; then
+    printf '\n'
+    die "https://$DOMAIN did not answer within 120s. The store itself is up; the
+  certificate is what is missing. Check: docker compose logs caddy — the usual
+  causes are port 80 blocked by a firewall or cloud security group, or the name
+  not resolving to this host."
+  fi
+  URL="https://$DOMAIN"
+  ADDRESS_NOTE=""
+else
+  HOST=$(hostname 2>/dev/null || echo '<this host>')
+  URL="http://$HOST:$PORT"
+  ADDRESS_NOTE="
+Check that '$HOST' is a name other machines can actually resolve — the value
+above is this host's own idea of its name, which is often not the one on the
+network. Substitute an IP or a DNS name if it is not.
+"
+fi
+
 RAW="https://raw.githubusercontent.com/poorants/engram/main"
 
 cat <<NEXT
 
-The store is up: http://localhost:$PORT   (open it in a browser for the viewer)
+The store is up: $URL   (open it in a browser for the viewer)
 
 Now set up the people. This is the whole client install — binary, MCP server,
 skill and hooks — on Linux and macOS:
 
   curl -fsSL $RAW/install.sh \\
-    | sh -s -- --store http://$HOST:$PORT --token $TOKEN
+    | sh -s -- --store $URL --token $TOKEN
 
 and on Windows, in PowerShell:
 
-  \$env:ENGRAM_STORE_URL = 'http://$HOST:$PORT'
+  \$env:ENGRAM_STORE_URL = '$URL'
   \$env:ENGRAM_TOKEN     = '$TOKEN'
   irm $RAW/install.ps1 | iex
-
-Check that '$HOST' is a name other machines can actually resolve — the value
-above is this host's own idea of its name, which is often not the one on the
-network. Substitute an IP or a DNS name if it is not.
-
-The token is the shared write token. It is in .env, it is not recoverable from
-the server if you lose that file, and anyone who has it can write.
+$ADDRESS_NOTE
+The token is the store's one credential: whoever holds it can read and write
+everything. It is in .env, and it is not recoverable from the server if you
+lose that file.
 
   docker compose logs -f app     what it is doing
   docker compose down            stop it (the data in ${DATA:-./data} stays)

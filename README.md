@@ -65,7 +65,9 @@ git clone https://github.com/poorants/engram && cd engram/server
 
 It generates both secrets, writes `.env`, brings the compose stack up, waits
 until it actually answers, and finishes by printing the exact client one-liner —
-store address and store token already filled in — for you to hand out.
+store address and store token already filled in — for you to hand out. On a
+host with a public IP add `--tls`, and the store is served over HTTPS with a
+Let's Encrypt certificate and no domain to buy.
 
 ### 2. The client — every person, every machine
 

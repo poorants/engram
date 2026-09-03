@@ -177,6 +177,56 @@ def test_login_sets_a_protected_cookie(monkeypatch):
     assert "samesite=lax" in cookie
 
 
+def test_the_cookie_is_secure_only_when_the_request_came_over_https(monkeypatch):
+    """Behind a TLS proxy the scheme is what X-Forwarded-Proto says (uvicorn
+    folds it in). On the plain-HTTP LAN deployment a Secure cookie would never
+    be sent back and the login would loop."""
+    from fastapi.testclient import TestClient
+    web = load_app(monkeypatch)
+    plain = TestClient(web.app, base_url="http://testserver").post(
+        "/login", data={"token": TOKEN}, follow_redirects=False)
+    assert "secure" not in plain.headers["set-cookie"].lower()
+
+    tls = TestClient(web.app, base_url="https://testserver").post(
+        "/login", data={"token": TOKEN}, follow_redirects=False)
+    assert "secure" in tls.headers["set-cookie"].lower()
+
+
+def test_a_browser_session_is_renewed_on_use(monkeypatch):
+    """The window slides: a browser that comes back within SESSION_TTL is
+    never asked to log in again. /api/docs is used because it is closed,
+    touches no database, and so answers 200 under the test client."""
+    web = load_app(monkeypatch)
+    c = client(web.app)
+    c.cookies.set(web.SESSION_COOKIE, TOKEN)
+    r = c.get("/api/docs")
+    assert r.status_code == 200
+    cookie = r.headers["set-cookie"].lower()
+    assert f"{web.SESSION_COOKIE}=" in cookie
+    assert f"max-age={web.SESSION_TTL}" in cookie
+    assert "httponly" in cookie
+
+
+def test_a_program_presenting_the_header_is_not_handed_a_cookie(monkeypatch):
+    """Only a browser has a session to extend."""
+    web = load_app(monkeypatch)
+    r = client(web.app).get("/api/docs", headers={"X-Engram-Token": TOKEN})
+    assert r.status_code == 200
+    assert "set-cookie" not in r.headers
+
+
+def test_logout_ends_the_session_rather_than_renewing_it(monkeypatch):
+    web = load_app(monkeypatch)
+    c = client(web.app)
+    c.cookies.set(web.SESSION_COOKIE, TOKEN)
+    r = c.get("/logout", follow_redirects=False)
+    assert r.status_code == 303
+    # The only Set-Cookie is the deletion (max-age=0 / an expiry in the past),
+    # never a renewal.
+    cookie = r.headers["set-cookie"].lower()
+    assert f"max-age={web.SESSION_TTL}" not in cookie
+
+
 def test_login_rejects_a_wrong_token_without_setting_a_cookie(monkeypatch):
     web = load_app(monkeypatch)
     r = client(web.app).post("/login", data={"token": "wrong"},

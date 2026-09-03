@@ -20,5 +20,12 @@ EXPOSE 8081
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD python -c "import urllib.request,sys; sys.exit(0 if __import__('json').load(urllib.request.urlopen('http://127.0.0.1:8081/healthz',timeout=4))['ok'] else 1)"
 
+# --forwarded-allow-ips '*': believe X-Forwarded-Proto from any peer. Behind
+# TLS the app only ever sees plaintext from the proxy, and without this it would
+# think every request arrived over http — marking the session cookie insecure
+# and rendering http:// links on an https:// site. uvicorn's default trusts
+# 127.0.0.1 alone, which is never the proxy's address inside a compose
+# network. The header is harmless when there is no proxy: a client forging it
+# only changes what its own cookie's flags are.
 CMD ["uvicorn", "app.web:app", "--host", "0.0.0.0", "--port", "8081", \
-     "--proxy-headers", "--no-server-header"]
+     "--proxy-headers", "--forwarded-allow-ips", "*", "--no-server-header"]

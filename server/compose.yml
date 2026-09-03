@@ -92,8 +92,72 @@ services:
     logging:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}
+    # ENGRAM_BIND is which of the host's addresses the port is published on.
+    # The default, every address, is right for the plaintext deployment on a
+    # trusted network. When something else terminates TLS in front of the app —
+    # the caddy service below, or a reverse proxy this host already runs — it
+    # is set to the loopback address (or the docker bridge, for a proxy that is
+    # itself a container), so that the plaintext port is reachable only from
+    # this machine. Leaving it on every address beside the encrypted one would
+    # be a hole that behaves exactly like the fix: a client pointed at the plain
+    # port works perfectly while sending the token in the clear.
     ports:
-      - "${ENGRAM_PORT:-8081}:8081"
+      - "${ENGRAM_BIND:-0.0.0.0}:${ENGRAM_PORT:-8081}:8081"
     depends_on:
       db:
         condition: service_healthy
+
+  # TLS. Off unless asked for. setup.sh --tls turns it on by writing
+  # COMPOSE_PROFILES=tls into .env, after which a plain `docker compose up -d`
+  # includes this service — the profile is a property of the deployment, not
+  # something to remember on every command.
+  #
+  # Not on by default because it cannot be. A certificate is issued to a NAME
+  # that a public CA can reach, and a store on a LAN at 192.168.1.10 has none —
+  # so a default-on TLS would fail to start for exactly the deployment the
+  # plaintext default is right for. Whether the network in between is one to
+  # trust is a judgement the deployer makes; server/README.md lays out the
+  # paths for the cases where it is not.
+  #
+  # The name does not have to be bought. ENGRAM_DOMAIN accepts anything that
+  # resolves to this host, and setup.sh defaults it to <public-ip>.sslip.io,
+  # a public resolver that maps an IP-shaped name back to that IP. Let's
+  # Encrypt issues for it like any other name, so TLS costs a flag rather than
+  # a domain registration.
+  #
+  # If this host already runs a reverse proxy — one holding :80 and :443 — this
+  # profile cannot bind them and must not be used. Point that proxy at the
+  # app's published port instead; server/README.md has the site block.
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    profiles: ["tls"]
+    environment:
+      # Not `${ENGRAM_DOMAIN:?}`: compose interpolates every service's variables
+      # even for a profile that is off, so a required marker here would stop
+      # the plaintext deployment from starting. The requirement is enforced
+      # where it applies — inside this container, when it actually runs.
+      ENGRAM_DOMAIN: ${ENGRAM_DOMAIN:-}
+    # Written inline rather than as a file so that turning TLS on adds nothing
+    # to the directory: one flag, one variable, no second thing to keep in sync
+    # with the compose file. Caddy obtains and renews the certificate itself.
+    command: >
+      sh -c '[ -n "$$ENGRAM_DOMAIN" ] || { echo "engram: the tls profile needs ENGRAM_DOMAIN (a name that resolves to this host)" >&2; exit 1; };
+      printf "%s {\n  reverse_proxy app:8081\n}\n" "$$ENGRAM_DOMAIN"
+      > /etc/caddy/Caddyfile && exec caddy run --config /etc/caddy/Caddyfile'
+    ports:
+      # 80 is not optional: it is how the ACME HTTP challenge and the
+      # redirect-to-HTTPS both work.
+      - "80:80"
+      - "443:443"
+    volumes:
+      # Certificates and account keys. Losing this directory means re-issuing
+      # on the next start, which Let's Encrypt rate-limits — so it is a bind
+      # mount next to the database's, not an anonymous volume.
+      - ${ENGRAM_DATA:-./data}/caddy:/data
+      - ${ENGRAM_DATA:-./data}/caddy-config:/config
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    depends_on:
+      - app

@@ -39,6 +39,10 @@ irm https://raw.githubusercontent.com/poorants/engram/main/install.ps1 | iex
 With no arguments both installers still work — you get the binary, and
 everything else is printed as commands to run yourself.
 
+A store brought up with `setup.sh --tls` has an `https://` address and no port —
+`https://203-0-113-10.sslip.io`, or the name its operator gave it. The client
+needs nothing else; a public certificate is verified like any other.
+
 ### Options
 
 Every option has a matching environment variable, which is how you pass it to

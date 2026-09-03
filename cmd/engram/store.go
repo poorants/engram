@@ -237,7 +237,7 @@ func storeDoctor(args []string) int {
 	}
 	if err := c.VerifyToken(ctx); err != nil {
 		fmt.Printf("write     REJECTED — %v\n", err)
-		fmt.Println("\nThe token does not match the server's ENGRAM_INGEST_TOKEN.")
+		fmt.Println("\nThe token does not match the server's ENGRAM_TOKEN.")
 		return exitError
 	}
 	fmt.Println("write     ok — the token is accepted")

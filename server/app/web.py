@@ -187,6 +187,42 @@ def authenticated(request: Request) -> bool:
     return token_ok(presented_token(request))
 
 
+# How long a browser session lives without being used. It is a SLIDING window:
+# every authenticated browser request re-issues the cookie with this much time
+# again, so a browser that comes back within the window never logs in twice,
+# and one that stays away this long does. That is how the sites people never
+# remember logging into again behave, and the trade is deliberate: convenience
+# is bought with a longer window on a lost laptop, and the way out is the same
+# as everywhere else — rotate the credential, which invalidates every cookie at
+# once because the cookie is bound to it.
+SESSION_TTL = 60 * 60 * 24 * 30
+
+
+def set_session_cookie(resp, request: Request) -> None:
+    """One place that knows what the session cookie looks like, so the login
+    and the renewal cannot drift into issuing two different cookies."""
+    resp.set_cookie(
+        SESSION_COOKIE, TOKEN,
+        httponly=True,        # script on the page can never read it
+        samesite="lax",       # not sent on cross-site POSTs
+        max_age=SESSION_TTL,
+        # Only over HTTPS when the request arrived over HTTPS — which, behind a
+        # TLS proxy, is what X-Forwarded-Proto says (uvicorn folds it into the
+        # scheme). Setting it unconditionally would make the cookie
+        # undeliverable on the plain-HTTP LAN deployment, and the login would
+        # appear to succeed and then loop.
+        secure=request.url.scheme == "https",
+    )
+
+
+def _authenticated_by_cookie(request: Request) -> bool:
+    """True when the credential came in the cookie and not the header. Only a
+    browser session is renewed; a program presenting the header has no session
+    to extend and would be handed a Set-Cookie it never asked for."""
+    return not request.headers.get("x-engram-token") and token_ok(
+        request.cookies.get(SESSION_COOKIE, ""))
+
+
 @app.middleware("http")
 async def authentication(request: Request, call_next):
     """Default deny, with a named exception list.
@@ -209,7 +245,12 @@ async def authentication(request: Request, call_next):
         needs_auth = is_write or not PUBLIC_READS
         if needs_auth and not authenticated(request):
             return _unauthenticated_response(request)
-    return await call_next(request)
+    response = await call_next(request)
+    # Renew the browser session on use (see SESSION_TTL). Not on /logout, whose
+    # whole point is to end it.
+    if path != "/logout" and _authenticated_by_cookie(request):
+        set_session_cookie(response, request)
+    return response
 
 
 def _unauthenticated_response(request: Request):
@@ -252,17 +293,7 @@ async def login(request: Request):
             request, "login.html",
             {"error": "That token was not accepted.", "next": nxt}, status_code=401)
     resp = RedirectResponse(nxt, status_code=303)
-    resp.set_cookie(
-        SESSION_COOKIE, TOKEN,
-        httponly=True,        # script on the page can never read it
-        samesite="lax",       # not sent on cross-site POSTs
-        max_age=60 * 60 * 24 * 30,
-        # Only over HTTPS when the request arrived over HTTPS. Setting it
-        # unconditionally would make the cookie undeliverable on the plain-HTTP
-        # LAN deployment this is usually run as, and the login would appear to
-        # succeed and then loop.
-        secure=request.url.scheme == "https",
-    )
+    set_session_cookie(resp, request)
     return resp
 
 

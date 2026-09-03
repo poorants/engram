@@ -95,6 +95,34 @@ directory. Almost never what you want on a store that has data in it.
 **`no source of randomness`** — install `openssl`, or write `.env` by hand from
 `.env.example`.
 
+## `--tls`: the store is up but `https://` never answers
+
+`setup.sh` waits two minutes for the certificate and then points at
+`docker compose logs caddy`. What it says there is one of three things:
+
+- **The challenge never arrived.** Port 80 is blocked — by `ufw`, or by the
+  cloud provider's security group, which is separate from the host firewall
+  and often closed by default. Open 80 and 443 inbound.
+- **The name resolves elsewhere.** `dig +short <name>` should print this host's
+  public IP. If you passed your own name, its DNS record is wrong or not yet
+  propagated.
+- **Rate limited.** Let's Encrypt allows five certificates a week for one
+  name. Repeated `docker compose down -v` or deleting `data/caddy` re-issues
+  each time; the certificate lives in `data/caddy`, keep it.
+
+`setup.sh --tls` refuses up front on a host behind NAT (the public address is
+not on any interface) and on a host with 80 or 443 in use. Both are the right
+answer, not an obstacle: see "Reaching it from outside" in
+[server/README.md](../server/README.md).
+
+## The viewer accepts the token and then asks again
+
+The store is behind a TLS proxy that does not send `X-Forwarded-Proto`. Without
+it the store believes the request arrived over plain HTTP, and a session cookie
+issued as such is refused by the browser on the `https://` page — so every page
+is the login page. Add the header at the proxy (nginx:
+`proxy_set_header X-Forwarded-Proto $scheme;`; Caddy sets it by itself).
+
 ## The skill's scripts fail
 
 The skill's helpers and hooks need `python3` on `PATH`. The binary and the MCP

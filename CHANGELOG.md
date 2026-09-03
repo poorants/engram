@@ -20,10 +20,29 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
   `--store` / `--token` designate the store and run `store doctor`, and the
   skill, its capture hooks and the `brain_*` MCP tools are registered with
   Claude Code at user scope. `--no-claude` installs the binary alone.
+- Reads require the token. The store has one credential, `ENGRAM_TOKEN`, and it
+  authorises reads and writes alike; the viewer asks for it once and keeps a
+  session cookie. `ENGRAM_PUBLIC_READS=true` (`setup.sh --public-reads`) opens
+  reads deliberately, for a network where everyone who can reach the port may
+  already read everything.
+- `setup.sh --tls [name]` — HTTPS for a store on a host with a public IP: Caddy
+  with a Let's Encrypt certificate, `<public-ip>.sslip.io` as the name when
+  none is given, the plaintext port re-bound to loopback. The installer checks
+  that the host actually has the public address and that 80/443 are free
+  before writing anything. `ENGRAM_BIND` for hosts that already run a reverse
+  proxy; a guide for hosts with no public IP (Tailscale, DNS-01).
+- The viewer's session is renewed on every visit, so a browser that comes back
+  within thirty days is never asked for the token again. Rotating the token
+  ends every session.
 - `docs/` — install, concepts, CLI and MCP reference, design decisions,
   troubleshooting.
 - `CONTRIBUTING.md`, `SECURITY.md`, `CODE_OF_CONDUCT.md`, issue and pull request
   templates.
+
+### Changed
+- `ENGRAM_INGEST_TOKEN` is `ENGRAM_TOKEN`, and `ENGRAM_READ_AUTH` is gone: there
+  is one credential and reads are closed unless `ENGRAM_PUBLIC_READS` says
+  otherwise. A `.env` with the old names does not start.
 
 ## [0.1.0] — unreleased
 
