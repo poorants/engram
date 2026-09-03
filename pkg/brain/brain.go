@@ -72,6 +72,12 @@ const TokenHeader = "X-Engram-Token"
 // their configuration.
 var ErrNoStore = errors.New("no store address configured — run `engram store set <url>` (or set ENGRAM_STORE_URL)")
 
+// ErrNoToken means this machine is set up read-only and the call needs to
+// write. Like ErrNoStore it is a setup error, reported here rather than as the
+// store's 401 — "token mismatch" reads as a wrong token and sends people to
+// rotate a credential that was never set in the first place.
+var ErrNoToken = errors.New("no write token on this machine — run `engram store set <url> --token <t>` (or set ENGRAM_TOKEN)")
+
 // Client is a thin wrapper over the store's REST API.
 type Client struct {
 	baseURL string
@@ -147,10 +153,25 @@ func (e *TransportError) Error() string {
 func (e *TransportError) Unwrap() error { return e.Err }
 
 // do calls a store API path and decodes the JSON response into out. body is
-// sent as JSON when non-nil; withToken attaches the write token.
-func (c *Client) do(ctx context.Context, method, path string, q url.Values, body any, withToken bool, out any) error {
+// sent as JSON when non-nil.
+//
+// requiresToken says the call CANNOT succeed without one, which is what makes
+// "you have no token" a better error than the store's 401. It does not decide
+// whether the header is sent: the token goes on every request whenever this
+// machine has one, because a store may be configured to require it for reads
+// too (ENGRAM_READ_AUTH=required). Sending it only on writes would mean a
+// read-authenticated store rejects searches from a client that is holding the
+// very credential it is asking for.
+func (c *Client) do(ctx context.Context, method, path string, q url.Values, body any, requiresToken bool, out any) error {
 	if c.baseURL == "" {
 		return ErrNoStore
+	}
+	// Answer locally rather than letting the store say 401. "this machine has
+	// no write token" names what to fix; "token mismatch" from the server
+	// reads as the token being wrong, which sends people to rotate a
+	// credential that was simply never set.
+	if requiresToken && c.token == "" {
+		return ErrNoToken
 	}
 	var reader io.Reader
 	if body != nil {
@@ -172,7 +193,7 @@ func (c *Client) do(ctx context.Context, method, path string, q url.Values, body
 	if body != nil {
 		req.Header.Set("Content-Type", "application/json")
 	}
-	if withToken {
+	if c.token != "" {
 		req.Header.Set(TokenHeader, c.token)
 	}
 

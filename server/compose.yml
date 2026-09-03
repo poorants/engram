@@ -83,6 +83,11 @@ services:
       # that keeps the wrong repos out. Empty means nothing can be written — a
       # deployment that forgot to configure it closes rather than opens.
       ENGRAM_OWNERS: ${ENGRAM_OWNERS:-}
+      # Whether reads carry the token as well. `open` is the historical
+      # behaviour and stays the code default so upgrading a LAN store does not
+      # start refusing its own clients; setup.sh writes `required` into every
+      # new .env, so new deployments are closed.
+      ENGRAM_READ_AUTH: ${ENGRAM_READ_AUTH:-open}
       ENGRAM_TZ: ${ENGRAM_TZ:-UTC}
       TZ: ${ENGRAM_TZ:-UTC}
     logging:

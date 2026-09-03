@@ -23,7 +23,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI, Header, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from markdown_it import MarkdownIt
 from psycopg_pool import ConnectionPool
@@ -35,6 +35,38 @@ from ingest import (ALLOWED_OWNERS, PathRejected, ScopeDenied,  # noqa: E402
 from search import DSN, search  # noqa: E402
 
 INGEST_TOKEN = os.environ.get("ENGRAM_INGEST_TOKEN", "")
+
+# Whether reading needs the token too.
+#
+# "open" is the original contract: the owner allow-list is the boundary, what
+# must not be readable is never let in, and a store sits on a LAN or a personal
+# server. That premise breaks the moment the port is reachable from the
+# internet, and it breaks silently — nothing about a wide-open store looks
+# wrong until the day it matters.
+#
+# "required" makes every read carry the same shared token the writes do. It is
+# the same secret, not a second one: adding a read credential would mean a
+# second thing to distribute, rotate and lose, for a store whose whole
+# authorisation model is one shared token.
+#
+# The default stays "open" so an existing LAN deployment does not start
+# refusing its own clients on upgrade. setup.sh writes "required" into every
+# new .env, so new deployments are closed and old ones are left as they were.
+READ_AUTH = os.environ.get("ENGRAM_READ_AUTH", "open").strip().lower()
+if READ_AUTH not in ("open", "required"):
+    print(f"engram: ENGRAM_READ_AUTH={READ_AUTH!r} is not 'open' or 'required'"
+          " — refusing to guess, treating it as 'required'", file=sys.stderr)
+    READ_AUTH = "required"
+if READ_AUTH == "required" and not INGEST_TOKEN:
+    # Failing to boot is the point. The alternative is a store that was asked
+    # to require a token, has none, and therefore serves everything.
+    raise SystemExit("engram: ENGRAM_READ_AUTH=required needs ENGRAM_INGEST_TOKEN")
+
+# The cookie the viewer uses once a person has entered the token in a browser.
+# A browser cannot send a header on a plain navigation, so the alternatives are
+# a cookie or the token in every URL — and a token in a URL lands in history,
+# in bookmarks, in referrers and in any log along the way.
+SESSION_COOKIE = "engram_session"
 # The timezone revision timestamps are rendered in. It is set explicitly rather
 # than inherited, because "when did this change" must not quietly become wrong
 # when the deployment method changes.
@@ -98,6 +130,85 @@ async def lifespan(_: FastAPI):
 
 
 app = FastAPI(title="engram store", docs_url="/api/docs", redoc_url=None, lifespan=lifespan)
+
+
+# -- read authorisation ------------------------------------------------------
+# Enforced as middleware rather than per-route on purpose. A dependency has to
+# be added to each route, and the failure mode of forgetting one is a route
+# that serves everything to anyone — silent, and discovered by someone else.
+# A default-deny gate with a named exception list fails the other way: forget
+# to list a new public route and it stops working, loudly, for you.
+
+# Open regardless of the setting. /healthz is what the container's own
+# healthcheck and setup.sh's wait loop call, and gating it means a store that
+# reports itself permanently unhealthy. It reveals whether the service is up
+# and how many documents exist, and nothing about what they say.
+PUBLIC_PATHS = frozenset({"/healthz", "/login", "/logout"})
+
+
+def _authorised(request: Request) -> bool:
+    token = request.headers.get("x-engram-token", "")
+    if token and secrets.compare_digest(token, INGEST_TOKEN):
+        return True
+    cookie = request.cookies.get(SESSION_COOKIE, "")
+    return bool(cookie) and secrets.compare_digest(cookie, INGEST_TOKEN)
+
+
+@app.middleware("http")
+async def read_gate(request: Request, call_next):
+    if READ_AUTH == "required" and request.url.path not in PUBLIC_PATHS:
+        if not _authorised(request):
+            # A browser gets a page it can act on; a program gets JSON it can
+            # branch on. Answering both with the same body means one of them
+            # is parsing an error message meant for the other.
+            wants_html = "text/html" in request.headers.get("accept", "")
+            if wants_html and not request.url.path.startswith("/api/"):
+                return templates.TemplateResponse(
+                    request, "login.html",
+                    {"error": "", "next": str(request.url.path)}, status_code=401)
+            return JSONResponse({"detail": "this store requires a token to read"},
+                                status_code=401)
+    return await call_next(request)
+
+
+@app.get("/login", response_class=HTMLResponse)
+def login_form(request: Request, next: str = "/"):
+    return templates.TemplateResponse(request, "login.html", {"error": "", "next": next})
+
+
+@app.post("/login")
+async def login(request: Request):
+    form = await request.form()
+    supplied = str(form.get("token", ""))
+    nxt = str(form.get("next", "/")) or "/"
+    # Only ever redirect somewhere on this site. An open redirect here would
+    # turn the login page into a way to bounce people off a URL they trust.
+    if not nxt.startswith("/") or nxt.startswith("//"):
+        nxt = "/"
+    if not (INGEST_TOKEN and secrets.compare_digest(supplied, INGEST_TOKEN)):
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"error": "That token was not accepted.", "next": nxt}, status_code=401)
+    resp = RedirectResponse(nxt, status_code=303)
+    resp.set_cookie(
+        SESSION_COOKIE, INGEST_TOKEN,
+        httponly=True,        # script on the page can never read it
+        samesite="lax",       # not sent on cross-site POSTs
+        max_age=60 * 60 * 24 * 30,
+        # Only over HTTPS when the request arrived over HTTPS. Setting it
+        # unconditionally would make the cookie undeliverable on the plain-HTTP
+        # LAN deployment this is usually run as, and the login would appear to
+        # succeed and then loop.
+        secure=request.url.scheme == "https",
+    )
+    return resp
+
+
+@app.get("/logout")
+def logout():
+    resp = RedirectResponse("/login", status_code=303)
+    resp.delete_cookie(SESSION_COOKIE)
+    return resp
 
 
 # -- shared lookups ----------------------------------------------------------

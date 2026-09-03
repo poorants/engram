@@ -1,0 +1,74 @@
+{# Deliberately standalone rather than extending base.html. base renders the
+   brand bar, the search box and a footer built from `meta`, and every one of
+   those is a database read plus a hint about a store the visitor has not been
+   let into yet. A login page should show nothing but the question. #}
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>engram — sign in</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cstyle%3E.t%7Bfill:%232f6f4f%7D.m%7Bfill:%23fff;stroke:%23fff;stroke-linecap:round%7D%40media(prefers-color-scheme:dark)%7B.t%7Bfill:%237fc4a0%7D.m%7Bfill:%2312241b;stroke:%2312241b%7D%7D%3C/style%3E%3Crect class=%22t%22 width=%2232%22 height=%2232%22 rx=%227%22/%3E%3Cpath class=%22m%22 stroke-width=%222.6%22 fill=%22none%22 d=%22M12.5 19.5 19.5 12.5%22/%3E%3Cg class=%22m%22%3E%3Ccircle cx=%2210.5%22 cy=%2221.5%22 r=%224%22/%3E%3Ccircle cx=%2221.5%22 cy=%2210.5%22 r=%224%22/%3E%3C/g%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#fbfbfa; --panel:#fff; --fg:#1f2328; --muted:#6b7280; --line:#e6e6e3;
+  --accent:#2f6f4f; --accent-soft:#e8f2ec; --code:#f4f4f2; --bad:#c2410c;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#16181c; --panel:#1c1f24; --fg:#e6e6e3; --muted:#9aa1ab; --line:#2b2f36;
+         --accent:#7fc4a0; --accent-soft:#1e2a24; --code:#22262c; --bad:#fb923c; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);min-height:100vh;
+  display:flex;align-items:center;justify-content:center;padding:24px;
+  font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Pretendard",
+  "Apple SD Gothic Neo","Noto Sans KR",sans-serif;}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:12px;
+  padding:32px;max-width:420px;width:100%}
+.brand{font-weight:700;font-size:20px;letter-spacing:-.02em;margin:0 0 6px}
+.brand span{color:var(--muted);font-weight:400;font-size:12px;margin-left:8px}
+p.lede{color:var(--muted);font-size:13.5px;margin:0 0 22px}
+label{display:block;font-size:12px;color:var(--muted);margin:0 0 6px;
+  text-transform:uppercase;letter-spacing:.06em;font-weight:600}
+input[type=password]{width:100%;padding:10px 13px;border:1px solid var(--line);
+  border-radius:8px;background:var(--bg);color:var(--fg);font-size:15px;
+  font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+input[type=password]:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+button{width:100%;margin-top:14px;padding:10px 16px;border:1px solid var(--accent);
+  border-radius:8px;background:var(--accent);color:#fff;font-size:14px;
+  font-family:inherit;font-weight:600;cursor:pointer}
+@media (prefers-color-scheme:dark){button{color:#12241b}}
+.err{color:var(--bad);font-size:13.5px;margin:0 0 16px;padding:9px 12px;
+  border:1px solid currentColor;border-radius:8px;background:transparent}
+.hint{color:var(--muted);font-size:12.5px;margin:20px 0 0;
+  padding-top:16px;border-top:1px solid var(--line)}
+.hint code{background:var(--code);padding:1.5px 5px;border-radius:4px;font-size:12px}
+</style>
+</head>
+<body>
+<div class="box">
+  <p class="brand">engram <span>store</span></p>
+  <p class="lede">This store requires the write token to read.</p>
+
+  {% if error %}<p class="err">{{ error }}</p>{% endif %}
+
+  <form method="post" action="/login">
+    <label for="token">Write token</label>
+    {# type=password so it is not shoulder-read and not kept by autofill as a
+       plain value; autofocus because there is exactly one thing to do here. #}
+    <input type="password" id="token" name="token" autocomplete="current-password"
+           autofocus required spellcheck="false">
+    <input type="hidden" name="next" value="{{ next }}">
+    <button type="submit">Sign in</button>
+  </form>
+
+  <p class="hint">
+    It is the same <code>ENGRAM_INGEST_TOKEN</code> your client uses — the one
+    <code>setup.sh</code> printed, kept in the server's <code>.env</code>.
+    There is no account and no password to reset: whoever holds the token can
+    read and write.
+  </p>
+</div>
+</body>
+</html>

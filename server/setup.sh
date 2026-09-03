@@ -32,6 +32,7 @@ TZ_VALUE=""
 DATA=""
 FORCE=0
 NO_START=0
+READ_AUTH=required
 
 usage() {
   cat <<'USAGE'
@@ -42,10 +43,16 @@ usage: ./setup.sh [options]
   --tz <zone>      zone revision timestamps display in (default UTC)
   --data <dir>     where the database files live (default ./data)
   --force          overwrite an existing .env — THIS ROTATES BOTH SECRETS
+  --open-reads     serve reads without a token — LAN only, see below
   --no-start       write .env and stop; do not run docker compose
   -h, --help       this
 
 With no --owners and no existing .env, you are asked for the owner groups.
+
+Reads require the token by default, and the viewer asks for it once. That is a
+change from how this store behaved historically: --open-reads restores the old
+behaviour, which is sound only on a network where everyone who can reach the
+port is already allowed to read everything in it.
 USAGE
 }
 
@@ -56,6 +63,7 @@ while [ $# -gt 0 ]; do
     --tz)     TZ_VALUE="${2:?--tz needs a value}"; shift 2 ;;
     --data)   DATA="${2:?--data needs a value}"; shift 2 ;;
     --force)  FORCE=1; shift ;;
+    --open-reads) READ_AUTH=open; shift ;;
     --no-start) NO_START=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'setup: unknown option %s\n\n' "$1" >&2; usage >&2; exit 1 ;;
@@ -142,6 +150,11 @@ ASK
 POSTGRES_PASSWORD=$(gen_secret)
 ENGRAM_INGEST_TOKEN=$INGEST_TOKEN
 ENGRAM_OWNERS=$OWNERS
+# Reads carry the token too. New stores close by default: the alternative is a
+# store that is readable by anyone who can reach the port, which is fine on a
+# LAN and is not fine the first time this lands on a public IP -- and which of
+# the two it is is not something this script can know.
+ENGRAM_READ_AUTH=$READ_AUTH
 ENGRAM_DATA=$DATA
 ENGRAM_PORT=${PORT:-8081}
 ENGRAM_TZ=${TZ_VALUE:-UTC}
