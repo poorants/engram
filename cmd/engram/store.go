@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/poorants/engram/pkg/brain"
@@ -72,13 +73,28 @@ func storeSet(args []string) int {
 		return usageError(err.Error())
 	}
 
+	// The credential this command should actually reach the store with: --token
+	// when it was given, otherwise whatever this machine is already configured
+	// with. Without the fallback, re-running `store set` to change only the
+	// address or the byline probes the store unauthenticated, takes the 401,
+	// and then reports the machine as having no token — three lines that read
+	// as if the command had just thrown the credential away. It had not; the
+	// file was never touched. Setup is where people are least able to tell a
+	// misreport from a real failure, so the report has to be true.
+	configured := config.Load()
+	given := strings.TrimSpace(*token)
+	effective := given
+	if effective == "" {
+		effective = configured.Token
+	}
+
 	// Ask the store which owner groups it admits and cache the answer, so
 	// everything afterwards — including hooks, which must not touch the network
 	// — can report scope offline. A store that cannot be reached right now is
 	// not a reason to refuse the designation: the address may be correct and the
 	// service simply not up yet.
 	var owners []string
-	c := brain.New(brain.Config{BaseURL: url, Token: strings.TrimSpace(*token)})
+	c := brain.New(brain.Config{BaseURL: url, Token: effective})
 	ctx := context.Background()
 	scopes, scopeErr := c.StoreScopes(ctx)
 	if scopeErr == nil {
@@ -106,17 +122,23 @@ func storeSet(args []string) int {
 		fmt.Printf("author: %s\n", strings.TrimSpace(*author))
 	}
 
-	if strings.TrimSpace(*token) == "" {
+	switch {
+	case given != "":
+		tp, err := config.WriteToken(given)
+		if err != nil {
+			fmt.Fprintln(os.Stderr, "error:", err)
+			return exitError
+		}
+		fmt.Printf("token:  %s (0600)\n", tp)
+	case effective == "":
 		fmt.Println("token:  not set — this machine can reach only a store that")
 		fmt.Println("        serves public reads, and can write to none. Re-run with --token.")
 		return exitOK
+	case slices.Contains(configured.FromEnv, "ENGRAM_TOKEN"):
+		fmt.Println("token:  kept — from ENGRAM_TOKEN")
+	default:
+		fmt.Printf("token:  kept — %s\n", config.TokenPath())
 	}
-	tp, err := config.WriteToken(*token)
-	if err != nil {
-		fmt.Fprintln(os.Stderr, "error:", err)
-		return exitError
-	}
-	fmt.Printf("token:  %s (0600)\n", tp)
 	fmt.Println("\nnext: engram store doctor")
 	return exitOK
 }

@@ -44,6 +44,16 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
   is one credential and reads are closed unless `ENGRAM_PUBLIC_READS` says
   otherwise. A `.env` with the old names does not start.
 
+### Fixed
+- `engram store set <url>` without `--token` no longer reports a machine that
+  already has a token as having none. It reached the store unauthenticated,
+  took the 401, dropped the cached owner list, and printed `token: not set —
+  Re-run with --token` — so re-running `store set` to change only the address
+  or the byline read as if it had just discarded the credential. It never had;
+  the token file is not written unless `--token` is given. The command now
+  probes with the token already configured (`--token`, else `ENGRAM_TOKEN`,
+  else `store.token`) and reports `token: kept` and where it came from.
+
 ## [0.1.0] — unreleased
 
 First public release. Extracted from three private repositories, made general,
