@@ -63,3 +63,41 @@ jobs:
 
             Checksums for every asset are in `SHA256SUMS`; both installers verify
             against it and refuse to install on a mismatch.
+
+  # Install the release that was just published, the way a stranger would, on
+  # each OS the client claims to support.
+  #
+  # The failure this exists to catch: `make dist` and the installers agree on
+  # the asset filename in two separate places, and nothing else compares them.
+  # Rename a target or add an architecture and the release still builds, still
+  # uploads, and still looks finished — and every install one-liner in the
+  # README fails with "could not download", for everyone, until someone reports
+  # it. Checking it here costs a minute per release.
+  smoke:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: install it the way the README says
+        if: runner.os != 'Windows'
+        run: |
+          sh install.sh --version "$GITHUB_REF_NAME" --no-claude --dir "$HOME/engram-smoke"
+          "$HOME/engram-smoke/engram" version
+          # The installer is allowed to leave the store unconfigured; it is not
+          # allowed to leave a binary that cannot answer.
+          "$HOME/engram-smoke/engram" store show
+
+      - name: install it the way the README says
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:ENGRAM_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'engram-smoke'
+          ./install.ps1 -Version $env:GITHUB_REF_NAME -NoClaude
+          $exe = Join-Path $env:ENGRAM_INSTALL_DIR 'engram.exe'
+          & $exe version
+          & $exe store show

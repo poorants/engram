@@ -161,6 +161,9 @@ say "installed: $ENGRAM"
 case ":$PATH:" in
   *":$INSTALL_DIR:"*) ;;
   *)
+    # The $PATH in the format string is meant to reach the terminal literally —
+    # it is a line for the reader to paste into their shell profile.
+    # shellcheck disable=SC2016
     printf '\nwarning: %s is not on your PATH. Add this to your shell profile:\n  export PATH="%s:$PATH"\n' "$INSTALL_DIR" "$INSTALL_DIR"
     # Fix it for the rest of THIS script, so `claude mcp add engram -- engram mcp`
     # below records a command the shell can actually find later.

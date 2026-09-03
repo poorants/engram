@@ -188,20 +188,26 @@ try {
   Write-Host ""
   if ($storeOk -and $claudeWired) {
     Write-Host 'Done. A session can search and save now - try: engram search "anything"'
-    return
+  } else {
+    Write-Host "Next:"
+    if (-not $storeOk) {
+      Write-Host "  engram store set http://<host>:8081 --token <write token>"
+      Write-Host "  engram store doctor"
+    }
+    if (-not $Store) {
+      Write-Host ""
+      Write-Host "No store yet? The store is Postgres in Docker and runs on Linux or macOS,"
+      Write-Host "not Windows. Somebody brings one up once, for everyone:"
+      Write-Host "  https://github.com/$Repo/blob/main/server/README.md"
+    }
   }
 
-  Write-Host "Next:"
-  if (-not $storeOk) {
-    Write-Host "  engram store set http://<host>:8081 --token <write token>"
-    Write-Host "  engram store doctor"
-  }
-  if (-not $Store) {
-    Write-Host ""
-    Write-Host "No store yet? The store is Postgres in Docker and runs on Linux or macOS,"
-    Write-Host "not Windows. Somebody brings one up once, for everyone:"
-    Write-Host "  https://github.com/$Repo/blob/main/server/README.md"
-  }
+  # The binary is installed and usable; a store that is not up yet, or a Claude
+  # CLI that was not found, is not an install failure. install.sh exits 0 here
+  # too, and the twins have to agree — a caller that checks the exit status
+  # would otherwise see Windows installs "fail" for a store nobody started yet.
+  # Without this the script would inherit $LASTEXITCODE from `store doctor`.
+  exit 0
 } finally {
   Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
 }

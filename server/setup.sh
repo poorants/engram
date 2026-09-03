@@ -116,6 +116,8 @@ PORT=$(sed -n 's/^ENGRAM_PORT=//p' .env | head -1)
 PORT="${PORT:-8081}"
 
 if [ "$NO_START" -eq 1 ]; then
+  # The backticks are prose quoting a command, not a substitution.
+  # shellcheck disable=SC2016
   printf 'setup: --no-start — .env is ready, run `docker compose up -d` when you are\n'
   exit 0
 fi
