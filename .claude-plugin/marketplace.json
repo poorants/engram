@@ -1,0 +1,42 @@
+{
+  "name": "engram",
+  "owner": {
+    "name": "poorants",
+    "url": "https://github.com/poorants/engram"
+  },
+  "metadata": {
+    "description": "A networked PARA knowledge brain for coding agents — documents managed by PARA and woven into one connected graph, held in a searchable Postgres store with a revision history per document.",
+    "version": "0.1.0"
+  },
+  "plugins": [
+    {
+      "name": "engram",
+      "description": "Networked PARA knowledge brain. Manages documents by PARA (Projects, Areas, Resources, Archives) and weaves them into one connected knowledge graph through bi-directional links, MOC hubs and integrity linting. The brain is a shared Postgres-backed store that is searched rather than grepped, with a revision history per document and aliases that keep links alive across moves; a local file brain covers repos the store does not admit. Carries the capture-loop hooks that keep the brain fed. Needs the `engram` binary — see the repository's install.sh.",
+      "source": "./",
+      "strict": false,
+      "skills": ["./skills/engram"],
+      "hooks": {
+        "UserPromptSubmit": [
+          {
+            "hooks": [
+              {
+                "type": "command",
+                "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/engram/scripts/brain_reflect.py\""
+              }
+            ]
+          }
+        ],
+        "Stop": [
+          {
+            "hooks": [
+              {
+                "type": "command",
+                "command": "python3 \"${CLAUDE_PLUGIN_ROOT}/skills/engram/scripts/brain_reflect.py\""
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

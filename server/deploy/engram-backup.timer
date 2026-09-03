@@ -1,0 +1,12 @@
+[Unit]
+Description=run the engram store backup daily
+
+[Timer]
+OnCalendar=*-*-* 03:20:00
+# Catch up a run missed by a reboot. A backup quietly absent for a few days is
+# the most common way this goes wrong.
+Persistent=true
+RandomizedDelaySec=300
+
+[Install]
+WantedBy=timers.target

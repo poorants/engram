@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{% block title %}engram{% endblock %}</title>
+<!-- The favicon. There is no static route and no asset directory — the icon
+     lives here the same way the CSS does. Two nodes and one link: what a brain
+     sells is not documents but the connections between them. Dark mode is
+     flipped by a media query inside the SVG itself. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cstyle%3E.t%7Bfill:%232f6f4f%7D.m%7Bfill:%23fff;stroke:%23fff;stroke-linecap:round%7D%40media(prefers-color-scheme:dark)%7B.t%7Bfill:%237fc4a0%7D.m%7Bfill:%2312241b;stroke:%2312241b%7D%7D%3C/style%3E%3Crect class=%22t%22 width=%2232%22 height=%2232%22 rx=%227%22/%3E%3Cpath class=%22m%22 stroke-width=%222.6%22 fill=%22none%22 d=%22M12.5 19.5 19.5 12.5%22/%3E%3Cg class=%22m%22%3E%3Ccircle cx=%2210.5%22 cy=%2221.5%22 r=%224%22/%3E%3Ccircle cx=%2221.5%22 cy=%2210.5%22 r=%224%22/%3E%3C/g%3E%3C/svg%3E">
+<style>
+:root{
+  --bg:#fbfbfa; --panel:#fff; --fg:#1f2328; --muted:#6b7280; --line:#e6e6e3;
+  --accent:#2f6f4f; --accent-soft:#e8f2ec; --mark:#fff2a8; --code:#f4f4f2;
+}
+@media (prefers-color-scheme:dark){
+  :root{ --bg:#16181c; --panel:#1c1f24; --fg:#e6e6e3; --muted:#9aa1ab; --line:#2b2f36;
+         --accent:#7fc4a0; --accent-soft:#1e2a24; --mark:#5c5320; --code:#22262c; }
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Pretendard",
+  "Apple SD Gothic Neo","Noto Sans KR",sans-serif;}
+a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
+header{border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
+.wrap{max-width:940px;margin:0 auto;padding:0 20px}
+.bar{display:flex;gap:16px;align-items:center;padding:12px 0}
+.brand{font-weight:700;letter-spacing:-.02em;white-space:nowrap;color:var(--fg)}
+.brand span{color:var(--muted);font-weight:400;font-size:12px;margin-left:6px}
+form.search{flex:1;display:flex;gap:8px}
+input[type=search]{flex:1;padding:9px 13px;border:1px solid var(--line);border-radius:8px;
+  background:var(--bg);color:var(--fg);font-size:15px;font-family:inherit}
+input[type=search]:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
+button{padding:9px 16px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);
+  color:#fff;font-size:14px;font-family:inherit;cursor:pointer}
+@media (prefers-color-scheme:dark){button{color:#12241b}}
+main{padding:28px 0 64px}
+h1{font-size:24px;letter-spacing:-.02em;margin:0 0 4px}
+h2{font-size:15px;color:var(--muted);font-weight:600;margin:32px 0 10px;
+   text-transform:uppercase;letter-spacing:.06em}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px}
+.crumb{font-size:12.5px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+.pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;
+  background:var(--accent-soft);color:var(--accent);margin-right:6px;vertical-align:1px}
+.snippet{margin-top:8px;color:var(--fg);white-space:pre-wrap;word-break:break-word;
+  font-size:14px;max-height:8.5em;overflow:hidden}
+mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
+.meta{color:var(--muted);font-size:12.5px}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
+.empty{color:var(--muted);padding:40px 0;text-align:center}
+footer{border-top:1px solid var(--line);color:var(--muted);font-size:12px;padding:14px 0;margin-top:40px}
+footer code{background:var(--code);padding:1px 5px;border-radius:4px}
+.broken{color:#c2410c;border-bottom:1px dotted currentColor;cursor:help}
+@media (prefers-color-scheme:dark){.broken{color:#fb923c}}
+.prose{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px 28px}
+.prose h1{font-size:26px;margin:0 0 16px} .prose h2{font-size:19px;color:var(--fg);
+  text-transform:none;letter-spacing:-.01em;margin:28px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
+.prose h3{font-size:16px;margin:22px 0 8px} .prose p{margin:0 0 14px}
+.prose code{background:var(--code);padding:1.5px 5px;border-radius:4px;font-size:13px}
+.prose pre{background:var(--code);padding:14px 16px;border-radius:8px;overflow-x:auto}
+.prose pre code{background:none;padding:0}
+.prose table{border-collapse:collapse;width:100%;margin:0 0 16px;font-size:14px;display:block;overflow-x:auto}
+.prose th,.prose td{border:1px solid var(--line);padding:7px 11px;text-align:left}
+.prose th{background:var(--code)}
+.prose blockquote{margin:0 0 14px;padding:2px 0 2px 14px;border-left:3px solid var(--line);color:var(--muted)}
+.prose li{margin:3px 0}
+.cols{display:grid;grid-template-columns:1fr;gap:10px}
+</style>
+</head>
+<body>
+<header><div class="wrap bar">
+  <a class="brand" href="/">engram<span>knowledge store</span></a>
+  <form class="search" action="/search" method="get">
+    <input type="search" name="q" value="{{ q|default('') }}" placeholder="Search the brain — ask a whole question, not keywords" autofocus>
+    <button type="submit">Search</button>
+  </form>
+</div></header>
+<main class="wrap">{% block body %}{% endblock %}</main>
+<footer class="wrap">
+  {{ meta.get('docs','?') }} documents · {{ meta.get('chunks','?') }} chunks
+  {% if meta.get('broken_links','0') != '0' %}· {{ meta.broken_links }} broken links{% endif %}
+  {% if meta.get('updated_at') %}· last write {{ meta.updated_at[:16] }}{% endif %}
+  · agents hit the same ranking at <code>/api/search?q=</code>
+</footer>
+</body></html>

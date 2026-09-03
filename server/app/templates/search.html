@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}{{ q }} — engram{% endblock %}
+{% block body %}
+{% if not q %}
+  <div class="empty">Type a query. <strong>A whole question works better than keywords</strong> — the ranking is tuned on them.</div>
+{% elif not hits %}
+  <div class="empty">
+    <p>No results for <strong>{{ q }}</strong></p>
+    <p class="meta">{% if not archives %}<a href="/search?q={{ q|urlencode }}&archives=true">Search archives too</a>{% endif %}</p>
+  </div>
+{% else %}
+  <p class="meta">{{ hits|length }} chunks · <strong>{{ q }}</strong>
+    {% if not archives %}· <a href="/search?q={{ q|urlencode }}&archives=true">include archives</a>{% endif %}</p>
+  {% for h in hits %}
+  <div class="card">
+    <a href="/doc/{{ h.path }}#c{{ h.ord }}"><span class="pill">{{ h.repo }}</span><span class="pill">{{ h.area }}</span><strong>{{ h.title }}</strong></a>
+    <div class="crumb">{{ h.path }}{% if h.heading_path %} ¶ {{ highlight(h.heading_path, q)|safe }}{% endif %}</div>
+    <div class="snippet">{{ highlight(h.body[:700], q)|safe }}</div>
+    <div class="meta" style="margin-top:8px">score {{ '%.4f'|format(h.score) }}
+      · body rank {{ h.lex_rank or '—' }}</div>
+  </div>
+  {% endfor %}
+{% endif %}
+{% endblock %}

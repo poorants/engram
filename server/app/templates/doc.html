@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}{{ doc.title }} — engram{% endblock %}
+{% block body %}
+<div class="crumb" style="margin-bottom:12px">
+  {% if doc.is_revision %}<span class="pill" style="background:#fde68a;color:#92400e">past revision</span>
+    <a href="/doc/{{ doc.path }}">{{ doc.path }}</a> · {{ doc.updated_at }}
+    {% if doc.author %} · {{ doc.author }}{% endif %}{% if doc.note %} · {{ doc.note }}{% endif %}
+  {% else %}<span class="pill">{{ doc.owner }}/{{ doc.repo }}</span><span class="pill">{{ doc.area }}</span>{{ doc.path }}
+    {% if doc.updated_at %} · {{ doc.updated_at }}{% endif %}{% endif %} · {{ '{:,}'.format(doc.chars) }} chars
+</div>
+{% if doc.is_revision %}
+<div class="card" style="border-color:#f59e0b">
+  This is <strong>an earlier body of this document</strong>. The current one is
+  <a href="/doc/{{ doc.path }}">here</a>.
+</div>
+{% endif %}
+<article class="prose">{{ doc.html|safe }}</article>
+
+{% if doc.revisions %}
+<h2>History · {{ doc.revisions|length }}</h2>
+<div class="card">
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+  {% for r in doc.revisions %}
+    <tr style="border-top:1px solid var(--line)">
+      <td style="padding:6px 8px;white-space:nowrap"><a href="/rev/{{ r.id }}">{{ r.at }}</a></td>
+      <td style="padding:6px 8px;white-space:nowrap" class="meta">{{ r.author or '—' }}</td>
+      <td style="padding:6px 8px">{{ r.note or '(no note)' }}</td>
+      <td style="padding:6px 8px;text-align:right;white-space:nowrap" class="meta">{{ '{:,}'.format(r.chars) }}</td>
+    </tr>
+  {% endfor %}
+  </table>
+  <div class="meta" style="margin-top:8px">Each row is <strong>the body as it stood just before that change</strong> — open one to read the document as it was.</div>
+</div>
+{% endif %}
+
+<div class="cols">
+{% if doc.backlinks %}
+<div><h2>Linked from · {{ doc.backlinks|length }}</h2>
+  {% for b in doc.backlinks %}<a class="card" href="/doc/{{ b.path }}" style="display:block">
+    <strong>{{ b.title }}</strong><div class="crumb">{{ b.path }}</div></a>{% endfor %}
+</div>
+{% endif %}
+{% if doc.outgoing %}
+<div><h2>Links out · {{ doc.outgoing|length }}</h2>
+  <div class="card">
+  {% for o in doc.outgoing %}
+    {% if o.path %}<a href="/doc/{{ o.path }}">{{ o.name }}</a>{% else %}<span class="broken" title="no such document">{{ o.name }}</span>{% endif %}{% if not loop.last %} · {% endif %}
+  {% endfor %}
+  </div>
+</div>
+{% endif %}
+</div>
+{% endblock %}

@@ -1,0 +1,46 @@
+name: release
+
+# Tag a version and the binaries appear on the release page. That is the whole
+# distribution story: install.sh downloads one file from here, so nobody needs
+# Go, a clone, or a build to run engram.
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test ./...
+      - name: build artifacts
+        run: make dist VERSION=${{ github.ref_name }}
+      - name: publish
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.tar.gz
+            dist/*.zip
+            dist/SHA256SUMS
+          generate_release_notes: true
+          body: |
+            ## Install
+
+            ```bash
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | bash
+            ```
+
+            Then point it at a store and prove it works:
+
+            ```bash
+            engram store set http://<host>:8081 --token <write token>
+            engram store doctor
+            ```

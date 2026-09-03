@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block body %}
+<h1>The brain</h1>
+<p class="meta">This page and an agent's <code>brain_search</code> use the same index and the same ranking.</p>
+
+<h2>Areas</h2>
+<div class="grid">
+  {% for area, n in areas %}
+  <a class="card" href="/search?q={{ area }}"><strong>{{ area }}</strong> <span class="meta">· {{ n }}</span></a>
+  {% endfor %}
+</div>
+
+<h2>Scopes</h2>
+<div class="grid">
+  {% for owner, repo, n in scopes %}
+  <a class="card" href="/search?q={{ repo }}&only_repo={{ repo }}"><strong>{{ owner }}/{{ repo }}</strong> <span class="meta">· {{ n }}</span></a>
+  {% endfor %}
+</div>
+
+<h2>Recent changes · <a href="/changes" style="font-weight:400;text-transform:none;letter-spacing:0">see all →</a></h2>
+{% for path, title, area, updated in recent %}
+<a class="card" href="/doc/{{ path }}" style="display:block">
+  <span class="pill">{{ area }}</span><strong>{{ title }}</strong>
+  <div class="crumb">{{ path }}{% if updated %} · {{ updated.strftime('%Y-%m-%d %H:%M') }}{% endif %}</div>
+</a>
+{% endfor %}
+{% endblock %}

@@ -1,0 +1,60 @@
+# The deployment is this one file. No systemd unit, no nginx, no virtualenv.
+#
+# db publishes no port — only app sees it, inside the compose network. Exactly
+# one thing is exposed: app's 8081. Even bulk imports arrive over that port
+# (POST /api/index), so the server needs neither documents on disk nor git
+# credentials.
+name: engram
+
+services:
+  db:
+    image: postgres:17
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: engram
+      POSTGRES_DB: engram
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      # Pin collation so sorting and comparison do not shift with the host locale.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C.UTF-8"
+      # Revision timestamps are rendered in this zone. They are stored as
+      # timestamptz so the value is the same either way, but a UTC display means
+      # converting "when did this change" in your head every time.
+      TZ: ${ENGRAM_TZ:-UTC}
+      PGTZ: ${ENGRAM_TZ:-UTC}
+    volumes:
+      # A bind mount rather than a named volume — pg_dump and looking at the
+      # actual files then do not have to go through docker.
+      - ${ENGRAM_DATA:-./data}/pgdata:/var/lib/postgresql/data
+    # Docker's default is unbounded log growth. Changing the daemon-wide setting
+    # would affect every other container on the machine, so it is set per service.
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U engram -d engram"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 20s
+
+  app:
+    build: .
+    image: engram-store
+    restart: unless-stopped
+    environment:
+      ENGRAM_DSN: postgresql://engram:${POSTGRES_PASSWORD}@db:5432/engram
+      ENGRAM_INGEST_TOKEN: ${ENGRAM_INGEST_TOKEN:?set ENGRAM_INGEST_TOKEN in .env}
+      # Groups not listed here are refused on write. This line is the boundary
+      # that keeps the wrong repos out. Empty means nothing can be written — a
+      # deployment that forgot to configure it closes rather than opens.
+      ENGRAM_OWNERS: ${ENGRAM_OWNERS:-}
+      ENGRAM_TZ: ${ENGRAM_TZ:-UTC}
+      TZ: ${ENGRAM_TZ:-UTC}
+    logging:
+      driver: json-file
+      options: {max-size: "10m", max-file: "3"}
+    ports:
+      - "${ENGRAM_PORT:-8081}:8081"
+    depends_on:
+      db:
+        condition: service_healthy

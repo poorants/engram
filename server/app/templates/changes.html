@@ -1,0 +1,16 @@
+{% extends "base.html" %}
+{% block title %}Recent changes — engram{% endblock %}
+{% block body %}
+<h1>Recent changes</h1>
+<p class="meta">Document updates and revisions on one timeline. A <strong>revision</strong> row links to the body as it stood just before that change.</p>
+{% for r in rows %}
+<div class="card" style="padding:9px 14px">
+  <span class="meta" style="font-family:ui-monospace,monospace">{{ r.at }}</span>
+  {% if r.kind == 'rev' %}<span class="pill" style="background:#fde68a;color:#92400e">revision</span>{% endif %}
+  <a href="{% if r.kind == 'rev' %}/rev/{{ r.rev_id }}{% else %}/doc/{{ r.path }}{% endif %}"><strong>{{ r.title }}</strong></a>
+  {% if r.note %}<span class="meta"> — {{ r.note }}</span>{% endif %}
+  {% if r.author %}<span class="meta"> · {{ r.author }}</span>{% endif %}
+  <div class="crumb">{{ r.path }}</div>
+</div>
+{% endfor %}
+{% endblock %}

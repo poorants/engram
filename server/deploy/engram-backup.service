@@ -1,0 +1,13 @@
+[Unit]
+Description=engram store logical backup (pg_dump)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/engram/server/deploy/backup.sh
+# Add the off-machine copy as a second ExecStart here. The order matters: the
+# dump comes first, so a failed upload still leaves a local dump AND marks the
+# unit failed, which shows up in the journal instead of passing silently.
+StandardOutput=journal
+StandardError=journal

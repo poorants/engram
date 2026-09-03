@@ -1,0 +1,19 @@
+# Go build output
+/engram
+/dist/
+
+# Server runtime state — the database lives here; never commit it.
+/server/data/
+/server/.env
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+
+# pytest
+.pytest_cache/
+
+# The internal planning document that governed the extraction. Kept locally
+# for reference; it names private hosts and repos and does not belong here.
+PLAN.md

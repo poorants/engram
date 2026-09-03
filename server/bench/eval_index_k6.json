@@ -1,0 +1,512 @@
+[
+ {
+  "id": "e01",
+  "type": "exact",
+  "q": "how many levels deep can a document sit below the document root",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 1058,
+  "docs": 5,
+  "ms": 3.782987594604492,
+  "top": [
+   "resources/document-addressing.md",
+   "README.md",
+   "resources/author-identity.md"
+  ]
+ },
+ {
+  "id": "e02",
+  "type": "exact",
+  "q": "which HTTP header carries the write token",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 840,
+  "docs": 5,
+  "ms": 4.942893981933594,
+  "top": [
+   "resources/store-api.md",
+   "resources/scope-boundary.md",
+   "resources/README.md"
+  ]
+ },
+ {
+  "id": "e03",
+  "type": "exact",
+  "q": "what does ENGRAM_OWNERS do",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 753,
+  "docs": 5,
+  "ms": 3.199338912963867,
+  "top": [
+   "projects/public-release.md",
+   "README.md",
+   "areas/store-operations.md"
+  ]
+ },
+ {
+  "id": "e04",
+  "type": "exact",
+  "q": "what value is RRF_K set to",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 794,
+  "docs": 3,
+  "ms": 3.1664371490478516,
+  "top": [
+   "areas/search-quality.md",
+   "areas/store-operations.md",
+   "resources/search-ranking.md"
+  ]
+ },
+ {
+  "id": "e05",
+  "type": "exact",
+  "q": "what does exit code 3 mean",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 930,
+  "docs": 5,
+  "ms": 3.183603286743164,
+  "top": [
+   "resources/client-exit-codes.md",
+   "projects/public-release.md",
+   "resources/store-api.md"
+  ]
+ },
+ {
+  "id": "e06",
+  "type": "exact",
+  "q": "what is the target chunk size in characters",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 737,
+  "docs": 3,
+  "ms": 2.991914749145508,
+  "top": [
+   "resources/chunking.md",
+   "areas/search-quality.md",
+   "resources/README.md"
+  ]
+ },
+ {
+  "id": "e07",
+  "type": "exact",
+  "q": "what does POST /api/rederive rebuild",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 980,
+  "docs": 6,
+  "ms": 3.160715103149414,
+  "top": [
+   "resources/store-api.md",
+   "areas/store-operations.md",
+   "resources/chunking.md"
+  ]
+ },
+ {
+  "id": "e08",
+  "type": "exact",
+  "q": "which parts of a document get setweight A and which get B",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 798,
+  "docs": 5,
+  "ms": 3.337860107421875,
+  "top": [
+   "resources/document-addressing.md",
+   "resources/lexeme-indexing.md",
+   "resources/linking-rules.md"
+  ]
+ },
+ {
+  "id": "e09",
+  "type": "exact",
+  "q": "what is ENGRAM_TZ for",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 797,
+  "docs": 4,
+  "ms": 3.0984878540039062,
+  "top": [
+   "projects/public-release.md",
+   "README.md",
+   "areas/store-operations.md"
+  ]
+ },
+ {
+  "id": "e10",
+  "type": "exact",
+  "q": "what does GET /api/export return",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 1070,
+  "docs": 5,
+  "ms": 2.943277359008789,
+  "top": [
+   "resources/store-api.md",
+   "resources/backup-and-recovery.md",
+   "resources/linking-rules.md"
+  ]
+ },
+ {
+  "id": "e11",
+  "type": "exact",
+  "q": "what does the store answer with 403",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 462,
+  "docs": 5,
+  "ms": 2.9497146606445312,
+  "top": [
+   "resources/store-api.md",
+   "areas/store-operations.md",
+   "resources/client-exit-codes.md"
+  ]
+ },
+ {
+  "id": "e12",
+  "type": "exact",
+  "q": "which table keeps the previous body of a document",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 817,
+  "docs": 5,
+  "ms": 3.370523452758789,
+  "top": [
+   "resources/document-addressing.md",
+   "resources/revisions-and-aliases.md",
+   "resources/lexeme-indexing.md"
+  ]
+ },
+ {
+  "id": "s01",
+  "type": "semantic",
+  "q": "a note is only reachable from its folder index page — is that connected enough",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 839,
+  "docs": 3,
+  "ms": 2.806425094604492,
+  "top": [
+   "resources/linking-rules.md",
+   "areas/search-quality.md",
+   "resources/chunking.md"
+  ]
+ },
+ {
+  "id": "s02",
+  "type": "semantic",
+  "q": "if I rename a note do the links other people wrote to it break",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 948,
+  "docs": 4,
+  "ms": 2.8586387634277344,
+  "top": [
+   "resources/author-identity.md",
+   "resources/README.md",
+   "resources/revisions-and-aliases.md"
+  ]
+ },
+ {
+  "id": "s03",
+  "type": "semantic",
+  "q": "the brain is unreachable right now, should I answer from an older copy instead",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 874,
+  "docs": 4,
+  "ms": 3.089427947998047,
+  "top": [
+   "README.md",
+   "resources/client-exit-codes.md",
+   "resources/author-identity.md"
+  ]
+ },
+ {
+  "id": "s04",
+  "type": "semantic",
+  "q": "can someone read documents belonging to a team they are not on",
+  "hit1": false,
+  "hit5": false,
+  "tokens": 717,
+  "docs": 4,
+  "ms": 2.777576446533203,
+  "top": [
+   "areas/search-quality.md",
+   "resources/author-identity.md",
+   "resources/chunking.md"
+  ]
+ },
+ {
+  "id": "s05",
+  "type": "semantic",
+  "q": "why do results come back as a fragment instead of the whole file",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 852,
+  "docs": 5,
+  "ms": 2.7971267700195312,
+  "top": [
+   "resources/search-ranking.md",
+   "resources/chunking.md",
+   "areas/search-quality.md"
+  ]
+ },
+ {
+  "id": "s06",
+  "type": "semantic",
+  "q": "will searching from my repo hide what another repo already figured out",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 889,
+  "docs": 5,
+  "ms": 3.072500228881836,
+  "top": [
+   "resources/search-ranking.md",
+   "resources/document-addressing.md",
+   "README.md"
+  ]
+ },
+ {
+  "id": "s07",
+  "type": "semantic",
+  "q": "how do I get rid of a document I do not need any more",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 1190,
+  "docs": 6,
+  "ms": 2.7213096618652344,
+  "top": [
+   "resources/document-addressing.md",
+   "resources/store-api.md",
+   "resources/revisions-and-aliases.md"
+  ]
+ },
+ {
+  "id": "s08",
+  "type": "semantic",
+  "q": "my saved notes are credited to a machine account, where does that name come from",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 930,
+  "docs": 6,
+  "ms": 3.513813018798828,
+  "top": [
+   "resources/author-identity.md",
+   "projects/public-release.md",
+   "resources/linking-rules.md"
+  ]
+ },
+ {
+  "id": "s09",
+  "type": "semantic",
+  "q": "is the nightly dump enough if the server disk dies",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 700,
+  "docs": 4,
+  "ms": 2.3224353790283203,
+  "top": [
+   "resources/backup-and-recovery.md",
+   "areas/search-quality.md",
+   "areas/store-operations.md"
+  ]
+ },
+ {
+  "id": "s10",
+  "type": "semantic",
+  "q": "why not one combined score instead of fusing two separate rankings",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 1101,
+  "docs": 6,
+  "ms": 2.9625892639160156,
+  "top": [
+   "resources/author-identity.md",
+   "resources/search-ranking.md",
+   "resources/README.md"
+  ]
+ },
+ {
+  "id": "s11",
+  "type": "semantic",
+  "q": "my folder index lists filenames in backticks and everything is still an orphan",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 860,
+  "docs": 3,
+  "ms": 2.0596981048583984,
+  "top": [
+   "resources/linking-rules.md",
+   "README.md",
+   "areas/search-quality.md"
+  ]
+ },
+ {
+  "id": "s12",
+  "type": "semantic",
+  "q": "where should knowledge that several repos all depend on live",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 1110,
+  "docs": 6,
+  "ms": 2.1991729736328125,
+  "top": [
+   "resources/scope-boundary.md",
+   "resources/document-addressing.md",
+   "resources/search-ranking.md"
+  ]
+ },
+ {
+  "id": "s13",
+  "type": "semantic",
+  "q": "an example in my document shows link syntax and it is being counted as a real link",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 986,
+  "docs": 3,
+  "ms": 2.5572776794433594,
+  "top": [
+   "README.md",
+   "resources/document-addressing.md",
+   "resources/linking-rules.md"
+  ]
+ },
+ {
+  "id": "s14",
+  "type": "semantic",
+  "q": "the database container restarted and one request failed, why only one",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 806,
+  "docs": 3,
+  "ms": 2.736806869506836,
+  "top": [
+   "areas/store-operations.md",
+   "resources/store-api.md",
+   "resources/backup-and-recovery.md"
+  ]
+ },
+ {
+  "id": "g01",
+  "type": "general",
+  "q": "how do I decide which PARA area a new document belongs in",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 967,
+  "docs": 4,
+  "ms": 2.122163772583008,
+  "top": [
+   "resources/document-addressing.md",
+   "resources/para-areas.md",
+   "resources/README.md"
+  ]
+ },
+ {
+  "id": "g02",
+  "type": "general",
+  "q": "what do I need to configure to run a store",
+  "hit1": false,
+  "hit5": true,
+  "tokens": 675,
+  "docs": 5,
+  "ms": 2.191781997680664,
+  "top": [
+   "resources/store-api.md",
+   "areas/store-operations.md",
+   "resources/chunking.md"
+  ]
+ },
+ {
+  "id": "g03",
+  "type": "general",
+  "q": "how do I tell whether a ranking change made search worse",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 758,
+  "docs": 5,
+  "ms": 2.478361129760742,
+  "top": [
+   "areas/search-quality.md",
+   "resources/search-ranking.md",
+   "resources/store-api.md"
+  ]
+ },
+ {
+  "id": "g04",
+  "type": "general",
+  "q": "why was the markdown mirror export retired",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 512,
+  "docs": 3,
+  "ms": 3.3690929412841797,
+  "top": [
+   "archives/markdown-mirror.md",
+   "archives/README.md",
+   "resources/revisions-and-aliases.md"
+  ]
+ },
+ {
+  "id": "g05",
+  "type": "general",
+  "q": "what was deliberately left out of engram and why",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 757,
+  "docs": 4,
+  "ms": 2.1843910217285156,
+  "top": [
+   "projects/public-release.md",
+   "README.md",
+   "resources/backup-and-recovery.md"
+  ]
+ },
+ {
+  "id": "g06",
+  "type": "general",
+  "q": "how is a document address structured",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 952,
+  "docs": 5,
+  "ms": 2.3717880249023438,
+  "top": [
+   "resources/document-addressing.md",
+   "resources/store-api.md",
+   "resources/revisions-and-aliases.md"
+  ]
+ },
+ {
+  "id": "g07",
+  "type": "general",
+  "q": "what makes the healthcheck consider the store healthy",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 737,
+  "docs": 6,
+  "ms": 2.421855926513672,
+  "top": [
+   "resources/store-api.md",
+   "areas/store-operations.md",
+   "resources/README.md"
+  ]
+ },
+ {
+  "id": "g08",
+  "type": "general",
+  "q": "what happens if the server has no ingest token configured",
+  "hit1": true,
+  "hit5": true,
+  "tokens": 823,
+  "docs": 5,
+  "ms": 2.3250579833984375,
+  "top": [
+   "resources/store-api.md",
+   "areas/store-operations.md",
+   "projects/public-release.md"
+  ]
+ }
+]
