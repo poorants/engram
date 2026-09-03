@@ -74,8 +74,18 @@ HELP
 done
 
 # ------------------------------------------------------- 1. the binary --------
-need uname
-need mktemp
+# Everything needed is checked here, before anything is downloaded. Checking
+# late is worse than not checking: a missing tool surfaces as whatever the
+# command that needed it happened to print, and that message names the wrong
+# problem — `tar: not found` after a successful download reads as a corrupt
+# release rather than a minimal image missing tar.
+missing=""
+for t in uname mktemp tar chmod mv; do
+  command -v "$t" >/dev/null 2>&1 || missing="$missing $t"
+done
+[ -z "$missing" ] || die "missing required tools:$missing
+  On a minimal image: apt-get install -y tar coreutils (or the dnf/apk equivalent)"
+
 if command -v curl >/dev/null 2>&1; then
   fetch() { curl -fsSL "$1" -o "$2"; }
   # latest_tag follows the /releases/latest redirect and reads the tag out of

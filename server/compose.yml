@@ -10,6 +10,37 @@ services:
   db:
     image: postgres:17
     restart: unless-stopped
+    # Sized for the machine this actually lands on. A store like this is a
+    # second service on a box that already runs something else — typically the
+    # cheapest VPS tier, 1 vCPU and 2GB — and Postgres's defaults assume the
+    # box is its own. Unbounded, an import or a wide query can take the whole
+    # machine down, and the process the OOM killer picks is not necessarily
+    # this one: the neighbour dies and engram looks innocent.
+    #
+    # Raise both on a real database host; ENGRAM_DB_MEMORY=2g is reasonable
+    # when nothing else is competing.
+    deploy:
+      resources:
+        limits:
+          memory: ${ENGRAM_DB_MEMORY:-512m}
+    command:
+      - postgres
+      # 25% of the container limit, the usual starting point.
+      - -c
+      - shared_buffers=${ENGRAM_DB_SHARED_BUFFERS:-128MB}
+      # The default 100 is the real hazard: worst-case memory is roughly
+      # max_connections * work_mem, and the client count here is people, not a
+      # web tier. Fifty is already generous.
+      - -c
+      - max_connections=${ENGRAM_DB_MAX_CONNECTIONS:-50}
+      - -c
+      - work_mem=${ENGRAM_DB_WORK_MEM:-4MB}
+      - -c
+      - maintenance_work_mem=${ENGRAM_DB_MAINTENANCE_WORK_MEM:-64MB}
+      # What the planner believes the OS will cache. Too high on a shared box
+      # makes it pick index scans that then hit disk.
+      - -c
+      - effective_cache_size=${ENGRAM_DB_EFFECTIVE_CACHE_SIZE:-384MB}
     environment:
       POSTGRES_USER: engram
       POSTGRES_DB: engram
@@ -41,6 +72,10 @@ services:
     build: .
     image: engram-store
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: ${ENGRAM_APP_MEMORY:-384m}
     environment:
       ENGRAM_DSN: postgresql://engram:${POSTGRES_PASSWORD}@db:5432/engram
       ENGRAM_INGEST_TOKEN: ${ENGRAM_INGEST_TOKEN:?set ENGRAM_INGEST_TOKEN in .env}
