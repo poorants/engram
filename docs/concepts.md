@@ -70,8 +70,10 @@ under an admitted group works with no change at all, and a personal or client
 repo never does. The boundary holds by default rather than by remembering to
 maintain it.
 
-**Reads need no token.** What must not be readable is therefore never let in —
-the allow-list is the only control, so it is where the thinking goes. See
+The allow-list is about **what** may enter, not **who** may connect. Who may
+connect is the store's token, and the two are separate on purpose: a store that
+is careful about which repos it admits and then serves all of them
+unauthenticated has a boundary that only looks like one. See
 [`scope-boundary.md`](../server/bench/corpus/resources/scope-boundary.md).
 
 A refusal is not an error to retry. The store is alive and declined, so the
@@ -84,8 +86,9 @@ Every write keeps the previous body. `brain_revisions` returns who changed a
 document, when, and the `--note` they gave for why. `put` requires that note;
 a history of changes with no reasons is a history you cannot use.
 
-The byline is **a claim, not a proof**. The write token is one shared
-credential, so the recorded author is what the client says it is:
+The byline is **a claim, not a proof**. The store has one shared token and it
+identifies a deployment, not a person, so the recorded author is what the client
+says it is:
 `ENGRAM_AUTHOR`, else `git config user.name`, else `$USER`. The goal is to make
 it honest by default, not provable — proving it means accounts, issuing and
 revocation, which is a different system than this one.

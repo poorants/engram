@@ -23,7 +23,7 @@ Environment beats the config file for every setting: `ENGRAM_STORE_URL`,
 | Code | Meaning |
 |---|---|
 | `0` | ok |
-| `1` | error — usage, validation, or the store said no for a reason of its own |
+| `1` | error — usage, validation, a bad or missing token (401), or the store said no for a reason of its own |
 | `3` | the store **refused this path's owner group** (403) |
 | `4` | the store could not be **reached at all** |
 
@@ -120,11 +120,17 @@ There is no delete. Archiving is the disposal path, and it keeps the reasons.
 
 | Flag | Meaning |
 |---|---|
-| `--token <t>` | the write token — stored at mode `0600` beside the config |
+| `--token <t>` | the store's token — reads and writes alike, stored at mode `0600` beside the config |
 | `--author <a>` | the byline stamped on revisions from this machine |
 
-Without `--token` the machine is set up read-only, which is a legitimate
-configuration and not an error.
+Without `--token` the machine can only reach a store that has
+`ENGRAM_PUBLIC_READS=true`, and cannot write to any store. That is a legitimate
+configuration and not an error — but on a store with the default settings it
+means the machine cannot do anything at all, which `store doctor` will say.
+
+The token is the store's one credential, not a write-specific one: holding it
+grants reads and writes alike. There is nothing to hand out that permits
+reading without also permitting writing.
 
 ### `engram store show`
 

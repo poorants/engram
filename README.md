@@ -65,7 +65,7 @@ git clone https://github.com/poorants/engram && cd engram/server
 
 It generates both secrets, writes `.env`, brings the compose stack up, waits
 until it actually answers, and finishes by printing the exact client one-liner —
-store address and write token already filled in — for you to hand out.
+store address and store token already filled in — for you to hand out.
 
 ### 2. The client — every person, every machine
 
@@ -75,13 +75,13 @@ Binary, MCP server, skill and capture hooks, in one command. Paste what
 ```bash
 # Linux · macOS
 curl -fsSL https://raw.githubusercontent.com/poorants/engram/main/install.sh \
-  | sh -s -- --store http://<host>:8081 --token <write token>
+  | sh -s -- --store http://<host>:8081 --token <store token>
 ```
 
 ```powershell
 # Windows
 $env:ENGRAM_STORE_URL = 'http://<host>:8081'
-$env:ENGRAM_TOKEN     = '<write token>'
+$env:ENGRAM_TOKEN     = '<store token>'
 irm https://raw.githubusercontent.com/poorants/engram/main/install.ps1 | iex
 ```
 

@@ -7,7 +7,7 @@ index and the search build lexemes with the same code. The server holds no
 files, no git, and no credentials.
 
     python bin/import_tree.py ~/notes --owner acme --repo shared \
-        --url http://localhost:8081 --token "$ENGRAM_INGEST_TOKEN"
+        --url http://localhost:8081 --token "$ENGRAM_TOKEN"
 
 Every file becomes ``<owner>/<repo>/<its path under the tree>``, so a tree laid
 out as ``projects/ areas/ resources/ archives/`` lands with its PARA areas
@@ -66,7 +66,7 @@ def main() -> int:
     ap.add_argument("--repo", default="shared",
                     help="repo coordinate ('shared' for knowledge that belongs to no single repo)")
     ap.add_argument("--url", default=os.environ.get("ENGRAM_URL", "http://127.0.0.1:8081"))
-    ap.add_argument("--token", default=os.environ.get("ENGRAM_INGEST_TOKEN", ""))
+    ap.add_argument("--token", default=os.environ.get("ENGRAM_TOKEN", ""))
     ap.add_argument("--note", default="bulk import", help="recorded on every revision this creates")
     ap.add_argument("--dry-run", action="store_true", help="list what would be sent and stop")
     args = ap.parse_args()
@@ -76,7 +76,7 @@ def main() -> int:
         print(f"not a directory: {root}", file=sys.stderr)
         return 2
     if not args.token and not args.dry_run:
-        print("no token — pass --token or set ENGRAM_INGEST_TOKEN", file=sys.stderr)
+        print("no token — pass --token or set ENGRAM_TOKEN", file=sys.stderr)
         return 2
 
     dates = last_commit_dates(root)

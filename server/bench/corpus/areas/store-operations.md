@@ -8,7 +8,7 @@ nginx, no virtualenv.
 | Variable | What it does |
 |---|---|
 | `POSTGRES_PASSWORD` | the database password; generate with `openssl rand -hex 24` |
-| `ENGRAM_INGEST_TOKEN` | the shared write token; without it every write is refused |
+| `ENGRAM_TOKEN` | the shared write token; without it every write is refused |
 | `ENGRAM_OWNERS` | the owner groups admitted ([[scope-boundary]]); empty admits nothing |
 | `ENGRAM_DATA` | where the database files live; defaults to `./data` |
 | `ENGRAM_PORT` | the published port; defaults to 8081 |

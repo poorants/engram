@@ -19,10 +19,11 @@ import re
 import secrets
 import sys
 import time
+import urllib.parse
 from contextlib import asynccontextmanager
 from pathlib import Path
 
-from fastapi import FastAPI, Header, HTTPException, Query, Request
+from fastapi import Depends, FastAPI, HTTPException, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from markdown_it import MarkdownIt
@@ -34,38 +35,56 @@ from ingest import (ALLOWED_OWNERS, PathRejected, ScopeDenied,  # noqa: E402
                     restore_doc, write_doc)
 from search import DSN, search  # noqa: E402
 
-INGEST_TOKEN = os.environ.get("ENGRAM_INGEST_TOKEN", "")
+# -- authentication ----------------------------------------------------------
+#
+# One token, and it answers one question: may this caller use this store at all?
+#
+# It is deliberately NOT a permission system. There is no read token and no
+# write token, no roles and no accounts — whoever holds ENGRAM_TOKEN can read
+# everything and write everything. Splitting it would mean two secrets to
+# distribute, rotate and lose, and a store whose whole model is "one shared
+# credential per deployment" does not get safer by having two of them; it gets
+# a second thing to be inconsistent about.
+#
+# What separates a caller who may write from one who may not is therefore not
+# authorisation at all: it is whether that machine was given the token. A
+# machine set up without one is read-only because it cannot authenticate for a
+# write, not because it holds a lesser credential.
+#
+# What the token does NOT decide is which documents may enter the store. That
+# is ENGRAM_OWNERS, and it is a different axis on purpose: authentication says
+# who is admitted, the owner allow-list says what is admitted, and neither one
+# can stand in for the other.
+TOKEN = os.environ.get("ENGRAM_TOKEN", "").strip()
 
-# Whether reading needs the token too.
-#
-# "open" is the original contract: the owner allow-list is the boundary, what
-# must not be readable is never let in, and a store sits on a LAN or a personal
-# server. That premise breaks the moment the port is reachable from the
-# internet, and it breaks silently — nothing about a wide-open store looks
-# wrong until the day it matters.
-#
-# "required" makes every read carry the same shared token the writes do. It is
-# the same secret, not a second one: adding a read credential would mean a
-# second thing to distribute, rotate and lose, for a store whose whole
-# authorisation model is one shared token.
-#
-# The default stays "open" so an existing LAN deployment does not start
-# refusing its own clients on upgrade. setup.sh writes "required" into every
-# new .env, so new deployments are closed and old ones are left as they were.
-READ_AUTH = os.environ.get("ENGRAM_READ_AUTH", "open").strip().lower()
-if READ_AUTH not in ("open", "required"):
-    print(f"engram: ENGRAM_READ_AUTH={READ_AUTH!r} is not 'open' or 'required'"
-          " — refusing to guess, treating it as 'required'", file=sys.stderr)
-    READ_AUTH = "required"
-if READ_AUTH == "required" and not INGEST_TOKEN:
-    # Failing to boot is the point. The alternative is a store that was asked
-    # to require a token, has none, and therefore serves everything.
-    raise SystemExit("engram: ENGRAM_READ_AUTH=required needs ENGRAM_INGEST_TOKEN")
+# Refusing to boot is the point. A store with no token cannot tell anyone
+# apart, and the only two things it could do instead are both worse: serve
+# everything to everyone, or refuse everything while appearing to run.
+if not TOKEN:
+    raise SystemExit(
+        "engram: ENGRAM_TOKEN is not set — a store with no token cannot"
+        " authenticate anyone. Generate one with `openssl rand -hex 24`, or"
+        " run server/setup.sh, which does it for you.")
 
-# The cookie the viewer uses once a person has entered the token in a browser.
-# A browser cannot send a header on a plain navigation, so the alternatives are
-# a cookie or the token in every URL — and a token in a URL lands in history,
-# in bookmarks, in referrers and in any log along the way.
+# Whether an unauthenticated caller may read.
+#
+# The default is closed. The store's own premise used to be that reads need no
+# token — the owner allow-list is the boundary, and what must not be readable
+# is never let in — and that holds exactly as long as the port is on a trusted
+# network. It stops holding the moment the service is reachable from the
+# internet, and it stops holding silently: nothing about a wide-open store
+# looks wrong until the day it matters. A default that is only correct under a
+# condition the software cannot check is not a safe default.
+#
+# ENGRAM_PUBLIC_READS=true is the deliberate opt-out for the deployment where
+# everyone who can reach the port is already allowed to read everything.
+PUBLIC_READS = os.environ.get("ENGRAM_PUBLIC_READS", "").strip().lower() in (
+    "1", "true", "yes", "on")
+
+# The cookie the viewer trades the token for. A browser cannot put a header on
+# a plain navigation, so the alternatives are a cookie or the token in every
+# URL — and a token in a URL lands in history, in bookmarks, in referrers and
+# in every log along the way.
 SESSION_COOKIE = "engram_session"
 # The timezone revision timestamps are rendered in. It is set explicitly rather
 # than inherited, because "when did this change" must not quietly become wrong
@@ -132,43 +151,80 @@ async def lifespan(_: FastAPI):
 app = FastAPI(title="engram store", docs_url="/api/docs", redoc_url=None, lifespan=lifespan)
 
 
-# -- read authorisation ------------------------------------------------------
-# Enforced as middleware rather than per-route on purpose. A dependency has to
-# be added to each route, and the failure mode of forgetting one is a route
-# that serves everything to anyone — silent, and discovered by someone else.
-# A default-deny gate with a named exception list fails the other way: forget
-# to list a new public route and it stops working, loudly, for you.
+# -- the authentication gate -------------------------------------------------
 
-# Open regardless of the setting. /healthz is what the container's own
-# healthcheck and setup.sh's wait loop call, and gating it means a store that
-# reports itself permanently unhealthy. It reveals whether the service is up
-# and how many documents exist, and nothing about what they say.
-PUBLIC_PATHS = frozenset({"/healthz", "/login", "/logout"})
+# Reachable without authenticating, whatever ENGRAM_PUBLIC_READS says.
+#
+# /healthz is what the container's own healthcheck and setup.sh's wait loop
+# call: gating it produces a store that reports itself permanently unhealthy
+# and restarts forever. It says whether the service is up and how many
+# documents exist, and nothing about what any of them contain.
+#
+# /login and /logout are how a browser authenticates in the first place.
+UNAUTHENTICATED_PATHS = frozenset({"/healthz", "/login", "/logout"})
 
 
-def _authorised(request: Request) -> bool:
-    token = request.headers.get("x-engram-token", "")
-    if token and secrets.compare_digest(token, INGEST_TOKEN):
-        return True
-    cookie = request.cookies.get(SESSION_COOKIE, "")
-    return bool(cookie) and secrets.compare_digest(cookie, INGEST_TOKEN)
+def presented_token(request: Request) -> str:
+    """The credential this request carries, from either place a caller can put
+    it: the header a program sets, or the cookie a browser was given at /login.
+
+    One function, so there is exactly one answer to "is this caller
+    authenticated" and no route can accidentally accept something the others
+    reject."""
+    header = request.headers.get("x-engram-token", "")
+    if header:
+        return header
+    return request.cookies.get(SESSION_COOKIE, "")
+
+
+def token_ok(supplied: str) -> bool:
+    """compare_digest, not ==, so the comparison does not leak the token's
+    length or its matching prefix through timing."""
+    return bool(supplied) and secrets.compare_digest(supplied, TOKEN)
+
+
+def authenticated(request: Request) -> bool:
+    return token_ok(presented_token(request))
 
 
 @app.middleware("http")
-async def read_gate(request: Request, call_next):
-    if READ_AUTH == "required" and request.url.path not in PUBLIC_PATHS:
-        if not _authorised(request):
-            # A browser gets a page it can act on; a program gets JSON it can
-            # branch on. Answering both with the same body means one of them
-            # is parsing an error message meant for the other.
-            wants_html = "text/html" in request.headers.get("accept", "")
-            if wants_html and not request.url.path.startswith("/api/"):
-                return templates.TemplateResponse(
-                    request, "login.html",
-                    {"error": "", "next": str(request.url.path)}, status_code=401)
-            return JSONResponse({"detail": "this store requires a token to read"},
-                                status_code=401)
+async def authentication(request: Request, call_next):
+    """Default deny, with a named exception list.
+
+    Middleware rather than a per-route dependency on purpose. A dependency has
+    to be remembered on every route, and the failure mode of forgetting one is
+    a route that serves everything to anyone — silent, and discovered by
+    somebody else. Forgetting to add a genuinely public route to the list here
+    fails the other way: it stops working, loudly, for whoever added it.
+
+    Writes are gated here too, not only by require_auth on each write route.
+    That is deliberate belt-and-braces: this gate is what makes an unlisted
+    route closed by default, and the per-route check is what keeps writes
+    closed even if this list ever grows an entry it should not have.
+    """
+    path = request.url.path
+    if path not in UNAUTHENTICATED_PATHS:
+        is_write = request.method not in ("GET", "HEAD", "OPTIONS")
+        # Reads may be waved through when the deployment says so; writes never.
+        needs_auth = is_write or not PUBLIC_READS
+        if needs_auth and not authenticated(request):
+            return _unauthenticated_response(request)
     return await call_next(request)
+
+
+def _unauthenticated_response(request: Request):
+    """A browser gets a page it can act on; a program gets JSON it can branch
+    on. One body for both means one of them is parsing an error written for the
+    other."""
+    is_api = request.url.path.startswith("/api/")
+    wants_html = "text/html" in request.headers.get("accept", "")
+    if wants_html and not is_api:
+        return templates.TemplateResponse(
+            request, "login.html",
+            {"error": "", "next": request.url.path}, status_code=401)
+    return JSONResponse(
+        {"detail": "this store requires a token — send it as X-Engram-Token"},
+        status_code=401)
 
 
 @app.get("/login", response_class=HTMLResponse)
@@ -178,20 +234,26 @@ def login_form(request: Request, next: str = "/"):
 
 @app.post("/login")
 async def login(request: Request):
-    form = await request.form()
-    supplied = str(form.get("token", ""))
-    nxt = str(form.get("next", "/")) or "/"
+    # Parsed with the standard library rather than request.form(), which pulls
+    # in python-multipart as a runtime dependency. This form is two fields of
+    # urlencoded text; adding a dependency to the image for that is a poor
+    # trade, and forgetting to add it makes the login page answer 500 -- which
+    # is exactly how this was found.
+    raw = (await request.body()).decode("utf-8", "replace")
+    fields = urllib.parse.parse_qs(raw, keep_blank_values=True)
+    supplied = (fields.get("token") or [""])[0]
+    nxt = (fields.get("next") or ["/"])[0] or "/"
     # Only ever redirect somewhere on this site. An open redirect here would
     # turn the login page into a way to bounce people off a URL they trust.
     if not nxt.startswith("/") or nxt.startswith("//"):
         nxt = "/"
-    if not (INGEST_TOKEN and secrets.compare_digest(supplied, INGEST_TOKEN)):
+    if not (TOKEN and secrets.compare_digest(supplied, TOKEN)):
         return templates.TemplateResponse(
             request, "login.html",
             {"error": "That token was not accepted.", "next": nxt}, status_code=401)
     resp = RedirectResponse(nxt, status_code=303)
     resp.set_cookie(
-        SESSION_COOKIE, INGEST_TOKEN,
+        SESSION_COOKIE, TOKEN,
         httponly=True,        # script on the page can never read it
         samesite="lax",       # not sent on cross-site POSTs
         max_age=60 * 60 * 24 * 30,
@@ -354,25 +416,30 @@ def api_doc(path: str) -> dict:
     return d
 
 
-def require_token(token: str) -> None:
-    """Every write goes through the token. If no token is configured the store
-    accepts **nothing** — defaulting to "allow anyone" means a deployment that
-    forgot to configure it runs quietly wide open."""
-    if not INGEST_TOKEN:
-        raise HTTPException(503, "ENGRAM_INGEST_TOKEN is not set on this server")
-    if not secrets.compare_digest(token, INGEST_TOKEN):
-        raise HTTPException(401, "token mismatch")
+def require_auth(request: Request) -> None:
+    """Dependency for a route that must never be public.
+
+    The middleware has already checked this for every route, so this is a
+    second lock on the writes specifically. It does not depend on the
+    exception list staying correct, which means a mistake there cannot turn a
+    write route into an open one -- and writes are the only irreversible thing
+    the store does.
+
+    It accepts either carrier, like everything else here: a program's header or
+    a browser's session cookie. One credential, one way of checking it.
+    """
+    if not authenticated(request):
+        raise HTTPException(401, "invalid or missing token")
 
 
 @app.put("/api/doc/{path:path}")
 async def api_put_doc(path: str, request: Request,
-                      x_engram_token: str = Header(default="")) -> dict:
+                      _: None = Depends(require_auth)) -> dict:
     """Save one document — a canonical write.
 
     The previous body is kept in revisions (the git log slot). An identical body
     changes nothing and answers status=unchanged.
     """
-    require_token(x_engram_token)
     payload = await request.json()
     body = payload.get("body")
     if not isinstance(body, str) or not body.strip():
@@ -400,18 +467,16 @@ async def api_put_doc(path: str, request: Request,
 
 @app.delete("/api/doc/{path:path}")
 def api_delete_doc(path: str, author: str = "", note: str = "",
-                   x_engram_token: str = Header(default="")) -> dict:
+                   _: None = Depends(require_auth)) -> dict:
     """Soft delete. The body survives in revisions, so restore brings it back."""
-    require_token(x_engram_token)
     with pool.connection() as conn:
         return delete_doc(conn, path, author=author, note=note)
 
 
 @app.post("/api/doc/{path:path}/move")
 async def api_move_doc(path: str, request: Request,
-                       x_engram_token: str = Header(default="")) -> dict:
+                       _: None = Depends(require_auth)) -> dict:
     """Move a document. The old path stays as an alias so existing links reach it."""
-    require_token(x_engram_token)
     payload = await request.json()
     to = (payload.get("to") or "").strip()
     if not to:
@@ -427,8 +492,7 @@ async def api_move_doc(path: str, request: Request,
 
 @app.post("/api/doc/{path:path}/restore")
 def api_restore_doc(path: str, author: str = "",
-                    x_engram_token: str = Header(default="")) -> dict:
-    require_token(x_engram_token)
+                    _: None = Depends(require_auth)) -> dict:
     with pool.connection() as conn:
         return restore_doc(conn, path, author=author)
 
@@ -459,10 +523,9 @@ def api_revision(rev_id: int) -> dict:
 
 
 @app.post("/api/rederive")
-def api_rederive(x_engram_token: str = Header(default="")) -> dict:
+def api_rederive(_: None = Depends(require_auth)) -> dict:
     """Rebuild only the derived data — bodies and history untouched. Run it
     after changing the chunking or link rules."""
-    require_token(x_engram_token)
     global _meta_cache
     with pool.connection() as conn:
         res = rederive_all(conn)
@@ -561,7 +624,7 @@ def api_export() -> dict:
 
 @app.post("/api/index")
 async def api_index(request: Request,
-                    x_engram_token: str = Header(default="")) -> dict:
+                    _: None = Depends(require_auth)) -> dict:
     """Bulk import — seed the store from a tree of markdown files.
 
     **Upsert only.** An earlier design rebuilt the whole index (DROP -> CREATE),
@@ -569,8 +632,6 @@ async def api_index(request: Request,
     that would be knowledge deletion, not re-indexing. Documents missing from
     the payload are left alone, and nothing born here is touched.
     """
-    require_token(x_engram_token)
-
     # Starlette does not decompress a request body (only responses, via
     # middleware). A few megabytes of markdown compress to a fraction of that,
     # so the client may gzip and this unpacks it.

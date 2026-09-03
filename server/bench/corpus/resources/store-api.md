@@ -3,7 +3,19 @@
 The service reads nothing but its database. Bodies arrive over HTTP and live in
 Postgres, so there is no checkout on the server, no git, and no credentials.
 
-## Reads need no token
+## One token for the whole surface
+
+`ENGRAM_TOKEN` is presented as the `X-Engram-Token` header, or as the session
+cookie a browser is given at `/login`. It answers one question — may this caller
+use this store at all — and it is not a permission system: holding it grants
+reads and writes alike. See [[scope-boundary]] for the other axis, which is
+about *what* may enter rather than *who* may connect.
+
+**The store refuses to start without one.** A store that cannot tell anyone
+apart has only two options left, and both are worse than not booting: serve
+everything to everyone, or refuse everything while appearing healthy.
+
+## Reads
 
 | Endpoint | What it answers |
 |---|---|
@@ -14,20 +26,25 @@ Postgres, so there is no checkout on the server, no git, and no credentials.
 | `GET /api/integrity` | broken links, orphans, weak nodes |
 | `GET /api/scopes` | which owner groups are admitted, and what is present |
 | `GET /api/export` | every live document, verbatim |
-| `GET /healthz` | whether the database answers |
 
-Reads being open is a deliberate trade. It is also exactly why the confidentiality
-boundary cannot be a column — see [[scope-boundary]].
+All of them need the token unless the deployment sets
+`ENGRAM_PUBLIC_READS=true`, which serves reads to anyone who can reach the port.
+That is sound on a network where everyone who can reach it is already allowed to
+read everything, and it is not sound anywhere else — so it is off by default.
 
-## Writes need the token
+## Writes
 
 `PUT /api/doc/{path}`, `POST /api/doc/{path}/move`, `DELETE /api/doc/{path}`,
-`POST /api/doc/{path}/restore` and `POST /api/rederive` all require the
-`X-Engram-Token` header, matched against the server's `ENGRAM_INGEST_TOKEN`.
+`POST /api/doc/{path}/restore`, `POST /api/rederive` and `POST /api/index`
+always need the token. `ENGRAM_PUBLIC_READS` does not affect them; opening reads
+must not open writes as a side effect.
 
-**If no token is configured on the server, every write is refused with 503.**
-Defaulting to "allow anyone" would mean a deployment that forgot to configure it
-runs quietly wide open, and nothing about its behaviour would reveal that.
+## Reachable without the token
+
+`GET /healthz` — whether the database answers, and how many documents exist.
+Gating it would make the container's own healthcheck fail forever.
+
+`GET /login`, `POST /login`, `GET /logout` — how a browser authenticates.
 
 ## What each status code means
 

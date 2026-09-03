@@ -27,6 +27,43 @@ A scope refusal is a different thing and takes the other path — the store is
 alive and declined, so the document goes to the local file brain, which is where
 it belonged.
 
+## One token, and it is not a permission system
+
+`ENGRAM_TOKEN` answers exactly one question: may this caller use this store at
+all. Whoever holds it can read everything and write everything. There is no read
+token and no write token, no roles, no accounts — it is a deployment credential
+in the shape of a personal access token.
+
+Splitting it was considered and rejected. A read/write split would mean two
+secrets to distribute, rotate and lose, and a store whose entire model is *one
+shared credential per deployment* does not get safer by having two of them; it
+gets a second thing to be inconsistent about. The cost is real and worth naming:
+anyone who may read may also write, so "let someone browse the brain" and "let
+someone change the brain" are the same grant.
+
+What separates a machine that may write from one that may not is therefore not
+authorisation at all. It is whether that machine was given the token. A client
+set up without one is read-only because it cannot authenticate for a write, not
+because it holds a lesser credential.
+
+**Reads are closed by default.** The original design left them open, on the
+reasoning that the owner allow-list is the boundary and what must not be
+readable is never let in. That holds exactly as long as the port is on a trusted
+network — and it stops holding silently, because nothing about a wide-open store
+looks wrong until the day it matters. A default that is only correct under a
+condition the software cannot check is not a safe default.
+`ENGRAM_PUBLIC_READS=true` is the deliberate opt-out.
+
+The gate is middleware with a named list of unauthenticated paths, not a
+dependency on each route. Forgetting a dependency leaves a route serving
+everything to anyone — silent, and found by somebody else. Forgetting to list a
+genuinely public route breaks it loudly, for whoever added it. The writes carry
+a second check on top, so a mistake in that list cannot open one.
+
+A browser cannot put a header on a navigation, so the viewer trades the token
+for an HttpOnly, SameSite session cookie at `/login`. The alternative — a token
+in the URL — lands in history, bookmarks, referrers and every log along the way.
+
 ## The byline is a claim, not a proof
 
 The write token is one shared credential, so the recorded author is what the
@@ -75,8 +112,11 @@ client repo never does. The boundary holds by default rather than by remembering
 to maintain it — a per-repo list would be correct on the day it was written and
 wrong by the third new service.
 
-Reads need no token, so what must not be readable is never let in. Adding read
-auth would let the allow-list be sloppy, which is the wrong direction.
+It is not a substitute for authentication and does not become one. The
+allow-list decides *what* may enter the store; the token decides *who* may talk
+to it at all. Collapsing the two — letting either stand in for the other — is
+what produces a store that is careful about which repos it admits and then
+serves all of them to the internet.
 
 ## Never delete
 

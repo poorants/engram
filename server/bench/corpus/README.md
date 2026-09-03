@@ -18,5 +18,5 @@ Load it into a store with:
 
 ```bash
 python bin/import_tree.py bench/corpus --owner acme --repo shared \
-    --url http://localhost:8081 --token "$ENGRAM_INGEST_TOKEN"
+    --url http://localhost:8081 --token "$ENGRAM_TOKEN"
 ```

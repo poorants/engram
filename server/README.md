@@ -26,6 +26,7 @@ kept, so it doubles as "bring the store back up".
 | `--tz <zone>` | zone revision timestamps display in (default UTC) |
 | `--data <dir>` | where the database files live (default `./data`) |
 | `--no-start` | write `.env` and stop |
+| `--public-reads` | serve reads without a token — LAN only |
 | `--force` | rewrite `.env` — **this rotates both secrets** |
 
 `--force` on a store that has data in it will break every client's token and
@@ -48,16 +49,17 @@ same ranking an agent gets.
 | Variable | Meaning |
 |---|---|
 | `POSTGRES_PASSWORD` | database password — `openssl rand -hex 24` |
-| `ENGRAM_INGEST_TOKEN` | the shared write token — `openssl rand -hex 24` |
+| `ENGRAM_TOKEN` | the store's one credential — `openssl rand -hex 24`. Required; the store will not start without it. |
+| `ENGRAM_PUBLIC_READS` | serve reads to callers with no token (default `false`) |
 | `ENGRAM_OWNERS` | comma-separated owner groups admitted. **Empty admits nothing.** |
 | `ENGRAM_DATA` | where the database files live (default `./data`) |
 | `ENGRAM_PORT` | published port (default 8081) |
 | `ENGRAM_TZ` | zone revision timestamps display in (default UTC) |
 
-`ENGRAM_OWNERS` is the confidentiality boundary and it is a list of GROUPS, not
-repos: a new repo under an admitted group works with no change, and a repo
-outside one never does. Reads need no token, so what must not be readable is
-never let in — see `bench/corpus/resources/scope-boundary.md`.
+`ENGRAM_OWNERS` is a list of GROUPS, not repos: a new repo under an admitted
+group works with no change, and a repo outside one never does. It answers *what
+may enter*. `ENGRAM_TOKEN` answers *who may connect*, and neither substitutes
+for the other — see `bench/corpus/resources/scope-boundary.md`.
 
 Exactly one port is published. The database publishes none; only the app reaches
 it inside the compose network, and even bulk imports arrive over the app's port.
@@ -66,7 +68,7 @@ it inside the compose network, and even bulk imports arrive over the app's port.
 
 ```bash
 python bin/import_tree.py ~/notes --owner acme --repo shared \
-    --url http://localhost:8081 --token "$ENGRAM_INGEST_TOKEN"
+    --url http://localhost:8081 --token "$ENGRAM_TOKEN"
 ```
 
 Each file becomes `<owner>/<repo>/<its path under the tree>`, so a tree laid out

@@ -26,13 +26,13 @@ Paste what `server/setup.sh` printed when the store was brought up:
 ```bash
 # Linux · macOS
 curl -fsSL https://raw.githubusercontent.com/poorants/engram/main/install.sh \
-  | sh -s -- --store http://<host>:8081 --token <write token>
+  | sh -s -- --store http://<host>:8081 --token <store token>
 ```
 
 ```powershell
 # Windows — iex cannot take parameters, so pass them as environment variables
 $env:ENGRAM_STORE_URL = 'http://<host>:8081'
-$env:ENGRAM_TOKEN     = '<write token>'
+$env:ENGRAM_TOKEN     = '<store token>'
 irm https://raw.githubusercontent.com/poorants/engram/main/install.ps1 | iex
 ```
 
@@ -47,7 +47,7 @@ the PowerShell one-liner.
 | Option | Environment | Meaning |
 |---|---|---|
 | `--store <url>` | `ENGRAM_STORE_URL` | designate the store, then run `store doctor` |
-| `--token <t>` | `ENGRAM_TOKEN` | the shared write token |
+| `--token <t>` | `ENGRAM_TOKEN` | the store's one credential — reads and writes alike |
 | `--author <name>` | `ENGRAM_AUTHOR` | byline stamped on revisions from this machine |
 | `--version <tag>` | `ENGRAM_VERSION` | install a specific release (default: the latest) |
 | `--dir <path>` | `ENGRAM_INSTALL_DIR` | install location |
@@ -63,7 +63,7 @@ script instead of piping it: `.\install.ps1 -Store http://host:8081 -Token abc`.
 |---|---|---|
 | binary | `~/.local/bin/engram` | `%LOCALAPPDATA%\engram\bin\engram.exe` |
 | settings | `~/.claude/engram/config.json` | `%USERPROFILE%\.claude\engram\config.json` |
-| write token | `~/.claude/engram/store.token` (mode `0600`) | the same path |
+| token | `~/.claude/engram/store.token` (mode `0600`) | the same path |
 
 The Windows installer adds its directory to your user `PATH`; the POSIX one
 warns if `~/.local/bin` is not already on yours.
@@ -189,7 +189,7 @@ The installer does this for you when you pass `--store`. To do it later, or to
 point an existing install at a different store:
 
 ```bash
-engram store set http://<host>:8081 --token <write token>
+engram store set http://<host>:8081 --token <store token>
 engram store doctor
 ```
 
@@ -197,7 +197,7 @@ engram store doctor
 
 ```
 ~/.claude/engram/config.json    address, cached owner list, author  - plain JSON, readable
-~/.claude/engram/store.token    the write token                     - mode 0600
+~/.claude/engram/store.token    the store's token                   - mode 0600
 ```
 
 The token is deliberately not in `config.json`: that is a file people open and

@@ -10,7 +10,7 @@ inside. This is the guard.
 # 1. bring a store up and seed it with the example corpus
 cd server && docker compose up -d
 python bin/import_tree.py bench/corpus --owner acme --repo shared \
-    --url http://localhost:8081 --token "$ENGRAM_INGEST_TOKEN"
+    --url http://localhost:8081 --token "$ENGRAM_TOKEN"
 
 # 2. the baseline an agent would have had without a store
 python bench/baseline_grep.py

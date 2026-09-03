@@ -26,13 +26,18 @@ reasons attached ([docs/design.md](docs/design.md)).
 There is no per-tenant isolation and no plan for any. Cross-tenant reasoning does
 not apply.
 
-**Reads need no token.** Anything admitted into the store is readable by anyone
-who can reach the port. That is not an oversight — it is why the owner allow-list
-is the control that matters. "Unauthenticated read of a document" is the design.
+**One token, and it is not a permission system.** `ENGRAM_TOKEN` answers a
+single question — may this caller use this store at all. Whoever holds it can
+read everything and write everything. It is a deployment credential in the shape
+of a personal access token: not per-user, not scopeable, and revoking it means
+rotating it for everyone. A machine set up without one is read-only because it
+cannot authenticate for a write, not because it holds a lesser credential.
 
-**The write token is one shared credential.** Everyone who can write shares it.
-It is not per-user, it cannot be scoped, and revoking it means rotating it for
-everyone.
+**Reads are closed by default and can be opened deliberately.** A store requires
+the token to read unless `ENGRAM_PUBLIC_READS=true` is set. If it is set, every
+document is readable by anyone who can reach the port — that is what the setting
+means, and a report that a store configured that way serves reads is not a
+vulnerability. A store that serves reads *without* that setting is.
 
 **The byline is a claim, not a proof.** The recorded author is whatever the
 client said. Forging a byline is possible by design; proving identity would mean

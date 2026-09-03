@@ -78,16 +78,15 @@ services:
           memory: ${ENGRAM_APP_MEMORY:-384m}
     environment:
       ENGRAM_DSN: postgresql://engram:${POSTGRES_PASSWORD}@db:5432/engram
-      ENGRAM_INGEST_TOKEN: ${ENGRAM_INGEST_TOKEN:?set ENGRAM_INGEST_TOKEN in .env}
+      # The store's one credential; it refuses to start without it.
+      ENGRAM_TOKEN: ${ENGRAM_TOKEN:?set ENGRAM_TOKEN in .env}
       # Groups not listed here are refused on write. This line is the boundary
       # that keeps the wrong repos out. Empty means nothing can be written — a
       # deployment that forgot to configure it closes rather than opens.
       ENGRAM_OWNERS: ${ENGRAM_OWNERS:-}
-      # Whether reads carry the token as well. `open` is the historical
-      # behaviour and stays the code default so upgrading a LAN store does not
-      # start refusing its own clients; setup.sh writes `required` into every
-      # new .env, so new deployments are closed.
-      ENGRAM_READ_AUTH: ${ENGRAM_READ_AUTH:-open}
+      # Serve reads without a token. Off unless asked for -- the default has
+      # to be the one that is safe on the network the software cannot see.
+      ENGRAM_PUBLIC_READS: ${ENGRAM_PUBLIC_READS:-false}
       ENGRAM_TZ: ${ENGRAM_TZ:-UTC}
       TZ: ${ENGRAM_TZ:-UTC}
     logging:

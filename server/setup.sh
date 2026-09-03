@@ -32,7 +32,7 @@ TZ_VALUE=""
 DATA=""
 FORCE=0
 NO_START=0
-READ_AUTH=required
+PUBLIC_READS=false
 
 usage() {
   cat <<'USAGE'
@@ -43,16 +43,16 @@ usage: ./setup.sh [options]
   --tz <zone>      zone revision timestamps display in (default UTC)
   --data <dir>     where the database files live (default ./data)
   --force          overwrite an existing .env — THIS ROTATES BOTH SECRETS
-  --open-reads     serve reads without a token — LAN only, see below
+  --public-reads   serve reads to callers with no token — LAN only, see below
   --no-start       write .env and stop; do not run docker compose
   -h, --help       this
 
 With no --owners and no existing .env, you are asked for the owner groups.
 
-Reads require the token by default, and the viewer asks for it once. That is a
-change from how this store behaved historically: --open-reads restores the old
-behaviour, which is sound only on a network where everyone who can reach the
-port is already allowed to read everything in it.
+Reads require the token by default, and the viewer asks for it once, keeping a
+session cookie. --public-reads serves reads to anyone who can reach the port,
+which is sound only on a network where everyone who can is already allowed to
+read everything in the store.
 USAGE
 }
 
@@ -63,7 +63,7 @@ while [ $# -gt 0 ]; do
     --tz)     TZ_VALUE="${2:?--tz needs a value}"; shift 2 ;;
     --data)   DATA="${2:?--data needs a value}"; shift 2 ;;
     --force)  FORCE=1; shift ;;
-    --open-reads) READ_AUTH=open; shift ;;
+    --public-reads) PUBLIC_READS=true; shift ;;
     --no-start) NO_START=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'setup: unknown option %s\n\n' "$1" >&2; usage >&2; exit 1 ;;
@@ -143,18 +143,17 @@ ASK
   fi
   [ -n "$OWNERS" ] || die "ENGRAM_OWNERS cannot be empty — an empty list admits nothing"
 
-  INGEST_TOKEN=$(gen_secret)
+  TOKEN=$(gen_secret)
   umask 077
   cat > .env <<ENV
 # Written by setup.sh on $(date -u '+%Y-%m-%dT%H:%M:%SZ'). Never commit this file.
 POSTGRES_PASSWORD=$(gen_secret)
-ENGRAM_INGEST_TOKEN=$INGEST_TOKEN
+ENGRAM_TOKEN=$TOKEN
 ENGRAM_OWNERS=$OWNERS
-# Reads carry the token too. New stores close by default: the alternative is a
-# store that is readable by anyone who can reach the port, which is fine on a
-# LAN and is not fine the first time this lands on a public IP -- and which of
-# the two it is is not something this script can know.
-ENGRAM_READ_AUTH=$READ_AUTH
+# Reads need the token too. Closed by default -- a store readable by anyone who
+# can reach the port is fine on a LAN and is not fine on a public IP, and which
+# of the two this is is not something the software can check.
+ENGRAM_PUBLIC_READS=$PUBLIC_READS
 ENGRAM_DATA=$DATA
 ENGRAM_PORT=${PORT:-8081}
 ENGRAM_TZ=${TZ_VALUE:-UTC}
@@ -165,7 +164,7 @@ fi
 
 # Read back what is actually in the file, so the values printed at the end are
 # the running store's and not the ones this run happened to generate.
-INGEST_TOKEN=$(sed -n 's/^ENGRAM_INGEST_TOKEN=//p' .env | head -1)
+TOKEN=$(sed -n 's/^ENGRAM_TOKEN=//p' .env | head -1)
 PORT=$(sed -n 's/^ENGRAM_PORT=//p' .env | head -1)
 PORT="${PORT:-8081}"
 
@@ -210,12 +209,12 @@ Now set up the people. This is the whole client install — binary, MCP server,
 skill and hooks — on Linux and macOS:
 
   curl -fsSL $RAW/install.sh \\
-    | sh -s -- --store http://$HOST:$PORT --token $INGEST_TOKEN
+    | sh -s -- --store http://$HOST:$PORT --token $TOKEN
 
 and on Windows, in PowerShell:
 
   \$env:ENGRAM_STORE_URL = 'http://$HOST:$PORT'
-  \$env:ENGRAM_TOKEN     = '$INGEST_TOKEN'
+  \$env:ENGRAM_TOKEN     = '$TOKEN'
   irm $RAW/install.ps1 | iex
 
 Check that '$HOST' is a name other machines can actually resolve — the value

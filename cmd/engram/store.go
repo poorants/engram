@@ -16,18 +16,19 @@ import (
 // here either succeeds or says exactly which half is missing; none of them
 // leaves a half-configured install that looks fine until the first write.
 //
-// That is also why `doctor` checks the write token rather than only the
-// connection: "the store is up" and "I can write to it" are different facts,
+// That is also why `doctor` checks the token rather than only the
+// connection: "the store is up" and "this machine is admitted" are different
+// facts,
 // and a check that proves only the first one lets someone finish a setup
 // read-only and discover it at the end of a session, when a save fails.
 
 const storeUsage = `usage: engram store <command>
 
   set <url>       designate the store
-                  --token <t>   write token (stored at 0600 beside the config)
+                  --token <t>   the store's token (stored at 0600 beside the config)
                   --author <a>  the byline stamped on revisions from this machine
   show            where the settings come from, without touching the network
-  doctor          prove the store answers and this machine can write to it
+  doctor          prove the store answers and accepts this machine
   unset           remove the designation (--forget-token also deletes the token)
 `
 
@@ -57,7 +58,7 @@ func runStore(args []string) int {
 
 func storeSet(args []string) int {
 	fs := flag.NewFlagSet("store set", flag.ContinueOnError)
-	token := fs.String("token", "", "write token")
+	token := fs.String("token", "", "the store's token — reads and writes alike")
 	author := fs.String("author", "", "byline stamped on revisions from this machine")
 	pos, err := parseInterspersed(fs, args)
 	if err != nil {
@@ -106,7 +107,8 @@ func storeSet(args []string) int {
 	}
 
 	if strings.TrimSpace(*token) == "" {
-		fmt.Println("token:  not set — reads work, writes will be refused. Re-run with --token to enable writing.")
+		fmt.Println("token:  not set — this machine can reach only a store that")
+		fmt.Println("        serves public reads, and can write to none. Re-run with --token.")
 		return exitOK
 	}
 	tp, err := config.WriteToken(*token)
@@ -178,7 +180,7 @@ func storeDoctor(args []string) int {
 	fmt.Printf("config    %s\n", cfg.Path)
 	if cfg.StoreURL == "" {
 		fmt.Println("store     NOT SET")
-		fmt.Println("\nfix: engram store set <url> --token <write token>")
+		fmt.Println("\nfix: engram store set <url> --token <store token>")
 		return exitError
 	}
 	fmt.Printf("store     %s\n", cfg.StoreURL)
@@ -228,8 +230,9 @@ func storeDoctor(args []string) int {
 	fmt.Printf("author    %s\n", author)
 
 	if !c.CanWrite() {
-		fmt.Println("write     NO TOKEN — reads work, every write will be refused.")
-		fmt.Println("\nfix: engram store set " + cfg.StoreURL + " --token <write token>")
+		fmt.Println("write     NO TOKEN — every write will be refused, and reads too")
+		fmt.Println("          unless this store serves public reads.")
+		fmt.Println("\nfix: engram store set " + cfg.StoreURL + " --token <store token>")
 		return exitError
 	}
 	if err := c.VerifyToken(ctx); err != nil {
