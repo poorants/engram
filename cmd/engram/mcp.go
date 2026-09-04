@@ -71,10 +71,20 @@ func runMCP(args []string) int {
 		log.Printf("store %s (%s)", cfg.StoreURL, map[bool]string{true: "read/write", false: "read-only"}[cfg.Token != ""])
 	}
 
+	// The update check reads its cache (instant, offline) and refreshes in the
+	// background, so it never sits on the startup path. A notice found here was
+	// fetched by an earlier session.
+	notice := startUpdateCheck(newUpdateChecker())
+
 	server := mcp.NewServer(
 		&mcp.Implementation{Name: "engram", Version: resolveVersion()},
-		&mcp.ServerOptions{Instructions: instructions},
+		&mcp.ServerOptions{Instructions: serverInstructions(instructions, notice)},
 	)
+	if notice != "" {
+		// Belt and braces for a client that ignores instructions. Once per
+		// session — see noticeMiddleware.
+		server.AddReceivingMiddleware(noticeMiddleware(notice))
+	}
 	// Identity is resolved ONCE, here, and shared by every tool — the same
 	// resolver the CLI builds, so a document written from a session and one
 	// written from a hook carry the same byline.

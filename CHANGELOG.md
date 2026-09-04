@@ -8,6 +8,39 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Added — the binary says when it is out of date
+
+Distribution is by GitHub release, so a fix merged to main reaches a machine
+only when someone re-runs the installer, and the signal to do that was a person
+saying so. The failure is silent by construction: the machine keeps working and
+simply lacks whatever was added, surfacing as a tool that is not there in a
+session — where the binary's version is the last thing anyone suspects.
+
+The check now runs itself, in the shape oh-my-zsh uses:
+
+- **It never delays startup.** The read path is a cache read — instant, offline
+  — and the network call is a background refresh (at most daily) whose answer
+  the *next* session sees. Measured cold-cache `engram status`: 48 ms, silent;
+  the run after it carries the notice.
+- **It is silent when it cannot know.** No network, no releases, a `dev` build,
+  an unparsable tag — all say nothing. A build stamped `v0.4.0-2-gbde191b` by
+  `git describe` compares as its tag, so a source build of a release is not
+  nagged to install the release it already contains.
+- **The notice carries the remedy**, because "a new version exists" without the
+  command to get it only moves the work to the reader.
+
+Where it appears is decided by the transport: stdout is protocol framing and
+stderr is a log nobody opens, so the notice goes into `initialize.instructions`
+(the model reads it and can offer to run the update), onto the first tool result
+of a session (once, never per call), to stderr, and to `engram status`.
+
+- `engram status` grows `--live` to fetch now instead of reading the cache.
+- `ENGRAM_UPDATE_CHECK=0` turns it off.
+
+The shape is borrowed from `parataxis-mcp`'s `pkg/selfupdate`, which solved the
+same problem for an internally-distributed binary.
+
+
 ## [0.4.0] — 2026-09-04
 
 ### Added — partial writes (`brain_patch`, `engram patch`)

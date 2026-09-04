@@ -222,6 +222,14 @@ func renderStatus(st map[string]any) {
 	}
 	out("store       %s  token %s\n", store, token)
 
+	// The version line appears only when it says something. Printing "you are
+	// current" every time is how the one run that says otherwise gets skimmed
+	// past.
+	if latest := sOf(st, "updateAvailable"); latest != "" {
+		out("version     %s  →  %s available  (install.sh to update; restart the session after)\n",
+			sOf(st, "version"), latest)
+	}
+
 	authorNote := "  (resolved automatically)"
 	if sOf(st, "authorSource") != "" {
 		authorNote = "  (configured)"

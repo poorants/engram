@@ -641,6 +641,7 @@ func readBody(file string) (string, error) {
 func cmdStatus(args []string) int {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
 	asJSON := fs.Bool("json", false, "machine-readable output")
+	live := fs.Bool("live", false, "check for a newer release now instead of reading the cached answer")
 	c, ident, cfg, _, err := clients(fs, args)
 	if err != nil {
 		return usageError(err.Error())
@@ -651,6 +652,24 @@ func cmdStatus(args []string) int {
 		"store":    c.BaseURL(),
 		"canWrite": c.CanWrite(),
 		"author":   ident.Author(ctx, ""),
+		"version":  resolveVersion(),
+	}
+
+	// The version question, answered where a person asks it. The MCP server
+	// gets the same notice through the model; this is the surface for someone
+	// at a terminal wondering whether their binary is the problem.
+	//
+	// The default read is the cache — instant, and correct as of the last
+	// refresh. --live is for when the cached answer is not the question, which
+	// is exactly when someone is debugging a missing tool.
+	uc := newUpdateChecker()
+	if *live {
+		uc.RefreshNow(ctx)
+	} else if uc.Fetch != nil {
+		go uc.Refresh(context.Background())
+	}
+	if latest := uc.Available(); latest != "" {
+		st["updateAvailable"] = latest
 	}
 	if cfg.Author != "" {
 		st["authorSource"] = "configured"

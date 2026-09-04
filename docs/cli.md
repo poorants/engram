@@ -210,8 +210,28 @@ Remove the designation. `--forget-token` also deletes the token file.
 
 ### `engram status`
 
-Connection, scope, and who you write as — the one-line version of `store show`
-plus `scope`.
+Connection, scope, who you write as, and whether a newer release is out — the
+one-line version of `store show` plus `scope`.
+
+The version line appears **only when there is something to say.** Printing "you
+are current" on every run is how the one run that says otherwise gets skimmed
+past.
+
+```
+store       https://brain.example.com  token present
+version     v0.3.0  →  v0.4.0 available  (install.sh to update; restart the session after)
+author      dhkim  (resolved automatically)
+here        owner=acme  repo=webapp
+```
+
+The answer is read from a cache (`$XDG_CACHE_HOME/engram/update.json`), so it
+costs nothing and works offline; a background refresh at most once a day
+supplies the *next* run. `--live` fetches now instead — for when the cached
+answer is not the question, which is exactly when someone is trying to work out
+whether their binary is why a tool is missing.
+
+`ENGRAM_UPDATE_CHECK=0` turns the whole thing off, for a machine that
+deliberately runs a pinned build.
 
 ### `engram scope`
 
@@ -311,6 +331,7 @@ the user on every single prompt, which is worse than a missed reflection.
 
 | Variable | Default | Effect |
 |---|---|---|
+| `ENGRAM_UPDATE_CHECK` | unset | `0` turns the update notice off entirely |
 | `ENGRAM_CAPTURE_DISABLE` | unset | `1` turns both hooks off |
 | `ENGRAM_CAPTURE_COOLDOWN_MIN` | `30` | minutes between `Stop`-backstop nudges |
 | `ENGRAM_CAPTURE_PHRASES` | built-in list | comma-separated wrap-up phrases |

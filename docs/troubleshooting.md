@@ -130,6 +130,7 @@ knows that verb:
 
 ```bash
 engram version          # v0.4.0 or newer
+engram status --live    # says so directly when a newer release is out
 engram hook </dev/null  # must print nothing and exit 0
 ```
 
