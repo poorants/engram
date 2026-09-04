@@ -77,7 +77,7 @@ These hooks ship with the plugin and need no per-machine setup:
   something each script has to remember — so a Korean wrap-up phrase survives a
   cp949 console.
 
-The plugin therefore needs `engram` **v0.3.0 or newer** on `PATH`. An older
+The plugin therefore needs `engram` **v0.4.0 or newer** on `PATH`. An older
 binary does not know the `hook` verb and will print an unknown-command error on
 every prompt until it is updated (`install.sh` / `install.ps1`).
 

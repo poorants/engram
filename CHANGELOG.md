@@ -8,6 +8,8 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+## [0.4.0] — 2026-09-04
+
 ### Added — partial writes (`brain_patch`, `engram patch`)
 
 A put prices an edit by the size of the DOCUMENT. Fixing one link in a
@@ -54,6 +56,15 @@ writes all of it or none.
 - `brain_get` and `GET /api/doc/{path}` now return `sha256`.
 - A 409 means the document disagrees with the request — re-read and re-aim
   rather than retrying unchanged. A 400 means the call itself is malformed.
+
+### Upgrading
+
+The plugin now requires **`engram` v0.4.0 or newer**: the skill routes every
+edit of an existing document through `brain_patch`, and an older binary does not
+serve that tool. Nothing else changes — the settings file, the token, the store
+and a designated file brain are all untouched.
+
+## [0.3.0] — 2026-09-04
 
 ### Changed — the client has no dependencies at all
 

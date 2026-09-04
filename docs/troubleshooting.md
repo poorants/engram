@@ -129,7 +129,7 @@ The hook is `engram hook`, so the first question is whether the binary on `PATH`
 knows that verb:
 
 ```bash
-engram version          # v0.3.0 or newer
+engram version          # v0.4.0 or newer
 engram hook </dev/null  # must print nothing and exit 0
 ```
 

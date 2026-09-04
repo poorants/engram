@@ -242,7 +242,7 @@ remembering to; they ship with the plugin.
 
 All three are the same static binary. **There is no interpreter and no runtime to
 install** — the skill ships no scripts, and the hook command is `engram hook`.
-The plugin needs `engram` v0.3.0 or newer on `PATH`; an older one does not know
+The plugin needs `engram` v0.4.0 or newer on `PATH`; an older one does not know
 the `hook` verb and complains on every prompt until it is updated.
 
 Use `--scope project` instead of `--scope user` if you want the tools in one
