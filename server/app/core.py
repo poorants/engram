@@ -113,6 +113,41 @@ def chunk(md: str) -> list[Chunk]:
     return chunks
 
 
+@dataclass
+class Heading:
+    line: int           # 0-indexed line number of the heading itself
+    depth: int          # 1..6
+    text: str           # the heading without its hashes
+    path: str           # "A > B > this one" — the same string chunks carry
+
+
+def headings(md: str) -> list[Heading]:
+    """The document's heading structure, fences excluded.
+
+    Split out so partial writes address a section with the SAME grammar the
+    chunker indexes one by. Two copies of "what counts as a heading" would mean
+    an edit could land on a line search never treated as a heading — and the
+    disagreement would only ever show up as a wrong edit.
+    """
+    out: list[Heading] = []
+    stack: list[str] = []
+    in_fence = False
+    for i, line in enumerate(md.splitlines()):
+        if _FENCE.match(line):
+            in_fence = not in_fence
+            continue
+        if in_fence:
+            continue
+        h = _HEADING.match(line)
+        if not h:
+            continue
+        depth = len(h.group(1))
+        text = h.group(2).strip()
+        stack = stack[: depth - 1] + [text]
+        out.append(Heading(line=i, depth=depth, text=text, path=" > ".join(stack)))
+    return out
+
+
 PARA = ("projects", "areas", "resources", "archives")
 SHARED = "shared"          # knowledge that belongs to no single repo. Reserved as a repo name.
 

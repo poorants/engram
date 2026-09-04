@@ -118,6 +118,51 @@ directory IS the scope, so keeping them would nest the vault one repo deep insid
 itself. With no file brain designated the write lands nowhere, and that is the
 only case that exits `3`.
 
+### `engram patch <path>`
+
+Change **part** of a document. A put prices an edit by the size of the document;
+this prices it by the size of the change, which for a one-line fix in a long
+guide is the whole difference.
+
+One edit per invocation — batches are the API's and the MCP tool's business,
+because a shell carrying several addressed edits would need a file format of its
+own, and "where does this edit go" must not be decided in two places.
+
+Address it one of three ways, and only one per call:
+
+| flag | addresses | notes |
+|---|---|---|
+| `--section` | a heading and everything under it | matches the text, the raw `## line`, or the full heading path search prints. Two matches is a refusal, never a guess |
+| `--anchor` / `--anchor-file` | an exact substring | must occur **exactly once**; matched literally, not as a pattern |
+| `--lines START:END` | a line range | `END` is **exclusive** — one line 12 is `12:13`, and `12:12` inserts before line 12 |
+
+`--expect-file` holds the text you believe is there right now. It is compared
+character for character, and it is what turns matching into proof: an edit
+aimed at the wrong place is refused instead of applied. It is **required** with
+`--lines`, because a line number by itself proves nothing about what is on it.
+
+`--base` takes the `sha256` that `get --json` reported. It is the only thing
+that catches an edit which is right about its own range and wrong about the
+document — someone else changed the rest of it in between.
+
+```bash
+engram get acme/shared/areas/blog/writing-style.md --json | jq -r .sha256 > .base
+sed -n '120,128p' current.md > .expect            # what is there now
+engram patch acme/shared/areas/blog/writing-style.md \
+  --section "## 옵트아웃 옵션 (향후)" --expect-file .expect --file new-section.md \
+  --base "$(cat .base)" --note "retire the dead automation spec"
+```
+
+`--dry-run` prints a unified diff and writes nothing. `--file /dev/null` deletes
+the addressed range; the store still refuses a patch that would leave the
+document empty. Every edit lands or none does, and the result is **one ordinary
+revision** — reversible exactly like a put.
+
+Exit `1` covers both refusals: a malformed call (400) and a document that
+disagrees with the request (409 — an ambiguous address, an `expect` that does
+not match, a stale `--base`). The difference is in the message, and a 409 means
+re-read before retrying rather than retrying unchanged.
+
 ### `engram move <path> <new path>`
 
 Rename, reclassify, archive. The old path **stays as an alias**, so links into
@@ -289,6 +334,7 @@ The six tools it exposes:
 | `brain_revisions` | `engram revisions` |
 | `brain_integrity` | `engram integrity` |
 | `brain_put` | `engram put` |
+| `brain_patch` | `engram patch` |
 | `brain_move` | `engram move` |
 
 There is deliberately no `brain_delete` — see [concepts](concepts.md#never-delete).

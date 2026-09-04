@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
-
+	"strconv"
 	"strings"
 
 	"github.com/poorants/engram/pkg/brain"
@@ -394,6 +394,138 @@ func cmdPut(args []string) int {
 	}
 	out("ok: store: %s  (author %s)\n", path, who)
 	return exitOK
+}
+
+// cmdPatch is the single-edit surface. Batches are deliberately left to the API
+// and the MCP tool: a shell invocation carrying several addressed edits would
+// need a file format of its own, and the one thing a partial write must never
+// become is a second place where "where does this edit go" is decided.
+func cmdPatch(args []string) int {
+	fs := flag.NewFlagSet("patch", flag.ContinueOnError)
+	section := fs.String("section", "", "address a heading and everything under it (its text, its raw line, or its full heading path)")
+	anchorStr := fs.String("anchor", "", "address an exact substring that occurs exactly once")
+	anchorFile := fs.String("anchor-file", "", "read the anchor from a file (for a multi-line one)")
+	lines := fs.String("lines", "", "address a line range as START:END — END is EXCLUSIVE, and END==START inserts before START")
+	bodyOnly := fs.Bool("body-only", false, "with --section: replace only the prose under the heading, keeping the heading line")
+	expectFile := fs.String("expect-file", "", "file holding the text you expect the addressed range to hold right now (required for --lines)")
+	base := fs.String("base", "", "the sha256 `get --json` reported for the version you read — refuses the write if it has changed since")
+	file := fs.String("file", "", "replacement text file (stdin when omitted; \"\" via --file /dev/null deletes the range)")
+	note := fs.String("note", "", "one line on why this revision exists (required)")
+	author := fs.String("author", "", "recorded author (resolved automatically when omitted)")
+	dryRun := fs.Bool("dry-run", false, "print the diff without writing")
+	asJSON := fs.Bool("json", false, "machine-readable output")
+	c, ident, _, pos, err := clients(fs, args)
+	if err != nil {
+		return usageError(err.Error())
+	}
+	if len(pos) < 1 {
+		return usageError("a document path is required")
+	}
+	path, err := expandPath(pos[0])
+	if err != nil {
+		return usageError(err.Error())
+	}
+
+	edit := brain.Edit{Section: *section, Anchor: strings.TrimSpace(*anchorStr)}
+	if f := strings.TrimSpace(*anchorFile); f != "" {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return usageError(fmt.Sprintf("could not read the anchor file (%s): %v", f, err))
+		}
+		edit.Anchor = string(b)
+	}
+	if l := strings.TrimSpace(*lines); l != "" {
+		start, end, err := parseLineRange(l)
+		if err != nil {
+			return usageError(err.Error())
+		}
+		edit.StartLine, edit.EndLine = start, &end
+	}
+	if *bodyOnly {
+		no := false
+		edit.IncludeHeading = &no
+	}
+	if f := strings.TrimSpace(*expectFile); f != "" {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return usageError(fmt.Sprintf("could not read the expect file (%s): %v", f, err))
+		}
+		expect := string(b)
+		edit.Expect = &expect
+	}
+	// A deletion is a legitimate patch, so an empty replacement is allowed here
+	// — unlike put, where an empty body would wipe the document. The store
+	// still refuses a patch that would leave nothing behind.
+	body, err := readBodyAllowingEmpty(*file)
+	if err != nil {
+		return usageError(err.Error())
+	}
+	edit.Body = body
+
+	ctx := context.Background()
+	req := brain.PatchRequest{
+		BaseSHA256: strings.TrimSpace(*base),
+		Edits:      []brain.Edit{edit},
+		Note:       *note,
+		Author:     ident.Author(ctx, *author),
+		DryRun:     *dryRun,
+	}
+	if _, err := c.PreparePatch(path, req); err != nil {
+		return usageError(err.Error())
+	}
+	res, err := c.Patch(ctx, path, req)
+	if err != nil {
+		return fail(err)
+	}
+	if res == nil {
+		res = map[string]any{}
+	}
+	res["path"] = path
+	if *asJSON {
+		return emit(res)
+	}
+	renderPatch(res, path)
+	return exitOK
+}
+
+// parseLineRange reads START:END. END is exclusive, and saying so in the error
+// is worth more than the parse itself — an off-by-one here edits the wrong line
+// and looks like the tool misbehaved.
+func parseLineRange(s string) (int, int, error) {
+	a, b, ok := strings.Cut(s, ":")
+	if !ok {
+		return 0, 0, fmt.Errorf("--lines wants START:END (END is EXCLUSIVE — one line 12 is --lines 12:13)")
+	}
+	start, err := strconv.Atoi(strings.TrimSpace(a))
+	if err != nil {
+		return 0, 0, fmt.Errorf("--lines START is not a number: %q", a)
+	}
+	end, err := strconv.Atoi(strings.TrimSpace(b))
+	if err != nil {
+		return 0, 0, fmt.Errorf("--lines END is not a number: %q", b)
+	}
+	return start, end, nil
+}
+
+// readBodyAllowingEmpty is readBody without the non-empty rule: deleting a
+// range is a real edit, and "" is how it is expressed.
+func readBodyAllowingEmpty(file string) (string, error) {
+	if f := strings.TrimSpace(file); f != "" {
+		b, err := os.ReadFile(f)
+		if err != nil {
+			return "", fmt.Errorf("could not read the body file (%s): %w", f, err)
+		}
+		return string(b), nil
+	}
+	st, err := os.Stdin.Stat()
+	if err == nil && st.Mode()&os.ModeCharDevice != 0 {
+		return "", fmt.Errorf("no replacement text — pass --file or pipe it on stdin (--file /dev/null deletes the range)")
+	}
+	b, err := io.ReadAll(os.Stdin)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // putRefused writes a scope-refused document into the local file brain.

@@ -130,9 +130,10 @@ skill ships no scripts, and the capture-loop hook is `engram hook`.
 | `brain_revisions` | who changed it, when, and why |
 | `brain_integrity` | broken links, orphans, weak nodes |
 | `brain_put` | save (create and update are one upsert; the previous body is kept) |
+| `brain_patch` | change part of one — send the edit, not the document |
 | `brain_move` | rename, reclassify, archive — the old path stays as an alias |
 
-Same six over the CLI as `engram search|get|revisions|integrity|put|move`.
+Same seven over the CLI as `engram search|get|revisions|integrity|put|patch|move`.
 Full reference: [docs/cli.md](docs/cli.md).
 
 ## Documentation

@@ -33,6 +33,8 @@ sys.path.insert(0, str(Path(__file__).parent))
 from ingest import (ALLOWED_OWNERS, PathRejected, ScopeDenied,  # noqa: E402
                     delete_doc, ensure_schema, import_docs, move_doc, rederive_all,
                     restore_doc, write_doc)
+from patch import (PatchConflict, PatchRejected,  # noqa: E402
+                   apply_edits, check_base, diff, normalize, sha256 as body_sha256)
 from search import DSN, search  # noqa: E402
 
 # -- authentication ----------------------------------------------------------
@@ -496,6 +498,75 @@ async def api_put_doc(path: str, request: Request,
         raise HTTPException(403, str(e))
 
 
+@app.patch("/api/doc/{path:path}")
+async def api_patch_doc(path: str, request: Request,
+                        _: None = Depends(require_auth)) -> dict:
+    """Change PART of a document — the same canonical write, addressed narrowly.
+
+    This exists because a whole-body upsert prices an edit by the size of the
+    document rather than the size of the change, and the commonest edit in this
+    brain is one line in each of several documents.
+
+    It is not a second write path. The edits are applied to the stored body in
+    memory and the RESULT goes through ``write_doc`` — so one patch is one
+    revision holding the whole previous body, and aliases, scope refusal and
+    re-indexing behave exactly as they do for a put. What is saved is the
+    transfer, not the history.
+
+    The safety argument lives in ``patch.py``: an address that matches twice is
+    refused rather than guessed, ``expect`` proves the addressed range really
+    holds what the caller thinks, and ``base_sha256`` proves they read the
+    version they are editing. A failure writes nothing at all — there is no
+    partial application.
+    """
+    payload = await request.json()
+    edits = payload.get("edits")
+    note = payload.get("note", "")
+    if not isinstance(note, str) or not note.strip():
+        raise HTTPException(400, "note is empty — say in one line why this revision "
+                                 "exists (it is the commit message of the history)")
+    current = fetch_doc(path)
+    if not current:
+        raise HTTPException(404, f"no such document: {path} — patch changes an existing "
+                                 "document; create one with PUT")
+    before = normalize(current["body"])
+    try:
+        check_base(before, payload.get("base_sha256"))
+        applied = apply_edits(before, edits)
+    except PatchRejected as e:
+        raise HTTPException(400, str(e))
+    except PatchConflict as e:
+        # 409, not 400: the call is well formed and the DOCUMENT disagrees with
+        # it. Fixing it means re-reading, not rewriting the arguments — and a
+        # caller that retries a 400 unchanged would loop forever here.
+        raise HTTPException(409, str(e))
+
+    after = applied.body
+    if after == before:
+        return {"path": path, "status": "unchanged", "doc_id": current["id"],
+                "sha256": body_sha256(after), "edits": applied.edits}
+
+    if payload.get("dry_run"):
+        return {"path": path, "status": "dry_run", "doc_id": current["id"],
+                "edits": applied.edits, "chars": len(after),
+                "sha256": body_sha256(after),
+                "diff": diff(before, after, path),
+                "warning": "Call again without dry_run to write."}
+
+    try:
+        with pool.connection() as conn:
+            result = write_doc(conn, path, after, author=payload.get("author", ""),
+                               note=note)
+    except PathRejected as e:
+        raise HTTPException(400, str(e))
+    except ScopeDenied as e:
+        raise HTTPException(403, str(e))
+    result["edits"] = applied.edits
+    result["sha256"] = body_sha256(after)
+    result["chars"] = len(after)
+    return result
+
+
 @app.delete("/api/doc/{path:path}")
 def api_delete_doc(path: str, author: str = "", note: str = "",
                    _: None = Depends(require_auth)) -> dict:
@@ -684,8 +755,8 @@ async def api_index(request: Request,
 
 def fetch_doc(path: str) -> dict | None:
     with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute("SELECT id, path, title, area, updated_at, chars, body, owner, repo"
-                    " FROM docs WHERE path = %s AND deleted_at IS NULL", (path,))
+        cur.execute("SELECT id, path, title, area, updated_at, chars, body, owner, repo,"
+                    " sha256 FROM docs WHERE path = %s AND deleted_at IS NULL", (path,))
         row = cur.fetchone()
         if not row:
             return None
@@ -709,6 +780,10 @@ def fetch_doc(path: str) -> dict | None:
     return dict(id=doc_id, path=row[1], title=row[2], area=row[3],
                 updated_at=row[4].strftime("%Y-%m-%d %H:%M") if row[4] else None,
                 chars=row[5], body=row[6], owner=row[7], repo=row[8],
+                # The hash a partial write sends back as base_sha256. Handing it
+                # out with the body is what lets a caller prove it edited the
+                # version it actually read.
+                sha256=row[9],
                 outgoing=outgoing, backlinks=backlinks, revisions=revs)
 
 
