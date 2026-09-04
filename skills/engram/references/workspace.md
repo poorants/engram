@@ -1,11 +1,11 @@
 # Resolution — which brain is this repo's brain?
 
-`scripts/workspace.py` answers one question for every other part of the skill:
-standing in this directory, is the brain the **store**, a **local file brain**,
-or **nothing yet**?
+`engram resolve` answers one question for every other part of engram: standing in
+this directory, is the brain the **store**, a **local file brain**, or **nothing
+yet**?
 
 ```bash
-python "<skill_dir>/scripts/workspace.py" resolve --json
+engram resolve --json
 ```
 
 ## The settings file
@@ -26,15 +26,17 @@ python "<skill_dir>/scripts/workspace.py" resolve --json
 }
 ```
 
-**Two owners, no overlap.** The `engram` binary owns `store` and writes it
-(`engram store set`); this script owns `brains` and never writes the other
-section. Both read the whole file and preserve what they do not own, which is why
-`store set` cannot wipe a file-brain designation and `set-brain` cannot wipe a
-store address.
+**Two sections, two commands, no overlap.** `engram store set` writes `store`;
+`engram brain set` writes `brains`. Both read the whole file and preserve every
+key they do not own, which is why `store set` cannot wipe a file-brain
+designation and `brain set` cannot wipe a store address. That split used to be
+enforced by the two halves being two different programs in two languages; now it
+is one binary, and the only thing holding it is that each call writes one section
+— so it is pinned by a test.
 
 `store.owners` is a **cache** of the groups the store admits, written when the
-store was designated. It exists so resolution — which hooks call — never touches
-the network. Missing means `in_scope: null`, which is "unknown", not "refused";
+store was designated. It exists so resolution — which the capture-loop hook calls
+on every prompt and every turn — never touches the network. Missing means `in_scope: null`, which is "unknown", not "refused";
 the store itself decides, and it answers 403 when it disagrees.
 
 ## The order
@@ -69,9 +71,9 @@ are no per-repo assignments to keep in sync, and the one designated file brain
 applies everywhere once set.
 
 ```bash
-workspace.py set-brain /home/me/brain    # designate; replaces any previous one
-workspace.py unset-brain                 # the directory is left untouched
-workspace.py list                        # designations + how here resolves
+engram brain set /home/me/brain    # designate; replaces any previous one
+engram brain unset                 # the directory is left untouched
+engram brain show                  # designations + how here resolves
 ```
 
 There is exactly one file brain per environment, stored under the fixed name
@@ -89,8 +91,8 @@ session opening a repo has no signal a brain exists at all, and answers from the
 code alone.
 
 ```bash
-workspace.py link             # write/refresh the pointer in this repo's CLAUDE.md
-workspace.py link --remove    # strip it
+engram link             # write/refresh the pointer in this repo's CLAUDE.md
+engram link --remove    # strip it
 ```
 
 The block is marker-delimited and idempotent — re-running replaces it in place.

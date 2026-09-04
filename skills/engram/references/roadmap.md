@@ -47,9 +47,9 @@ brain/ (or flat root)        ->   engram publish   ->   dist/ (or a site)
 
 ### Integration points
 
-- Reuses `engram_lint.py` first: do not publish a brain with broken links into
+- Reuses `engram lint` first: do not publish a brain with broken links into
   the artifact — lint, repair, then export.
-- A new `scripts/publish.py` (the muscle) + a "Publish Workflow" section in
+- A new `engram publish` subcommand (the muscle) + a "Publish Workflow" section in
   `SKILL.md` (the intelligence: decide selection, run transforms, report).
 - Trigger ideas: "publish docs", "export the brain", "build the doc bundle",
   "engram publish".

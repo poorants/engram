@@ -182,3 +182,64 @@ func TestUnsetStoreLeavesTheRestAlone(t *testing.T) {
 		t.Fatal("brains must survive")
 	}
 }
+
+// The store section and the brains section are written by separate calls into
+// one file. Neither may erase the other — that split used to be enforced by the
+// two halves being two languages, and now it is only enforced here.
+func TestFileBrainAndStoreSurviveEachOtherRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ENGRAM_CONFIG_DIR", dir)
+	t.Setenv("ENGRAM_STORE_URL", "")
+	t.Setenv("ENGRAM_TOKEN", "")
+
+	if _, err := SetStore("https://store.example", []string{"acme"}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := SetFileBrain("/home/me/brain"); err != nil {
+		t.Fatal(err)
+	}
+	if got := FileBrain(); got != "/home/me/brain" {
+		t.Errorf("FileBrain() = %q", got)
+	}
+	cfg := Load()
+	if cfg.StoreURL != "https://store.example" {
+		t.Errorf("designating a file brain erased the store: %q", cfg.StoreURL)
+	}
+	if len(cfg.Owners) != 1 || cfg.Owners[0] != "acme" {
+		t.Errorf("the cached owner list did not survive: %v", cfg.Owners)
+	}
+
+	if _, err := SetStore("https://other.example", nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := FileBrain(); got != "/home/me/brain" {
+		t.Errorf("re-designating the store erased the file brain: %q", got)
+	}
+
+	if _, err := UnsetFileBrain(); err != nil {
+		t.Fatal(err)
+	}
+	if got := FileBrain(); got != "" {
+		t.Errorf("FileBrain() after unset = %q", got)
+	}
+	if Load().StoreURL != "https://other.example" {
+		t.Error("un-designating the file brain must leave the store alone")
+	}
+}
+
+// A brain registered under an older name still has to resolve, or an upgrade
+// silently loses somebody's vault.
+func TestAFileBrainUnderAnyNameResolves(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("ENGRAM_CONFIG_DIR", dir)
+	if err := os.MkdirAll(filepath.Join(dir, "engram"), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	doc := `{"version":1,"brains":{"legacy-name":{"path":"/vault"}}}`
+	if err := os.WriteFile(filepath.Join(dir, "engram", "config.json"), []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if got := FileBrain(); got != "/vault" {
+		t.Errorf("FileBrain() = %q, want /vault", got)
+	}
+}

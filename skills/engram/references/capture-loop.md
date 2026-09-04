@@ -41,7 +41,7 @@ the natural closing moment.
 
 Default wrap-up phrases (case-insensitive substring; Korean + English): 고생했 ·
 수고했 · 오늘은 여기까지 · 마무리하 · 마치자 · 끝내자 · 이만 · 푹 쉬 · wrap up ·
-that's all · done for today · good night · good work · … (see `brain_reflect.py`).
+that's all · done for today · good night · good work · … (see `engram hook`).
 
 Override the list with `ENGRAM_CAPTURE_PHRASES` (comma-separated). When the
 injected instruction appears, do the reflection as part of that turn's reply.
@@ -62,13 +62,24 @@ filler.
 
 These hooks ship with the plugin and need no per-machine setup:
 
-- `hooks/hooks.json` registers `brain_reflect.py` on `UserPromptSubmit` and `Stop`
-  (the latter alongside the integrity-lint `Stop` hook), using
-  `${CLAUDE_PLUGIN_ROOT}` paths.
-- They act only in repos that have a brain (`brain/` or `para/`) and never fail a
-  session on error (any exception → silent exit 0).
-- Both stdin reads and stdout writes use explicit UTF-8 so Korean text survives on
-  non-UTF-8 locales (e.g. Windows cp949).
+- `.claude-plugin/marketplace.json` registers the command `engram hook` on both
+  `UserPromptSubmit` and `Stop`. One command for both: Claude Code puts
+  `hook_event_name` in the payload, so the binary branches on it.
+- **It is the binary, not a script.** The hook used to be `python3 …
+  brain_reflect.py`, which meant the capture loop was silently dead on every
+  Windows machine: `python3` is not a command there even where Python is
+  installed — the App Execution Alias of that name opens the Microsoft Store and
+  exits. A hook that needs an interpreter is a hook that does not run.
+- They act only where a brain resolves (a designated store, a designated file
+  brain, or a local `brain/`), and never fail a session: every path exits 0,
+  including a panic, garbage on stdin and an unknown event.
+- Text is UTF-8 end to end, which is now a property of the runtime rather than
+  something each script has to remember — so a Korean wrap-up phrase survives a
+  cp949 console.
+
+The plugin therefore needs `engram` **v0.3.0 or newer** on `PATH`. An older
+binary does not know the `hook` verb and will print an unknown-command error on
+every prompt until it is updated (`install.sh` / `install.ps1`).
 
 Env knobs:
 

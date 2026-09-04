@@ -207,8 +207,8 @@ engram store doctor
 The token is deliberately not in `config.json`: that is a file people open and
 paste from, and a secret in it eventually gets copied somewhere it should not
 be. The directory is `$ENGRAM_CONFIG_DIR`, else `$CLAUDE_CONFIG_DIR`, else
-`~/.claude` - the same ladder the skill's Python helpers walk, so the binary and
-the skill land on one file without either being told where the other put it.
+`~/.claude`. The MCP server, the CLI and the capture hook are all the same
+binary, so they read that one file by construction.
 
 Environment beats file for every value, so a CI job or a one-off shell can point
 at a different store without editing anything: `ENGRAM_STORE_URL`,
@@ -240,8 +240,10 @@ model reads — when to save, what to link, how to classify. The **capture hooks
 (`UserPromptSubmit`, `Stop`) are what keep the brain fed without anyone
 remembering to; they ship with the plugin.
 
-The skill and the hooks need `python3` on `PATH`. The MCP server does not — it
-is the same static binary.
+All three are the same static binary. **There is no interpreter and no runtime to
+install** — the skill ships no scripts, and the hook command is `engram hook`.
+The plugin needs `engram` v0.3.0 or newer on `PATH`; an older one does not know
+the `hook` verb and complains on every prompt until it is updated.
 
 Use `--scope project` instead of `--scope user` if you want the tools in one
 checkout only. That is rarely what you want: the brain is not a property of a

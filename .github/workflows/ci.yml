@@ -40,17 +40,45 @@ jobs:
       - name: server unit tests (no database needed)
         run: python -m pytest server/tests -q
 
-  skill:
+  # The plugin declares its hook as a command line, and nothing else checks that
+  # the binary actually implements the verb it names. Getting that wrong is not a
+  # quiet failure: an unknown command puts an error in front of the user on every
+  # single prompt.
+  plugin:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-go@v5
         with:
-          python-version: "3.12"
-      - name: compile the skill's scripts
-        run: python -m compileall -q skills/engram/scripts
+          go-version-file: go.mod
+          cache: true
       - name: the plugin manifest must be valid JSON
-        run: python -c "import json;json.load(open('.claude-plugin/marketplace.json'))"
+        run: jq -e . .claude-plugin/marketplace.json > /dev/null
+      - name: the skill ships no scripts
+        run: |
+          if [ -e skills/engram/scripts ]; then
+            echo "skills/engram/scripts is back — the skill must stay interpreter-free"
+            exit 1
+          fi
+      - name: every hook command must be a verb this binary implements
+        run: |
+          set -eu
+          go build -o "$RUNNER_TEMP/engram" ./cmd/engram
+          jq -r '[.plugins[].hooks // {} | to_entries[] | .value[].hooks[].command] | unique[]' \
+            .claude-plugin/marketplace.json > "$RUNNER_TEMP/hookcmds"
+          test -s "$RUNNER_TEMP/hookcmds"
+          while read -r cmd; do
+            echo "checking: $cmd"
+            case "$cmd" in
+              "engram "*) ;;
+              *) echo "a hook command must be the engram binary, got: $cmd"; exit 1 ;;
+            esac
+            verb=$(printf '%s\n' "$cmd" | cut -d' ' -f2)
+            if ! "$RUNNER_TEMP/engram" "$verb" < /dev/null > /dev/null 2>&1; then
+              echo "the binary does not implement the hook verb: $verb"
+              exit 1
+            fi
+          done < "$RUNNER_TEMP/hookcmds"
 
   # The installers are the first thing a stranger runs, and nothing else in this
   # repository exercises them. A syntax error here is invisible until it is in

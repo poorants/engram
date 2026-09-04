@@ -2,12 +2,18 @@
 // model in a session, and a CLI for everything that is not one — hooks,
 // scripts, scheduled jobs, and a person at a terminal.
 //
-// One binary rather than two is the point. When the transport lived in two
-// programs, the cost was two credential files, two default authors, and two
-// copies of the path rules to drift apart. Here there is one client and three
-// surfaces over it: `engram mcp` for the session, `engram <verb>` for a
-// subprocess, and the engram skill's Python helpers, which shell out to this
-// same binary rather than speaking HTTP themselves.
+// One binary rather than two is the point, and it is now one binary rather than
+// a binary plus an interpreter. When the transport lived in two programs, the
+// cost was two credential files, two default authors, and two copies of the path
+// rules to drift apart. When the skill's helpers and the capture-loop hooks were
+// Python, the cost was steeper and quieter: on Windows `python3` is not a command
+// even where Python is installed — the App Execution Alias of that name opens the
+// Microsoft Store and exits — so the hooks were silently dead on every Windows
+// machine, and nothing said so.
+//
+// So there are three surfaces over one client and one settings file, and nothing
+// else to install: `engram mcp` for the session, `engram <verb>` for a
+// subprocess, and the plugin's hook command, which is `engram hook`.
 package main
 
 import (
@@ -41,8 +47,9 @@ usage: engram <command> [options]
 
   mcp                     run the MCP server over stdio (what a session launches)
 
+the store
   search <question>       search the store — pass the question as a sentence
-                          --limit --archives --boost-repo --only-repo --only-owner
+                          --limit --chars --archives --boost-repo --only-repo --only-owner
   get <path>              print one document
   put <path>              save a document (--file, or stdin; --note required)
   move <path> <new path>  move a document (the old path stays as an alias)
@@ -56,20 +63,37 @@ usage: engram <command> [options]
   store doctor            prove the store answers, end to end
   store unset             remove the designation (--forget-token)
 
+a file brain
+  resolve                 which brain feeds this directory, and why
+  brain show              the designations, and how here resolves
+  brain set <path>        designate THE shared file brain (replaces any previous)
+  brain unset             remove the designation (the directory is left alone)
+  init                    create the PARA folders (--output --flat --nested-dir)
+  lint                    broken links, orphans, weak nodes, density (--all --base)
+  weave                   the concrete links that would raise the density (--base)
+  link                    write this repo's CLAUDE.md brain pointer (--remove)
+
+  hook                    the capture-loop hook — reads a Claude Code hook
+                          payload on stdin. Registered by the plugin; not
+                          something to run by hand.
+
   version                 print the version
+
+Every command prints for a person and takes --json for a machine.
 
 A document path is <owner>/<repo>/<area>/<name>.md, where area is one of
 projects|areas|resources|archives; a repo hub MOC is <owner>/<repo>/README.md.
 Given as './<area>/<name>.md' the coordinates are filled in from the current
 directory's git origin.
 
-exit codes: 0 ok · 1 error · 3 the store refused this path's owner · 4 store unreachable
+exit codes: 0 ok · 1 error · 3 the store refused this path's owner and no local
+file brain took it · 4 store unreachable
 `
 
 const (
 	exitOK       = 0
 	exitError    = 1
-	exitRefused  = 3 // the store declined this path's owner group (403)
+	exitRefused  = 3 // the store declined this owner group AND nothing local caught it
 	exitStoreOut = 4 // the store could not be reached at all
 )
 
@@ -84,6 +108,8 @@ func run(args []string) int {
 	switch verb {
 	case "mcp":
 		return runMCP(rest)
+	case "hook":
+		return cmdHook(rest)
 	case "search":
 		return cmdSearch(rest)
 	case "get":
@@ -102,6 +128,18 @@ func run(args []string) int {
 		return cmdScope(rest)
 	case "store":
 		return runStore(rest)
+	case "resolve":
+		return cmdResolve(rest)
+	case "brain":
+		return runBrain(rest)
+	case "init":
+		return cmdInit(rest)
+	case "lint":
+		return cmdLint(rest)
+	case "weave":
+		return cmdWeave(rest)
+	case "link":
+		return cmdLink(rest)
 	case "version", "--version", "-v":
 		fmt.Printf("engram %s (%s/%s, %s)\n", resolveVersion(), runtime.GOOS, runtime.GOARCH, runtime.Version())
 		return exitOK

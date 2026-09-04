@@ -44,7 +44,7 @@ Examples:
 
 ## Step 4: Write Content
 
-Write through the store — `store.py put <path> --file <draft> --note "<why>"`.
+Write through the store — `engram put <path> --file <draft> --note "<why>"`.
 The `--note` is not optional politeness: it lands in the revision history, which is
 what replaces `git log` now that the brain is not a git tree. A write with no note
 leaves a change nobody can explain later.

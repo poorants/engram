@@ -1,19 +1,20 @@
 # CLI and MCP reference
 
-One binary, three surfaces over one transport client: the MCP tools a model
-calls in a session, `engram <verb>` for a subprocess, and the skill's Python
-wrapper. They are the same code — two clients would mean two places to put the
-token, two default authors, and two copies of the path rules to drift apart.
+One binary, two surfaces over one transport client: the MCP tools a model calls
+in a session, and `engram <verb>` for everything that is not one — a hook, a
+scheduled job, the skill, a person at a terminal. They are the same code — two
+clients would mean two places to put the token, two default authors, and two
+copies of the path rules to drift apart.
 
-Every CLI command prints **JSON on stdout** and human-readable errors on stderr.
-The caller is usually a program, so there is no second, prettier output format
-to keep in agreement with the first.
+Every command prints **for a person on stdout** and takes `--json` for a machine.
+Errors go to stderr, and the exit code — not the message text — is the contract.
 
 ## Global flags
 
 | Flag | Meaning |
 |---|---|
 | `--store <url>` | override the configured store for this one call |
+| `--json` | machine-readable output instead of the human report |
 
 Environment beats the config file for every setting: `ENGRAM_STORE_URL`,
 `ENGRAM_TOKEN`, `ENGRAM_AUTHOR`, `ENGRAM_CONFIG_DIR`.
@@ -24,13 +25,15 @@ Environment beats the config file for every setting: `ENGRAM_STORE_URL`,
 |---|---|
 | `0` | ok |
 | `1` | error — usage, validation, a bad or missing token (401), or the store said no for a reason of its own |
-| `3` | the store **refused this path's owner group** (403) |
+| `3` | the store **refused this path's owner group** (403) **and no local file brain took the document** |
 | `4` | the store could not be **reached at all** |
 
 `3` and `4` are separate on purpose, and a caller should treat them differently.
 A refusal means the store is alive and declined: the document belongs in a local
-file brain instead, and retrying will never help. Unreachable means try again
-later — there is no queue and no cache, so nothing was written.
+file brain instead, and retrying will never help — so `engram put` writes it
+there itself and exits `0`, because the document landed. `3` is what is left:
+refused with nowhere to put it. Unreachable means try again later — there is no
+queue and no cache, so nothing was written anywhere.
 
 ## Reading
 
@@ -46,6 +49,7 @@ path, ranked by the one ranking — the same `/api/search` the web viewer uses.
 | `--boost-repo <repo>` | lift this repo's documents — a **boost**, not a filter |
 | `--only-repo <a,b>` | restrict to these repos — a **filter** |
 | `--only-owner <a,b>` | restrict to these owners |
+| `--chars <n>` | characters shown per chunk in the human report (default 400) |
 
 ```bash
 engram search "how do we handle a token rotation" --limit 5
@@ -101,6 +105,18 @@ echo "..." | engram put ./resources/logging.md --note "first pass"
 nobody can use. `--dry-run` checks the owner group and the address rules against
 the live store, so it is the cheap way to find out whether a write would be
 refused before assembling the body.
+
+**When the store refuses the owner group (403), the document is written to the
+local file brain** — where it belonged — and the report says where it landed:
+
+```
+local: the store refused this path (…) → wrote the local file brain: /home/me/brain/resources/logging.md
+```
+
+The `<owner>/<repo>` coordinates are dropped on the way in: in a file brain the
+directory IS the scope, so keeping them would nest the vault one repo deep inside
+itself. With no file brain designated the write lands nowhere, and that is the
+only case that exits `3`.
 
 ### `engram move <path> <new path>`
 
@@ -159,6 +175,100 @@ here; this reports what the address rules derive. Run it when a write is refused
 and you are not sure which repo the session thinks it is in.
 
 ### `engram version`
+
+The version, the platform it was built for, and the Go toolchain that built it.
+
+## The file brain
+
+A file brain is what covers a repo the store does not admit, and a machine that
+has no store at all. These commands are pure filesystem work — nothing here
+touches the network.
+
+### `engram resolve`
+
+Which brain feeds this directory, and why. Every other part of engram asks this
+first, so it is also the command to run when something wrote to a place you did
+not expect.
+
+```
+store=https://brain.example scope=acme/webapp source=store fallback_vault=/repo/brain
+base=/home/me/brain/brain label=brain source=shared
+```
+
+`source` is one of `store` · `absorb` (you are inside the designated file brain)
+· `shared` (it is designated and you are elsewhere) · `local` (an undesignated
+`brain/` in this repo) · `none`. **The store is asked first and the answer stops
+there**: a not-yet-migrated `para/` sitting in an admitted repo is a leftover,
+not a second brain, and `warning` says so.
+
+### `engram brain show | set <path> | unset`
+
+The designation of THE shared file brain — one per environment, stored under the
+fixed name `shared`. `set` **replaces** rather than adds: two vaults means a coin
+flip about where a refused document went. Un-designating leaves the directory
+completely alone.
+
+### `engram init`
+
+Create the four PARA folders with a `.gitkeep` in each. Idempotent — running it
+twice is a no-op, not a reset.
+
+| Flag | Meaning |
+|---|---|
+| `--output <dir>` | base directory (default: here) |
+| `--flat` | categories at the base, with no nested prefix |
+| `--nested-dir <name>` | nested folder name (default `brain`; reuses a legacy `para/` if present) |
+
+### `engram lint`
+
+Broken links, orphans, **weak nodes** and the density metrics of a file brain.
+Exit is always `0` — a `[[wikilink]]` may point at a note not written yet, so
+problems are reported and never block work.
+
+| Flag | Meaning |
+|---|---|
+| `--base <path>` | force the PARA base instead of resolving it |
+| `--all` | print the summary even when the graph is clean |
+| `--json` | the full report, metrics included |
+
+In store mode it says so and scans nothing: the link graph is a table there, and
+`engram integrity` is the check that reads it. The exception is a repo the store
+refuses — there the local vault really is that repo's brain, and it is linted
+normally.
+
+### `engram weave`
+
+The concrete moves that would raise the density, ranked. Advisory only: it never
+touches a file.
+
+- **missing_links** — a document already names another note in prose but does not
+  link it. The cheapest way to dissolve a lonely spoke, and spokes rank first.
+- **concept_candidates** — a term recurring across documents in *different*
+  folders with no note of its own.
+
+### `engram link`
+
+Write or refresh this repo's `CLAUDE.md` brain pointer, so a session without the
+engram skill still knows a brain exists and where to look. The block is
+marker-delimited and idempotent; `--remove` strips it, and deletes `CLAUDE.md`
+only when the block was the whole of it.
+
+## `engram hook`
+
+The capture-loop hook. It reads a Claude Code hook payload on stdin and, at the
+right moment, injects an instruction to reflect on the session and save what is
+worth keeping. The plugin registers it on `UserPromptSubmit` and `Stop`; it is
+not a command to run by hand.
+
+It never fails a session — every path exits `0`, including a panic, malformed
+stdin and an unknown event. A hook that exits non-zero puts an error in front of
+the user on every single prompt, which is worse than a missed reflection.
+
+| Variable | Default | Effect |
+|---|---|---|
+| `ENGRAM_CAPTURE_DISABLE` | unset | `1` turns both hooks off |
+| `ENGRAM_CAPTURE_COOLDOWN_MIN` | `30` | minutes between `Stop`-backstop nudges |
+| `ENGRAM_CAPTURE_PHRASES` | built-in list | comma-separated wrap-up phrases |
 
 ## `engram mcp`
 

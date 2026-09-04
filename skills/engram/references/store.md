@@ -1,9 +1,10 @@
 # The store — full contract
 
 The brain is a Postgres-backed service. There is **one client for it**, the
-`engram` binary, and three surfaces over that one client: the `brain_*` MCP tools
-inside a session, `engram <verb>` for anything that is not the model, and
-[../scripts/store.py](../scripts/store.py) for this skill.
+`engram` binary, and two surfaces over that one client: the `brain_*` MCP tools
+inside a session, and `engram <verb>` for anything that is not the model — a
+hook, a scheduled job, this skill, a person at a terminal. There is no third
+surface and no interpreter: this skill ships no scripts.
 
 Keeping it to one client is not tidiness. When there were two, the cost was two
 places to put the token, two default authors, and two copies of the path rules to
@@ -25,9 +26,9 @@ it should not be. `<config dir>` is `$ENGRAM_CONFIG_DIR`, else
 `$CLAUDE_CONFIG_DIR`, else `~/.claude`. Environment beats file for every value:
 `ENGRAM_STORE_URL`, `ENGRAM_TOKEN`, `ENGRAM_AUTHOR`.
 
-The same file is read by this skill's `workspace.py`, which owns the `brains`
-section (the file brain) and never writes the `store` section. One settings file,
-two owners, no overlap.
+The `brains` section of that same file holds the file-brain designation
+(`engram brain set`). Two sections, written by two separate calls, so designating
+one never erases the other.
 
 **`doctor` checks the write token, not only the connection.** "The store is up"
 and "I can write to it" are different facts, and a check that proves only the
@@ -88,15 +89,18 @@ nothing that had already resolved.
 |---|---|---|
 | 0 | success | — |
 | 1 | error — bad argument, malformed path, missing token | fix the call |
-| 3 | the store REFUSED this path's owner (403) | write the local file brain |
+| 3 | the store REFUSED this path's owner (403) AND no local file brain took it | designate one: `engram brain set <path>` |
 | 4 | the store could not be REACHED | fail loudly; write nothing anywhere |
 
 Never branch on message text. Split that way, a network failure is one day read
 as a scope refusal, the document goes into a local file nobody reads, and
 everyone believes it was recorded.
 
-`store.py` turns these into `ScopeRefused` and `StoreDown`, and only the first
-one triggers a local write.
+`engram put` acts on this itself: on a 403 it writes the document into the local
+file brain and reports `local: … → wrote the local file brain: <path>` with exit
+0, because the document DID land. Exit 3 is reserved for a refusal that landed
+nowhere — no file brain is designated — which is the only case a caller has to do
+something about.
 
 ## Scope is the confidentiality boundary
 

@@ -263,3 +263,60 @@ func write(path string, doc raw) error {
 	}
 	return os.WriteFile(path, append(b, '\n'), 0o600)
 }
+
+// --- the file brain ---------------------------------------------------------
+//
+// The `brains` section used to be owned by the skill's workspace.py and read by
+// nothing else. It moved here when the skill's helpers did, and the split it
+// was protecting still holds — it is just no longer a split between two
+// languages. What the store owns (`store`) and what the file vault owns
+// (`brains`) are still separate keys, written by separate calls, so neither
+// erases the other.
+
+// FileBrainName is the fixed key of THE one shared file brain per environment.
+// Designating replaces rather than adds: two vaults means a coin flip about
+// where a refused document went.
+const FileBrainName = "shared"
+
+// FileBrain is the designated shared file brain's container directory, or "".
+func FileBrain() string {
+	doc := readRaw(Path())
+	brains := doc.section("brains")
+	if len(brains) == 0 {
+		return ""
+	}
+	if m, ok := brains[FileBrainName].(map[string]any); ok {
+		return str(m, "path")
+	}
+	// A brain registered under some other name still counts — an older
+	// designation must not silently stop resolving.
+	for _, v := range brains {
+		if m, ok := v.(map[string]any); ok {
+			if p := str(m, "path"); p != "" {
+				return p
+			}
+		}
+	}
+	return ""
+}
+
+// SetFileBrain designates the shared file brain, replacing any previous one and
+// preserving the store section.
+func SetFileBrain(dir string) (string, error) {
+	path := Path()
+	doc := readRaw(path)
+	doc["brains"] = map[string]any{FileBrainName: map[string]any{"path": dir}}
+	if _, ok := doc["version"]; !ok {
+		doc["version"] = 1
+	}
+	return path, write(path, doc)
+}
+
+// UnsetFileBrain removes the designation. The directory is left untouched — a
+// settings change must never delete somebody's notes.
+func UnsetFileBrain() (string, error) {
+	path := Path()
+	doc := readRaw(path)
+	delete(doc, "brains")
+	return path, write(path, doc)
+}

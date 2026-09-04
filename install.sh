@@ -233,7 +233,8 @@ if [ "$WIRE_CLAUDE" -eq 1 ] && command -v claude >/dev/null 2>&1; then
     say "  MCP: could not register — run: claude mcp add --scope user engram -- engram mcp"
   fi
   if [ "$plugin_rc" -eq 0 ] && [ "$mcp_rc" -eq 0 ]; then claude_wired=1; fi
-  command -v python3 >/dev/null 2>&1 || say "  note: the skill's helpers and hooks need python3 on PATH"
+  # The skill and the hooks are the binary itself now, so there is nothing left
+  # to check for here — no interpreter, no runtime.
 elif [ "$WIRE_CLAUDE" -eq 1 ]; then
   say ""
   say "note: the claude CLI was not found, so the skill and the MCP server were"

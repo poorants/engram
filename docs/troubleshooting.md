@@ -123,14 +123,25 @@ issued as such is refused by the browser on the `https://` page — so every pag
 is the login page. Add the header at the proxy (nginx:
 `proxy_set_header X-Forwarded-Proto $scheme;`; Caddy sets it by itself).
 
-## The skill's scripts fail
+## The capture hooks do not fire
 
-The skill's helpers and hooks need `python3` on `PATH`. The binary and the MCP
-server do not — those are the same static Go binary with no runtime.
+The hook is `engram hook`, so the first question is whether the binary on `PATH`
+knows that verb:
 
-The skill and the binary read one config file, resolved as `$ENGRAM_CONFIG_DIR`,
-else `$CLAUDE_CONFIG_DIR`, else `~/.claude`. If one half works and the other
-does not, check that both processes see the same value for those.
+```bash
+engram version          # v0.3.0 or newer
+engram hook </dev/null  # must print nothing and exit 0
+```
+
+An older binary prints `unknown command "hook"` on every prompt — update it with
+`install.sh` / `install.ps1`. If the version is fine, check that a brain actually
+resolves here (`engram resolve`): with `source=none` there is nothing to feed and
+the hook stays silent by design. `ENGRAM_CAPTURE_DISABLE=1` also silences it.
+
+This used to be the section about `python3`, and on Windows it was the answer
+almost every time: `python3` is not a command there even where Python is
+installed — the App Execution Alias of that name opens the Microsoft Store and
+exits, so the hook failed silently. Nothing in engram needs an interpreter now.
 
 ## The MCP tools do not appear in a session
 

@@ -52,21 +52,23 @@ author byline live there, once.
    `<owner>/<repo>/<area>/<name>.md` path — take owner and repo from `origin`.
 2. **`engram <verb>`** — the same operations for anything that is not the model:
    hooks, scripts, a person at a terminal. It runs IN a directory, so
-   `./<area>/<name>.md` is filled in from that repo's `origin`, and its exit codes
-   are a contract (`3` scope refused, `4` store unreachable).
-3. **[scripts/store.py](scripts/store.py)** — this skill's wrapper over (2). It
-   holds no HTTP, no token and no path rules. What it adds is the skill's own two
-   jobs: human-readable output, and the **403 → local-file-brain fallback** (that
-   vault's location is the skill's business, not a release binary's).
+   `./<area>/<name>.md` is filled in from that repo's `origin`. It prints for a
+   person and takes `--json` for a machine, it writes a scope-refused document to
+   the local file brain itself, and its exit codes are a contract (`3` the store
+   refused and nothing local took it, `4` store unreachable).
+
+**This skill ships no scripts and needs no interpreter.** Everything below is
+`engram`, one binary. It used to be a set of Python helpers, and on Windows they
+never ran: `python3` is not a command there even where Python is installed.
 
 ```bash
-store.py status                                    # store, this repo's scope, your byline
-store.py search "why does the copy button copy nothing"   # ranked chunks, not whole files
-store.py get   acme/shared/resources/x.md
-store.py put   acme/webapp/resources/x.md --file draft.md --note "why this exists"
-store.py revisions acme/shared/resources/x.md      # this replaces git log
-store.py move  <old> <new>                         # the old path stays as an alias
-store.py integrity                                 # broken / orphan / weak nodes
+engram status                                    # store, this repo's scope, your byline
+engram search "why does the copy button copy nothing"   # ranked chunks, not whole files
+engram get   acme/shared/resources/x.md
+engram put   acme/webapp/resources/x.md --file draft.md --note "why this exists"
+engram revisions acme/shared/resources/x.md      # this replaces git log
+engram move  <old> <new>                         # the old path stays as an alias
+engram integrity                                 # broken / orphan / weak nodes
 ```
 
 **Search the store before Grep. Always.** It returns chunks with their heading
@@ -124,9 +126,8 @@ store and does not want to run one, the file-brain path below works on its own.
 
 ## Path resolution
 
-Run the resolver first — `python "<skill_dir>/scripts/workspace.py" resolve
---json` → `{base, source, store, owner, repo, in_scope, warning}` — then route on
-`source`:
+Run the resolver first — `engram resolve --json` →
+`{base, source, store, owner, repo, in_scope, warning}` — then route on `source`:
 
 1. **`store`** (the normal case) — **the store is the brain and resolution stops
    here.** `store` is the URL, `owner`/`repo` are the coordinates derived from
@@ -143,7 +144,7 @@ Run the resolver first — `python "<skill_dir>/scripts/workspace.py" resolve
    PARA folders at the root (flat mode — consider the Upgrade Workflow).
 5. **`none`** — nothing yet. Ask the user to point at a store
    (`engram store set <url>`) or designate a file brain
-   (`workspace.py set-brain <path>`). **Never invent a path.**
+   (`engram brain set <path>`). **Never invent a path.**
 
 An explicit `CLAUDE.md` convention wins over all of the above. Once determined,
 stay consistent within that project. Full semantics — the settings file, its two
@@ -160,7 +161,7 @@ prefix in flat mode. The linter auto-detects it the same way (force with
 > lint) → **Upgrade Workflow**, a guarded refactor, because a base name can be
 > load-bearing in code and CI.
 
-`workspace.py link` writes a small portable pointer block into the repo's
+`engram link` writes a small portable pointer block into the repo's
 `CLAUDE.md` so that even a session without this skill knows a brain exists and
 where to look. It is optional — engram always resolves positionally — and
 `link --remove` strips it.
@@ -222,9 +223,8 @@ external lifecycle (→ sibling)?*
 **When**: the first PARA interaction, or the category folders are missing.
 **Auto-execute without asking** — it is idempotent.
 
-Resolve the base first, run [scripts/init.py](scripts/init.py) (`--output .` for
-nested under `brain/`, add `--flat` for categories at the root), and report what
-was created. In store mode there is nothing to initialize — the store already
+Resolve the base first, run `engram init` (`--output .` for nested under
+`brain/`, add `--flat` for categories at the root), and report what was created. In store mode there is nothing to initialize — the store already
 exists.
 
 ## Create Workflow
@@ -240,12 +240,12 @@ exists.
 4. **Write** — plain markdown, starting with an H1. No frontmatter, no `---`
    rules. Title and headings in the words someone would actually ask; the
    conclusion first in each section; identifiers verbatim. Write it **through the
-   store**: the `brain_put` MCP tool (body plus `note`), or `store.py put
+   store**: the `brain_put` MCP tool (body plus `note`), or `engram put
    <owner>/<repo>/<area>/<name>.md --file <draft> --note "<why this exists>"`.
    The note lands in the revision history, which is what replaces `git log` now
-   that there are no files. If the store refuses the owner (403), `store.py`
-   writes the local file brain and tells you; the MCP tool reports the refusal
-   and leaves that write to this skill.
+   that there are no files. If the store refuses the owner (403), `engram put`
+   writes the local file brain itself and says where it landed; the MCP tool
+   reports the refusal instead, so retry that one through `engram put`.
 5. **Connect** — secure at least one inbound link, weave contextual
    `[[wikilinks]]` into the prose, update the MOC, and ground a `resources/` doc
    to an `areas/` or `projects/` one. Follow
@@ -265,7 +265,7 @@ Common moves: `projects/`→`archives/` (completed), `areas/`→`archives/` (end
 **Do not `mv` a file for a store document.** There is no file to move.
 
 ```bash
-store.py move <owner>/<repo>/<area>/<name>.md <owner>/<repo>/archives/<name>.md
+engram move <owner>/<repo>/<area>/<name>.md <owner>/<repo>/archives/<name>.md
 ```
 
 (or the `brain_move` MCP tool with the same two paths.)
@@ -326,7 +326,7 @@ approval gate): [references/migration-patterns.md](references/migration-patterns
 
 ## List & Search Workflow
 
-- **Search** — the `brain_search` MCP tool or `store.py search`, with **the
+- **Search** — the `brain_search` MCP tool or `engram search`, with **the
   user's question, verbatim**. Ask it as a question, not as keywords: the ranking
   is tuned on natural questions. Report the returned chunks as
   `path ¶ heading_path`.
@@ -339,7 +339,7 @@ approval gate): [references/migration-patterns.md](references/migration-patterns
   dates): a markdown table per non-empty category, rows grouped under
   `### <Category> (N items)`, columns `Name | Type | Last Modified`. The store has
   no listing tool by design; its dashboard is the web viewer, and per-repo counts
-  come from `store.py status`.
+  come from `engram status`.
 - **List (filename patterns)** — still Glob, over file brains only. The store is
   addressed by path, not globbed.
 
@@ -361,7 +361,7 @@ First load [references/linking-rules.md](references/linking-rules.md).
 
 1. **Assess** — run the Integrity Lint for orphans and broken links.
 2. **Connect orphans** — read each orphan, find semantically related documents
-   (`brain_search`/`store.py search` for store documents; Grep/Glob only on a
+   (`brain_search`/`engram search` for store documents; Grep/Glob only on a
    file brain) and either **weave a contextual wikilink into that document's
    prose** or add a line in the folder's `README.md` MOC. Store edits go through
    `brain_put` (get → edit → put); never Edit a store document as if it were a
@@ -381,15 +381,15 @@ MOC), the next move is the Weave Workflow, not more MOCs.
 `woven_ratio`, many `weak_nodes`). Link & Connect removes orphans (≥1 inbound);
 this removes *lonely spokes* (earns a contextual, cross-folder inbound).
 
-**File brains only** for the script — it walks a filesystem and cannot see the
+**File brains only** — `engram weave` walks a filesystem and cannot see the
 store. For store documents, work from `brain_integrity`'s weak-node list, use
 `brain_search` to find candidates, and weave with get → edit → `brain_put`.
 
-`scripts/weave_candidates.py --json` gives two advisory lists — **missing_links**
+`engram weave --json` gives two advisory lists — **missing_links**
 (a document already names another note but does not link it; the cheapest
 spoke-dissolver, spokes ranked first) and **concept_candidates** (a term
 recurring across folders with no note of its own). Judge which are *real*, weave
-them where the mention already sits, then re-run `engram_lint.py --json` to
+them where the mention already sits, then re-run `engram lint --json` to
 confirm the metrics moved. Full procedure:
 [references/weave-workflow.md](references/weave-workflow.md).
 
@@ -401,7 +401,7 @@ closing check of Create, Move, Classify & Import, Upgrade and Review.
 **For store documents — the normal case:**
 
 ```bash
-store.py integrity
+engram integrity
 ```
 
 It reports broken links, orphans, and **weak nodes** separately, because the
@@ -412,14 +412,14 @@ not the goal*, and a document reachable only from its own folder MOC is a lonely
 spoke even though it passes. Clear it by weaving a contextual wikilink into
 related prose; another MOC line does not.
 
-`engram_lint.py` applies to **file brains only**:
+`engram lint` applies to **file brains only**:
 
 ```bash
-python "<skill_dir>/scripts/engram_lint.py" --json
+engram lint --json
 ```
 
-`<skill_dir>` is the directory holding this SKILL.md; installed as a plugin, call
-it as `${CLAUDE_PLUGIN_ROOT}/skills/engram/scripts/engram_lint.py`.
+In store mode it says so and does nothing — the link graph is a table there, and
+`engram integrity` is the check that reads it.
 
 Handling results:
 
@@ -469,7 +469,7 @@ not a hook — the read-back counterpart to the capture loop.
 
 Load [references/session-review.md](references/session-review.md). In short:
 reconcile your **session memory** (notes, links, MOCs touched) with a
-**cross-check** (`store.py revisions` on what you wrote, or `git status --short`
+**cross-check** (`engram revisions` on what you wrote, or `git status --short`
 on a file brain), run the Integrity Lint as the closing check, and present the
 report. If nothing landed, say so in one line.
 
@@ -523,6 +523,6 @@ rather than improvising one.
     Grep/Read. If a fallback to local files happened, **say so in your answer** —
     the user needs to know the answer may be stale and that store-only documents
     were not searched. Never present a degraded answer as a normal one.
-14. **Lint scope**: `engram_lint.py` auto-detects the base and is non-blocking.
+14. **Lint scope**: `engram lint` auto-detects the base and is non-blocking.
     Unresolved wikilinks are warnings, not errors — they may be intended future
     notes.

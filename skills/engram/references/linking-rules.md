@@ -30,11 +30,11 @@ MOC — links it, ideally across a folder boundary. Multi-path reachability is w
 makes retrieval associative; an inbound link from the node's own folder MOC just
 restates where the file already lives.
 
-`engram_lint.py` quantifies this with `metrics` (run `--json`): `woven_ratio`
+`engram lint` quantifies this with `metrics` (run `--json`): `woven_ratio`
 (content docs with ≥1 contextual inbound / total), `cross_folder_link_ratio`, and
 the `weak_nodes` list — documents whose *only* inbound is a MOC (lonely spokes).
 Drive `woven_ratio` and `cross_folder_link_ratio` up; the **Weave Workflow** and
-`scripts/weave_candidates.py` find the concrete links to add.
+`engram weave` find the concrete links to add.
 
 ## Linking rules
 
@@ -42,7 +42,7 @@ Drive `woven_ratio` and `cross_folder_link_ratio` up; the **Weave Workflow** and
 
 - The store records **both** forms as edges and tags them: a wikilink is `kind=wiki`
   (contextual), a markdown relative link is `kind=md` (structural — this is what MOC
-  entries produce). `store.py integrity` uses the tag to separate orphans from
+  entries produce). `engram integrity` uses the tag to separate orphans from
   **weak nodes**, so "linked from the MOC" no longer looks the same as "woven into the
   network". Only a wikilink in prose clears a weak node.
 - Use `[[filename]]` (Obsidian wikilink) or `[display text](relative/path.md)`
@@ -76,7 +76,7 @@ reachable from the entry point.
   inline code before counting links — so those docs stay orphans. Always write
   `[00-overview.md](00-overview.md)`. This is the #1 silent reason a folder with a
   fully populated README still shows every doc as an orphan.
-- **READMEs/index files are orphan-exempt.** `engram_lint.py` never flags
+- **READMEs/index files are orphan-exempt.** `engram lint` never flags
   `README.md`, `index.md`, `_index.md`, `CLAUDE.md`, or `MEMORY.md` as orphans —
   they are structural hubs. So a MOC needs no inbound link of its own to be
   "connected," though linking it from a parent MOC is still good navigation hygiene.
@@ -106,7 +106,7 @@ reachable from the entry point.
 
 2. **No orphan nodes**: every newly added document must receive at least one
    inbound link from an existing MOC (`README.md`) or a related document.
-   Unlinked knowledge gets lost. (`engram_lint.py` detects orphans.)
+   Unlinked knowledge gets lost. (`engram lint` detects orphans.)
 
 3. **No lonely spokes (earn the second link)**: a MOC link is *necessary but not
    sufficient*. Beyond the structural MOC inbound, a content document should earn
@@ -130,7 +130,7 @@ reachable from the entry point.
 - **Over-structuring**: when maintaining the system becomes the goal and actual
   thinking/output stops. Do not pile on excessive rules, tags, or numbers.
 - **Link rot**: links breaking due to filename changes. Prevent it with stable
-  naming and periodic `engram_lint.py` checks.
+  naming and periodic `engram lint` checks.
 - **Star topology (folder-replicated links)**: clearing orphans with MOC links
   alone and stopping there. The orphan count hits zero but every doc is a lonely
   spoke, so the "network" just redraws the folder tree — connected but not woven
@@ -142,7 +142,7 @@ reachable from the entry point.
    reach for at least one link **across a folder boundary**, not only within the
    same folder.
 2. Add a one-line entry to the folder's `README.md` (MOC) to avoid orphans.
-3. Before finishing, run `engram_lint.py` to find and repair broken links and
+3. Before finishing, run `engram lint` to find and repair broken links and
    orphans, and to read the density `metrics`/`weak_nodes`.
 4. Periodically (or when `woven_ratio` is low) run the **Weave Workflow** with
-   `scripts/weave_candidates.py` to dissolve lonely spokes into woven nodes.
+   `engram weave` to dissolve lonely spokes into woven nodes.

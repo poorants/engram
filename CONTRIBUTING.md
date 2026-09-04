@@ -11,7 +11,7 @@ Three deliverables, and a change usually belongs to exactly one:
 |---|---|---|
 | `cmd/`, `pkg/`, `internal/` | the client — binary, CLI, MCP server | Go 1.25 |
 | `server/` | the store — FastAPI + Postgres 17 | Python 3.12 |
-| `skills/engram/` | the Claude Code skill, its references and hooks | Markdown + Python |
+| `skills/engram/` | the Claude Code skill and its references — prose only, no scripts | Markdown |
 
 If a change spans two of them, say why in the PR. The layers are deliberately
 not collapsed ([why](docs/design.md#the-three-layers-are-not-collapsed)), and a
@@ -42,7 +42,7 @@ no `.env` yet, `server/setup.sh --owners acme` writes one for local work.
 ```bash
 make lint test                                    # Go: gofmt, go vet, go test
 python -m pytest server/tests -q                  # server unit tests, no database needed
-python -m compileall -q skills/engram/scripts     # the skill's scripts must parse
+jq -e . .claude-plugin/marketplace.json           # the plugin manifest must parse
 ```
 
 CI runs exactly these, plus a cross-compile of every release target. Nothing in
@@ -74,10 +74,14 @@ it — it takes a couple of minutes.
 dependencies without a reason in the PR — the deliverable is one static binary
 with `CGO_ENABLED=0`, and that property is load-bearing for the installer.
 
-**Python.** The server targets 3.12 and the standard library plus what is
-already in `requirements.txt`. The skill's scripts must run on plain `python3`
-with no third-party packages at all — they run on other people's machines,
-inside hooks, where a missing import is a broken session.
+**Python.** Server-side only. It targets 3.12 and the standard library plus what
+is already in `requirements.txt`.
+
+**The client ships no Python at all, and that is a rule rather than a
+coincidence.** The skill's helpers and the capture-loop hooks used to be Python;
+on Windows `python3` is not a command even where Python is installed, so the
+hooks were silently dead on every Windows machine. Anything that runs on a
+user's machine — a hook, a skill helper, an installer step — goes in the binary.
 
 **Comments explain why, not what.** The existing code is written that way and it
 is the house style: a comment that restates the line above it will be asked

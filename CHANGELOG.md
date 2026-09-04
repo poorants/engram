@@ -8,6 +8,68 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Changed — the client has no dependencies at all
+
+The skill's Python helpers and the capture-loop hooks are gone. Everything they
+did is in the `engram` binary, and the plugin now ships prose and a hook command
+and nothing else.
+
+The reason is not tidiness. **On Windows the capture hooks never ran.** The hook
+command was `python3 …/brain_reflect.py`, and `python3` is not a command on
+Windows even where Python is installed — the App Execution Alias of that name
+opens the Microsoft Store and exits. The hooks failed silently on every Windows
+machine, which is the worst way for a dependency to be missing: it is present on
+the maintainer's machine and absent where nobody is looking.
+
+- **The hooks are `engram hook`.** One command for both `UserPromptSubmit` and
+  `Stop` — Claude Code puts `hook_event_name` in the payload. Same wrap-up
+  phrases, same `Stop` loop guard and cooldown, same env knobs
+  (`ENGRAM_CAPTURE_DISABLE`, `ENGRAM_CAPTURE_COOLDOWN_MIN`,
+  `ENGRAM_CAPTURE_PHRASES`). It still never fails a session: every path exits 0,
+  now including a panic.
+- **New file-brain commands**, replacing the scripts one for one:
+  `engram resolve` (was `workspace.py resolve`), `engram brain show|set|unset`
+  (was `list` / `set-brain` / `unset-brain`), `engram link`, `engram init`
+  (was `init.py`), `engram lint` (was `engram_lint.py`), `engram weave` (was
+  `weave_candidates.py`). `lint` and `weave` produce byte-identical JSON to the
+  scripts they replace.
+- **`store.py` is gone entirely.** Its two jobs moved into the binary: the
+  human-readable output every verb now prints by default, and the
+  403 → local-file-brain fallback that `engram put` performs itself.
+
+### Changed — CLI output and one exit code
+
+- **Every command prints for a person by default and takes `--json` for a
+  machine.** Raw JSON was the only format before, and a session that reads it
+  pays for every field it did not need. Anything parsing `engram <verb>` output
+  must add `--json`.
+- **`engram put` writes a scope-refused document to the local file brain itself**
+  and exits **0**, reporting where it landed — the document did land, and a
+  non-zero exit for that reads as a failure to both a shell and a model. Exit
+  `3` now means the store refused AND no file brain took it, which is the only
+  case a caller has to act on. Exit `4` (store unreachable) is unchanged and
+  still writes nothing anywhere: an outage read as a refusal puts a document in a
+  file nobody reads while everyone believes it was recorded.
+
+### Added
+
+- `pkg/workspace` — brain resolution (store first, then the designated file
+  brain, then a local `brain/`), and the `CLAUDE.md` pointer block.
+- `pkg/vault` — the file-brain link graph: the integrity lint, the weave finder,
+  PARA init, and the refused-document write.
+- CI checks that every hook command in the plugin manifest is a verb the binary
+  actually implements, and that `skills/engram/scripts/` stays gone. An unknown
+  hook verb is not a quiet failure — it puts an error in front of the user on
+  every single prompt.
+
+### Upgrading
+
+The plugin now requires **`engram` v0.3.0 or newer**. Update the binary
+(`install.sh` / `install.ps1`) before or with the plugin; an older binary does
+not know `hook` and will complain on every prompt. Nothing else changes — the
+settings file, the token and the store are untouched, and a designated file
+brain is read exactly where it was.
+
 ## [0.2.0] — 2026-09-04
 
 ### Added

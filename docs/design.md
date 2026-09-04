@@ -98,11 +98,17 @@ which changes far more often than the wire format.
 
 ## Exactly one transport client
 
-The MCP tools, `engram <verb>` and the skill's Python wrapper are three surfaces
-over one client. Two clients would mean two places to put the token, two default
-authors, and two copies of the address rules to drift apart — and address rules
-that differ between the CLI and the MCP server produce documents at addresses
-nothing can find.
+The MCP tools and `engram <verb>` are two surfaces over one client. Two clients
+would mean two places to put the token, two default authors, and two copies of
+the address rules to drift apart — and address rules that differ between the CLI
+and the MCP server produce documents at addresses nothing can find.
+
+There used to be a third surface: a set of Python helpers the skill shelled out
+to. They are gone, and the reason is not tidiness. `python3` is not a command on
+Windows even where Python is installed, so the capture-loop hooks were silently
+dead on every Windows machine. A dependency that is present on the maintainer's
+machine and absent on the user's is worse than one that is absent on both — it
+fails where nobody is looking.
 
 ## The owner allow-list is a list of groups
 

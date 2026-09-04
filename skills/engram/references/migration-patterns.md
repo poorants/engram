@@ -259,7 +259,7 @@ base by convention and the user keeps it. Steps:
 3. **Update every non-doc reference** found in step 1: the `CLAUDE.md` doc-layout note,
    config/memory, CI/build scripts, and code (import paths, comments).
 4. **Fix doc links**: relative links between docs that move together keep resolving;
-   `[[wikilinks]]` resolve by filename and survive. Run `engram_lint.py --json` (it
+   `[[wikilinks]]` resolve by filename and survive. Run `engram lint --json` (it
    auto-detects the new `brain/` base) and fix every `broken_md_links` entry — these
    crossed the moved/not-moved boundary (e.g. into root-level files).
 5. **Scope, approve, execute**: because this touches code and not just docs, show the

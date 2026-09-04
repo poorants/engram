@@ -7,13 +7,14 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"os/exec"
-	"regexp"
+
 	"strings"
 
 	"github.com/poorants/engram/pkg/brain"
 	"github.com/poorants/engram/pkg/config"
 	"github.com/poorants/engram/pkg/identity"
+	"github.com/poorants/engram/pkg/vault"
+	"github.com/poorants/engram/pkg/workspace"
 )
 
 // The CLI is the second surface over pkg/brain, next to the brain_* MCP tools.
@@ -27,12 +28,20 @@ import (
 // token, a second default author, and a second copy of the path rules to drift
 // from this one.
 //
-// What stays OUT: the local file brain that the engram skill falls back to when
-// the store refuses a repo. That vault's location lives in the skill's own
-// resolution rules, and teaching a release-channel binary to read a plugin's
-// layout would tie the two together. Instead a refusal is reported in a form a
-// caller can branch on — exit code exitRefused, plus `"status": "refused"` on
-// stdout — and the skill does the local write it already knows how to do.
+// The local file brain used to stay OUT of here, on the reasoning that a
+// release-channel binary should not know a plugin's layout. It is in now,
+// because the thing on the other side of that boundary was a Python helper and a
+// helper that needs an interpreter is a helper that does not run — on Windows
+// `python3` is not a command even where Python is installed. What the boundary
+// was actually protecting survives in a different shape: the vault's location is
+// resolved by pkg/workspace from the SHARED settings file, never from anything
+// under the plugin directory, so the binary still has no idea where the plugin
+// is installed.
+//
+// Output is human-readable by default and JSON behind --json. That is the other
+// half of the same move: the reshaping that made a store answer readable used to
+// live in the skill's store.py, and a session that reads raw JSON pays for every
+// field it did not need.
 
 // clients builds the store client and the identity resolver from one settings
 // load, so both surfaces of one command agree about the address and the byline.
@@ -120,8 +129,11 @@ func splitList(s string) []string {
 // --- scope: which repo am I standing in -------------------------------------
 
 // originRe pulls owner/repo out of a git remote URL in either spelling
-// (git@host:group/repo.git, https://host/group/repo.git).
-var originRe = regexp.MustCompile(`[:/]([^/:]+)/([^/]+?)(?:\.git)?/*$`)
+// (git@host:group/repo.git, https://host/group/repo.git). The pattern itself
+// lives in pkg/workspace, which the hook and the resolver share — one derivation
+// of the owner coordinate, because it is the confidentiality boundary and two
+// copies would eventually disagree about it.
+var originRe = workspace.OriginRe
 
 // repoScope derives the document root from the CURRENT DIRECTORY's git origin.
 //
@@ -134,15 +146,17 @@ var originRe = regexp.MustCompile(`[:/]([^/:]+)/([^/]+?)(?:\.git)?/*$`)
 // the remote decides it — so knowledge from a repo the store does not admit
 // cannot be filed into it by someone forgetting where they were.
 func repoScope() (owner, repo string, err error) {
-	out, err := exec.Command("git", "remote", "get-url", "origin").Output()
+	wd, err := os.Getwd()
 	if err != nil {
-		return "", "", fmt.Errorf("could not read the git origin — there is nothing to build a document path from")
+		return "", "", fmt.Errorf("could not read the working directory: %w", err)
 	}
-	m := originRe.FindStringSubmatch(strings.TrimSpace(string(out)))
-	if m == nil {
-		return "", "", fmt.Errorf("could not read owner/repo out of the git origin: %q", strings.TrimSpace(string(out)))
+	if owner, repo = workspace.OriginCoords(wd); owner != "" && repo != "" {
+		return owner, repo, nil
 	}
-	return m[1], m[2], nil
+	if url := workspace.RemoteURL(wd); url != "" {
+		return "", "", fmt.Errorf("could not read owner/repo out of the git origin: %q", url)
+	}
+	return "", "", fmt.Errorf("could not read the git origin — there is nothing to build a document path from")
 }
 
 // expandPath resolves "./<area>/<name>.md" against the current repo. Anything
@@ -163,6 +177,7 @@ func expandPath(path string) (string, error) {
 
 func cmdScope(args []string) int {
 	fs := flag.NewFlagSet("scope", flag.ContinueOnError)
+	asJSON := fs.Bool("json", false, "machine-readable output")
 	if err := fs.Parse(args); err != nil {
 		return exitError
 	}
@@ -171,7 +186,11 @@ func cmdScope(args []string) int {
 		fmt.Fprintln(os.Stderr, "error:", err)
 		return exitError
 	}
-	return emit(map[string]any{"owner": owner, "repo": repo, "root": owner + "/" + repo})
+	if *asJSON {
+		return emit(map[string]any{"owner": owner, "repo": repo, "root": owner + "/" + repo})
+	}
+	out("%s/%s\n", owner, repo)
+	return exitOK
 }
 
 // --- reads ------------------------------------------------------------------
@@ -183,6 +202,8 @@ func cmdSearch(args []string) int {
 	boost := fs.String("boost-repo", "", "lift this repo's documents (a boost, not a filter)")
 	onlyRepos := fs.String("only-repo", "", "restrict to these repos (comma-separated) — a filter, not a boost")
 	onlyOwners := fs.String("only-owner", "", "restrict to these owners (comma-separated)")
+	chars := fs.Int("chars", 400, "characters shown per chunk (human output only)")
+	asJSON := fs.Bool("json", false, "machine-readable output")
 	c, _, _, pos, err := clients(fs, args)
 	if err != nil {
 		return usageError(err.Error())
@@ -215,12 +236,17 @@ func cmdSearch(args []string) int {
 		// scale; a ranking nobody can explain is one nobody trusts.
 		res["boostRepo"] = opts.BoostRepo
 	}
-	return emit(res)
+	if *asJSON {
+		return emit(res)
+	}
+	renderSearch(res, q, *chars)
+	return exitOK
 }
 
 func cmdGet(args []string) int {
 	fs := flag.NewFlagSet("get", flag.ContinueOnError)
-	out := fs.String("out", "", "write the body to this file and omit it from the response")
+	outFile := fs.String("out", "", "write the body to this file and omit it from the response")
+	asJSON := fs.Bool("json", false, "machine-readable output")
 	c, _, _, pos, err := clients(fs, args)
 	if err != nil {
 		return usageError(err.Error())
@@ -236,7 +262,7 @@ func cmdGet(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	if f := strings.TrimSpace(*out); f != "" {
+	if f := strings.TrimSpace(*outFile); f != "" {
 		body, _ := doc["body"].(string)
 		if err := os.WriteFile(f, []byte(body), 0o644); err != nil {
 			fmt.Fprintln(os.Stderr, "error:", err)
@@ -245,12 +271,17 @@ func cmdGet(args []string) int {
 		delete(doc, "body")
 		doc["savedTo"] = f
 	}
-	return emit(doc)
+	if *asJSON {
+		return emit(doc)
+	}
+	renderDoc(doc)
+	return exitOK
 }
 
 func cmdRevisions(args []string) int {
 	fs := flag.NewFlagSet("revisions", flag.ContinueOnError)
 	limit := fs.Int("limit", 0, "maximum revisions listed")
+	asJSON := fs.Bool("json", false, "machine-readable output")
 	c, _, _, pos, err := clients(fs, args)
 	if err != nil {
 		return usageError(err.Error())
@@ -266,12 +297,17 @@ func cmdRevisions(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	return emit(res)
+	if *asJSON {
+		return emit(res)
+	}
+	renderRevisions(res, path)
+	return exitOK
 }
 
 func cmdIntegrity(args []string) int {
 	fs := flag.NewFlagSet("integrity", flag.ContinueOnError)
 	limit := fs.Int("limit", 0, "maximum entries listed per category")
+	asJSON := fs.Bool("json", false, "machine-readable output")
 	c, _, _, _, err := clients(fs, args)
 	if err != nil {
 		return usageError(err.Error())
@@ -280,7 +316,11 @@ func cmdIntegrity(args []string) int {
 	if err != nil {
 		return fail(err)
 	}
-	return emit(res)
+	if *asJSON {
+		return emit(res)
+	}
+	renderIntegrity(res)
+	return exitOK
 }
 
 // --- writes -----------------------------------------------------------------
@@ -291,6 +331,7 @@ func cmdPut(args []string) int {
 	note := fs.String("note", "", "one line on why this revision exists (required)")
 	author := fs.String("author", "", "recorded author (resolved automatically when omitted)")
 	dryRun := fs.Bool("dry-run", false, "validate without writing")
+	asJSON := fs.Bool("json", false, "machine-readable output")
 	c, ident, _, pos, err := clients(fs, args)
 	if err != nil {
 		return usageError(err.Error())
@@ -315,23 +356,30 @@ func cmdPut(args []string) int {
 		if err != nil {
 			return usageError(err.Error())
 		}
-		return emit(map[string]any{
+		summary := map[string]any{
 			"dryRun": true, "path": target.Path, "bytes": target.Bytes,
 			"note": target.Note, "author": target.Author,
-		})
+		}
+		if *asJSON {
+			return emit(summary)
+		}
+		out("dry run: %s  (%d bytes, author %s)\n", target.Path, target.Bytes, target.Author)
+		return exitOK
 	}
 
 	res, err := c.Put(ctx, path, body, *note, who)
 	if err != nil {
-		// A refusal is not a failure to hide: the caller (the engram skill) owns
-		// a local file brain for exactly this case, and exitRefused is how it is
-		// told. Everything else — including an unreachable store — stays an
-		// error, because a write that went nowhere must never look like one that
-		// landed.
+		// A refusal is not a failure. The store is alive and declined this
+		// path's owner group, and that knowledge belonged in the local file
+		// brain anyway — so it goes there, here, rather than being handed back
+		// for something else to place.
+		//
+		// An UNREACHABLE store is the opposite and must never take this branch.
+		// Reading an outage as a refusal puts the document in a file nobody
+		// reads while everyone believes it was recorded, and that belief
+		// outlives the outage by months.
 		if brain.Refused(err) {
-			fmt.Fprintln(os.Stderr, "error:", err)
-			_ = emit(map[string]any{"status": "refused", "path": path, "author": who})
-			return exitRefused
+			return putRefused(path, body, who, err, *asJSON)
 		}
 		return fail(err)
 	}
@@ -340,13 +388,50 @@ func cmdPut(args []string) int {
 	}
 	res["path"] = path
 	res["author"] = who
-	return emit(res)
+	res["status"] = "ok"
+	if *asJSON {
+		return emit(res)
+	}
+	out("ok: store: %s  (author %s)\n", path, who)
+	return exitOK
+}
+
+// putRefused writes a scope-refused document into the local file brain.
+//
+// Exit code: 0 when the document landed, exitRefused when it landed NOWHERE.
+// The store's refusal is reported either way, but a write that succeeded must
+// not look like a failure — a caller that sees non-zero retries, and a model
+// that sees non-zero says the save failed when the file is sitting right there.
+func putRefused(path, body, who string, refusal error, asJSON bool) int {
+	r := workspace.Resolve(here())
+	file, writeErr := vault.WriteRefused(r.FallbackBase(), path, body)
+	if writeErr != nil {
+		fmt.Fprintln(os.Stderr, "error:", refusal)
+		summary := map[string]any{
+			"status": "refused", "path": path, "author": who,
+			"error": writeErr.Error(),
+		}
+		if asJSON {
+			_ = emit(summary)
+		} else {
+			out("failed: the store refused this path (%v) and it could not be written locally: %v\n"+
+				"  Designate a file brain with: engram brain set <path>\n", refusal, writeErr)
+		}
+		return exitRefused
+	}
+	summary := map[string]any{"status": "local", "path": path, "author": who, "file": file}
+	if asJSON {
+		return emit(summary)
+	}
+	out("local: the store refused this path (%v) → wrote the local file brain: %s\n", refusal, file)
+	return exitOK
 }
 
 func cmdMove(args []string) int {
 	fs := flag.NewFlagSet("move", flag.ContinueOnError)
 	author := fs.String("author", "", "recorded author (resolved automatically when omitted)")
 	dryRun := fs.Bool("dry-run", false, "validate without moving")
+	asJSON := fs.Bool("json", false, "machine-readable output")
 	c, ident, _, pos, err := clients(fs, args)
 	if err != nil {
 		return usageError(err.Error())
@@ -369,13 +454,29 @@ func cmdMove(args []string) int {
 		if err != nil {
 			return usageError(err.Error())
 		}
-		return emit(map[string]any{"dryRun": true, "from": from, "to": target.Path, "author": target.Author})
+		if *asJSON {
+			return emit(map[string]any{"dryRun": true, "from": from, "to": target.Path, "author": target.Author})
+		}
+		out("dry run: %s\n    → %s  (author %s)\n", from, target.Path, target.Author)
+		return exitOK
 	}
 	res, err := c.Move(ctx, from, to, who)
 	if err != nil {
 		return fail(err)
 	}
-	return emit(res)
+	if *asJSON {
+		return emit(res)
+	}
+	if sOf(res, "status") != "moved" {
+		fmt.Fprintf(os.Stderr, "%s: %s\n", sOf(res, "status"), from)
+		return exitError
+	}
+	line := fmt.Sprintf("moved: %s\n    → %s", from, to)
+	if n := nOf(res, "relinked"); n != "?" && n != "0" {
+		line += fmt.Sprintf("  (%s dangling link(s) reconnected)", n)
+	}
+	out("%s\n  The old path is kept as an alias, so existing links still reach it.\n", line)
+	return exitOK
 }
 
 // readBody takes the document from a file or, when none is named, stdin — so a
@@ -407,56 +508,67 @@ func readBody(file string) (string, error) {
 
 func cmdStatus(args []string) int {
 	fs := flag.NewFlagSet("status", flag.ContinueOnError)
+	asJSON := fs.Bool("json", false, "machine-readable output")
 	c, ident, cfg, _, err := clients(fs, args)
 	if err != nil {
 		return usageError(err.Error())
 	}
 	ctx := context.Background()
 
-	out := map[string]any{
+	st := map[string]any{
 		"store":    c.BaseURL(),
 		"canWrite": c.CanWrite(),
 		"author":   ident.Author(ctx, ""),
 	}
 	if cfg.Author != "" {
-		out["authorSource"] = "configured"
+		st["authorSource"] = "configured"
 	}
 	if len(cfg.FromEnv) > 0 {
-		out["fromEnv"] = cfg.FromEnv
+		st["fromEnv"] = cfg.FromEnv
+	}
+
+	// report is how every exit from here prints: one shape, whichever branch
+	// reached it, so a failure line is never formatted differently from a
+	// success line.
+	report := func(code int) int {
+		if *asJSON {
+			_ = emit(st)
+			return code
+		}
+		renderStatus(st)
+		return code
 	}
 
 	owner, repo, scopeErr := repoScope()
 	if scopeErr == nil {
-		out["owner"], out["repo"] = owner, repo
-		out["root"] = owner + "/" + repo
+		st["owner"], st["repo"] = owner, repo
+		st["root"] = owner + "/" + repo
 	} else {
-		out["scopeError"] = scopeErr.Error()
+		st["scopeError"] = scopeErr.Error()
 	}
 
 	if !c.Configured() {
-		out["reachable"] = false
-		out["error"] = brain.ErrNoStore.Error()
-		_ = emit(out)
-		return exitError
+		st["reachable"] = false
+		st["error"] = brain.ErrNoStore.Error()
+		return report(exitError)
 	}
 
 	h, err := c.Healthz(ctx)
 	if err != nil {
-		out["reachable"] = false
-		out["error"] = err.Error()
-		_ = emit(out)
-		return exitStoreOut
+		st["reachable"] = false
+		st["error"] = err.Error()
+		return report(exitStoreOut)
 	}
-	out["reachable"] = true
-	out["docs"] = h.Docs
+	st["reachable"] = true
+	st["docs"] = h.Docs
 
 	sc, err := c.StoreScopes(ctx)
 	if err != nil {
-		out["scopesError"] = err.Error()
-		return emit(out)
+		st["scopesError"] = err.Error()
+		return report(exitOK)
 	}
-	out["allowedOwners"] = sc.AllowedOwners
-	out["present"] = sc.Present
+	st["allowedOwners"] = sc.AllowedOwners
+	st["present"] = sc.Present
 	if scopeErr == nil {
 		// The question a caller actually has: do MY documents belong in the
 		// store, or in the local file brain? Answering it before a write beats
@@ -468,7 +580,7 @@ func cmdStatus(args []string) int {
 				break
 			}
 		}
-		out["writesHere"] = accepted
+		st["writesHere"] = accepted
 	}
-	return emit(out)
+	return report(exitOK)
 }

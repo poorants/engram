@@ -112,10 +112,14 @@ one is a different kind of thing.
 | **[`server/`](server/)** | the store: FastAPI + Postgres 17, one compose file | once, on a machine everyone can reach |
 | **[`skills/engram/`](skills/engram/)** | the Claude Code skill — the judgement and the workflows | the plugin marketplace |
 
-There is exactly **one** transport client with three surfaces over it: the MCP
-tools for a model in a session, `engram <verb>` for a subprocess, and the skill's
-Python wrapper. Two clients would mean two places to put the token, two default
-authors, and two copies of the path rules to drift apart.
+There is exactly **one** transport client with two surfaces over it: the MCP
+tools for a model in a session, and `engram <verb>` for a subprocess — a hook, a
+scheduled job, the skill, a person at a terminal. Two clients would mean two
+places to put the token, two default authors, and two copies of the path rules to
+drift apart.
+
+**The binary is the only thing to install.** No interpreter, no runtime: the
+skill ships no scripts, and the capture-loop hook is `engram hook`.
 
 ## The tools an agent gets
 

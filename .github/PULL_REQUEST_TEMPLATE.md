@@ -19,7 +19,7 @@
 
 - [ ] `make lint test` passes
 - [ ] `python -m pytest server/tests -q` passes (if `server/` changed)
-- [ ] `python -m compileall -q skills/engram/scripts` passes (if the skill changed)
+- [ ] `go test ./... -race` passes (if `cmd/`, `pkg/` or the skill changed)
 
 ## Ranking
 

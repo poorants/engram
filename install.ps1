@@ -170,11 +170,6 @@ try {
     if ($mcpOk) { Write-Host "  brain_* MCP tools: registered (user scope)" }
     else { Write-Host "  MCP: could not register - run: claude mcp add --scope user engram -- engram mcp" -ForegroundColor Yellow }
     $claudeWired = ($pluginOk -and $mcpOk)
-
-    if (-not (Get-Command python3 -ErrorAction SilentlyContinue) -and
-        -not (Get-Command python  -ErrorAction SilentlyContinue)) {
-      Write-Host "  note: the skill's helpers and hooks need python on PATH" -ForegroundColor Yellow
-    }
   } elseif (-not $NoClaude) {
     Write-Host ""
     Write-Host "note: the claude CLI was not found, so the skill and the MCP server were"
