@@ -50,12 +50,22 @@ func fOf(m map[string]any, key string) float64 {
 	return 0
 }
 
+// nOf renders a count.
+//
+// It has to accept both a float64 and an int because these maps arrive from two
+// places: decoded JSON, where every number is a float64, and status, which the
+// binary assembles in memory from typed fields. Handling only the JSON case
+// prints "?" for a number that is sitting right there.
 func nOf(m map[string]any, key string) string {
-	if f, ok := m[key].(float64); ok {
-		return fmt.Sprintf("%d", int64(f))
-	}
-	if s, ok := m[key].(string); ok {
-		return s
+	switch v := m[key].(type) {
+	case float64:
+		return fmt.Sprintf("%d", int64(v))
+	case int:
+		return fmt.Sprintf("%d", v)
+	case int64:
+		return fmt.Sprintf("%d", v)
+	case string:
+		return v
 	}
 	return "?"
 }

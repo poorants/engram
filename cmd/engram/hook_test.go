@@ -221,3 +221,23 @@ func TestSessionIDCannotEscapeTheTempDirectory(t *testing.T) {
 		}
 	}
 }
+
+// status assembles its map in memory from typed fields, so its numbers are Go
+// ints — not the float64s a decoded JSON body carries. A renderer that handles
+// only the JSON case prints "?" for a count that is sitting right there.
+func TestCountsRenderFromBothIntAndFloat(t *testing.T) {
+	for _, tc := range []struct {
+		v    any
+		want string
+	}{
+		{42, "42"},          // status, built in process
+		{float64(42), "42"}, // anything decoded from the store's JSON
+		{int64(42), "42"},
+		{"42", "42"},
+		{nil, "?"},
+	} {
+		if got := nOf(map[string]any{"docs": tc.v}, "docs"); got != tc.want {
+			t.Errorf("nOf(%T %v) = %q, want %q", tc.v, tc.v, got, tc.want)
+		}
+	}
+}
