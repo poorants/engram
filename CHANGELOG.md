@@ -8,6 +8,53 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Added — partial writes (`brain_patch`, `engram patch`)
+
+A put prices an edit by the size of the DOCUMENT. Fixing one link in a
+9,000-character guide meant sending 9,000 characters back, and the commonest
+edit in a brain is exactly that shape: one line, in each of several documents.
+Five such fixes moved about 40,000 characters to change under twenty lines.
+
+`PATCH /api/doc/{path}` takes addressed edits instead of a body. It is **not a
+second write path**: the edits are applied to the stored body in memory and the
+result goes through the same `write_doc`, so one patch is one revision holding
+the whole previous body, and aliases, scope refusal and re-indexing are
+unchanged. What is saved is the transfer, not the history.
+
+The risk a partial write introduces is the one an upsert cannot have — landing
+somewhere the caller did not look — so the safety model is three independent
+layers, and the independence is the point:
+
+- **Addressing (where).** A line range, a section (a heading and everything
+  under it, up to the next heading of the same or shallower depth), or an anchor
+  (an exact substring). An address that matches twice is **refused with the
+  candidates listed, never resolved by taking the first match.**
+- **Verification (what you expected).** `expect` is the literal current text of
+  the addressed range, compared character for character. Matching CHOOSES a
+  range; this PROVES it. It is text rather than a hash so a caller that cannot
+  run a hash function can still supply it, and its size is proportional to the
+  edit rather than the document. Required for a line range, which by itself
+  proves nothing about what is on it.
+- **Concurrency (which version).** `base_sha256`, the hash `brain_get` now
+  returns alongside the body. It is the only layer that catches an edit correct
+  about its own range and wrong about the document, because someone else changed
+  the rest of it in between.
+
+There is deliberately **no fuzz**. `patch(1)` applies a hunk at an offset when
+the context nearly matches, and "nearly" is precisely how an edit lands in the
+neighbouring section. Every mismatch here refuses and reports what is actually
+there, so the caller re-aims instead of guessing. Nothing is ever partially
+applied: a batch resolves every edit against the document as read (the LSP rule
+— sequential resolution silently shifts coordinates), refuses overlaps, and
+writes all of it or none.
+
+- `brain_patch` is the MCP tool; `engram patch` is the single-edit CLI
+  (`--section` / `--anchor` / `--lines`, `--expect-file`, `--base`,
+  `--dry-run` for a unified diff).
+- `brain_get` and `GET /api/doc/{path}` now return `sha256`.
+- A 409 means the document disagrees with the request — re-read and re-aim
+  rather than retrying unchanged. A 400 means the call itself is malformed.
+
 ### Changed — the client has no dependencies at all
 
 The skill's Python helpers and the capture-loop hooks are gone. Everything they

@@ -135,6 +135,8 @@ func (e *APIError) Error() string {
 		return base + " — the store does not admit this path's owner group; knowledge from this repo belongs in a local file brain. (" + e.Message + ")"
 	case http.StatusNotFound:
 		return base + " — no such document. Paths are <owner>/<repo>/<area>/<name>.md; a repo hub is <owner>/<repo>/README.md. (" + e.Message + ")"
+	case http.StatusConflict:
+		return base + " — the document does not agree with this patch; nothing was written. Re-read it and re-aim the edit rather than retrying. (" + e.Message + ")"
 	case http.StatusServiceUnavailable:
 		return base + " — the store is up but its database is not. (" + e.Message + ")"
 	default:
@@ -364,6 +366,138 @@ func (c *Client) Put(ctx context.Context, path, body, note, author string) (map[
 	var out map[string]any
 	payload := map[string]string{"body": body, "note": target.Note, "author": target.Author}
 	if err := c.do(ctx, http.MethodPut, "/api/doc/"+escapePath(path), nil, payload, true, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Edit is ONE addressed change inside a document. Exactly one address form is
+// given — a line range, a section, or an anchor — and the store refuses an Edit
+// that carries two, rather than deciding which one the caller meant.
+//
+// Expect is a pointer because "" is a legitimate expectation (the addressed
+// range is empty, which is how an insertion verifies) and absent is not the
+// same thing. EndLine is a pointer for the mirror-image reason: 0 is a real
+// line-range bound to reject, while absent means "no line address here".
+type Edit struct {
+	// StartLine/EndLine are 1-indexed and EndLine is EXCLUSIVE, so one line n
+	// is EndLine n+1 and EndLine == StartLine inserts before line n without
+	// replacing anything. A line range MUST carry Expect: a line number is pure
+	// position and proves nothing about what is there.
+	StartLine int  `json:"start_line,omitempty"`
+	EndLine   *int `json:"end_line,omitempty"`
+	// Section addresses a heading and everything under it, up to the next
+	// heading of the same or shallower depth. It matches the heading text, the
+	// raw heading line, or the full heading path search prints ("A > B > C").
+	Section string `json:"section,omitempty"`
+	// IncludeHeading defaults to true — the heading line is part of the section.
+	// False replaces only the prose under it.
+	IncludeHeading *bool `json:"include_heading,omitempty"`
+	// Anchor is an exact substring that must occur EXACTLY ONCE. Two matches is
+	// a refusal, never a choice; that refusal is the whole point of the form.
+	Anchor string `json:"anchor,omitempty"`
+	// Expect is the literal text the caller believes occupies the addressed
+	// range. It is what turns matching from a guess into a proof, and it is
+	// text rather than a hash so a caller that cannot run a hash function can
+	// still supply it. Trailing newlines are the only tolerated difference.
+	Expect *string `json:"expect,omitempty"`
+	// Body replaces the addressed range. "" deletes it.
+	Body string `json:"body"`
+}
+
+// Address reports the one address form this edit uses, for error messages.
+func (e Edit) Address() string {
+	switch {
+	case e.StartLine != 0 || e.EndLine != nil:
+		return "line range"
+	case e.Section != "":
+		return "section"
+	case e.Anchor != "":
+		return "anchor"
+	}
+	return ""
+}
+
+// PatchRequest is a partial write: several addressed edits, applied together or
+// not at all.
+type PatchRequest struct {
+	// BaseSHA256 is the hash Doc returned for the version the caller read.
+	// Optional, and the only guard against an edit that is right about its own
+	// range and wrong about the document — because someone else rewrote the
+	// rest of it in between.
+	BaseSHA256 string `json:"base_sha256,omitempty"`
+	Edits      []Edit `json:"edits"`
+	Note       string `json:"note"`
+	Author     string `json:"author,omitempty"`
+	DryRun     bool   `json:"dry_run,omitempty"`
+}
+
+// PreparePatch validates a partial write without performing it.
+//
+// The address rules are checked here as well as in the store for the same
+// reason ValidatePath is: a caller gets the rule back instead of a bare 4xx,
+// and one obviously-wrong call never costs a round trip. The store remains the
+// authority — this mirrors it, it does not reinterpret it.
+func (c *Client) PreparePatch(path string, req PatchRequest) (PutTarget, error) {
+	if err := ValidatePath(path); err != nil {
+		return PutTarget{}, err
+	}
+	if strings.TrimSpace(req.Note) == "" {
+		return PutTarget{}, fmt.Errorf("note is empty — say in one line why this revision exists (it is the commit message of the history)")
+	}
+	if len(req.Edits) == 0 {
+		return PutTarget{}, fmt.Errorf("no edits — a patch with nothing in it changes nothing; use Put to replace a document wholesale")
+	}
+	bytes := 0
+	for i, e := range req.Edits {
+		n := i + 1
+		forms := 0
+		for _, used := range []bool{e.StartLine != 0 || e.EndLine != nil, e.Section != "", e.Anchor != ""} {
+			if used {
+				forms++
+			}
+		}
+		if forms == 0 {
+			return PutTarget{}, fmt.Errorf("edit %d has no address — give start_line+end_line, section, or anchor", n)
+		}
+		if forms > 1 {
+			return PutTarget{}, fmt.Errorf("edit %d carries more than one address; an edit has exactly one", n)
+		}
+		if e.StartLine != 0 || e.EndLine != nil {
+			if e.StartLine < 1 || e.EndLine == nil {
+				return PutTarget{}, fmt.Errorf("edit %d: a line address needs start_line (1-indexed) and end_line (EXCLUSIVE — one line n is end_line n+1)", n)
+			}
+			if *e.EndLine < e.StartLine {
+				return PutTarget{}, fmt.Errorf("edit %d: end_line %d is before start_line %d", n, *e.EndLine, e.StartLine)
+			}
+			if e.Expect == nil {
+				return PutTarget{}, fmt.Errorf("edit %d: a line range carries no evidence of what is there, so expect (the literal current text of those lines) is required. Section and anchor addressing may omit it", n)
+			}
+		}
+		bytes += len(e.Body)
+	}
+	if !c.Configured() {
+		return PutTarget{}, ErrNoStore
+	}
+	if !c.CanWrite() {
+		return PutTarget{}, ErrNoToken
+	}
+	return PutTarget{Path: path, Bytes: bytes, Note: req.Note, Author: req.Author}, nil
+}
+
+// Patch changes PART of a document. The store applies every edit or none, and
+// records the result as one ordinary revision — so the saving is in the
+// transfer, not in the history.
+//
+// A 409 means the document disagrees with the request (an ambiguous address, an
+// expect that does not match, a stale base). That is not a malformed call and
+// retrying it unchanged will fail the same way: re-read the document first.
+func (c *Client) Patch(ctx context.Context, path string, req PatchRequest) (map[string]any, error) {
+	if _, err := c.PreparePatch(path, req); err != nil {
+		return nil, err
+	}
+	var out map[string]any
+	if err := c.do(ctx, http.MethodPatch, "/api/doc/"+escapePath(path), nil, req, true, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

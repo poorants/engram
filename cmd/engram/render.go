@@ -142,6 +142,31 @@ func renderRevisions(res map[string]any, path string) {
 	}
 }
 
+// renderPatch reports what a partial write touched. It names the LINES, not
+// just the document: the one question a reader has after a patch is whether it
+// landed where they meant, and a bare "ok" answers everything except that.
+func renderPatch(res map[string]any, path string) {
+	status := sOf(res, "status")
+	for _, e := range listOf(res["edits"]) {
+		m := mapOf(e)
+		out("  %s  lines %s..%s  (-%s +%s chars)\n", sOf(m, "how"),
+			nOf(m, "start_line"), nOf(m, "end_line"),
+			nOf(m, "chars_removed"), nOf(m, "chars_added"))
+	}
+	if d := sOf(res, "diff"); d != "" {
+		out("%s", d)
+	}
+	switch status {
+	case "dry_run":
+		out("dry run: %s — nothing written. Run it again without --dry-run.\n", path)
+	case "unchanged":
+		out("unchanged: %s — the edits produce the document that is already stored.\n", path)
+	default:
+		out("ok: store: %s  (%s chars, sha %s)\n", path, nOf(res, "chars"),
+			clip(sOf(res, "sha256"), 12))
+	}
+}
+
 // renderIntegrity prints the store's own measurement of the link graph. The
 // orphan count is the floor, not the goal — the weak-node list is the line that
 // actually tells you the graph is still a folder tree.

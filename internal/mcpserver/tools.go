@@ -111,7 +111,7 @@ func Register(server *mcp.Server, cfg brain.Config, authorOf AuthorFunc) {
 
 	type putIn struct {
 		Path   string `json:"path" jsonschema:"Document path — <owner>/<repo>/<area>/<name>.md. Take owner/repo from the working repo's git origin; area is PARA (projects|areas|resources|archives). Only a repo hub MOC omits the area: <owner>/<repo>/README.md. At most 5 levels below the document root"`
-		Body   string `json:"body" jsonschema:"The full document (markdown). This is an upsert: the existing document is REPLACED wholesale and the previous body is kept in revisions — for a partial edit, brain_get the full text first, change it, and send it back"`
+		Body   string `json:"body" jsonschema:"The full document (markdown). This is an upsert: the existing document is REPLACED wholesale and the previous body is kept in revisions. For a PARTIAL edit of an existing document use brain_patch instead — it sends only the changed part"`
 		Note   string `json:"note" jsonschema:"One line on why this revision exists (the commit message of the history). Required"`
 		Author string `json:"author,omitempty" jsonschema:"Recorded author. Omit to resolve it automatically (ENGRAM_AUTHOR, then git config user.name, then the OS user)"`
 		DryRun bool   `json:"dryRun,omitempty" jsonschema:"Preview — validate and report without writing. Recommended before a new document or a large replacement"`
@@ -135,6 +135,64 @@ func Register(server *mcp.Server, cfg brain.Config, authorOf AuthorFunc) {
 			})
 		}
 		out, err := c.Put(ctx, in.Path, in.Body, in.Note, authorOf(ctx, in.Author))
+		if err != nil {
+			return fail(err.Error())
+		}
+		return jsonResult(out)
+	})
+
+	// One address form per edit, checked in pkg/brain before the call leaves.
+	// The schema spells out what each one costs to get wrong, because the
+	// failure mode this tool has to avoid is not "the edit was rejected" — it
+	// is "the edit landed somewhere else".
+	type editIn struct {
+		StartLine      int     `json:"startLine,omitempty" jsonschema:"1-indexed first line to replace. Pair with endLine, which is EXCLUSIVE: one line n is endLine n+1, and endLine == startLine inserts before line n without replacing. A line range REQUIRES expect"`
+		EndLine        int     `json:"endLine,omitempty" jsonschema:"1-indexed line to stop before (EXCLUSIVE)"`
+		Section        string  `json:"section,omitempty" jsonschema:"Address a heading and everything under it, up to the next heading of the same or shallower depth. Matches the heading text ('Notes'), the raw heading line ('## Notes'), or the full heading path brain_search prints ('Guide > Notes'). A query matching two headings is refused, not guessed"`
+		IncludeHeading *bool   `json:"includeHeading,omitempty" jsonschema:"Default true — the heading line is part of the section, so your body must repeat it. False replaces only the prose under the heading"`
+		Anchor         string  `json:"anchor,omitempty" jsonschema:"An exact substring, matched literally (not a regex), that must occur EXACTLY ONCE in the document. Two matches is a refusal — extend the anchor until it is unique. Use this for an edit inside a line"`
+		Expect         *string `json:"expect,omitempty" jsonschema:"The literal text you believe occupies the addressed range right now, copied from brain_get. Compared character for character; trailing newlines are the only tolerated difference. This is what proves the edit is aimed where you think — always send it. Required for a line range"`
+		Body           string  `json:"body" jsonschema:"What replaces the addressed range. \"\" deletes it"`
+	}
+	type patchIn struct {
+		Path       string   `json:"path" jsonschema:"Document path — <owner>/<repo>/<area>/<name>.md"`
+		Edits      []editIn `json:"edits" jsonschema:"The changes, applied together or not at all. Every edit is resolved against the document AS YOU READ IT, so line numbers do not shift under each other. Overlapping edits are refused"`
+		Note       string   `json:"note" jsonschema:"One line on why this revision exists (the commit message of the history). Required"`
+		BaseSha256 string   `json:"baseSha256,omitempty" jsonschema:"The sha256 brain_get returned for the version you read. Send it: it is the only thing that catches an edit aimed correctly at a document somebody else has since changed"`
+		Author     string   `json:"author,omitempty" jsonschema:"Recorded author. Omit to resolve it automatically"`
+		DryRun     bool     `json:"dryRun,omitempty" jsonschema:"Preview — returns a unified diff of what would change, and writes nothing"`
+	}
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "brain_patch",
+		Description: "Change PART of an existing document — send only the edit, not the whole body. " +
+			"Prefer this over brain_put for any edit to a document that already exists; brain_put re-sends the entire document, which for a long one costs far more than the change. " +
+			"Address each edit by section (a heading and what is under it), by anchor (an exact substring that occurs exactly once), or by line range — and pass `expect`, the current text of that range, so a misaimed edit is refused instead of applied. " +
+			"Ambiguity is never resolved by guessing: an address matching two places comes back as a conflict listing both. " +
+			"Every edit lands or none does, and the result is one ordinary revision, so it stays reversible exactly like a put. " +
+			"A 409 means the document disagrees with the request — re-read it and re-aim rather than retrying unchanged.",
+		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in patchIn) (*mcp.CallToolResult, any, error) {
+		req := brain.PatchRequest{
+			BaseSHA256: in.BaseSha256,
+			Note:       in.Note,
+			Author:     authorOf(ctx, in.Author),
+			DryRun:     in.DryRun,
+		}
+		for _, e := range in.Edits {
+			edit := brain.Edit{
+				StartLine: e.StartLine, Section: e.Section, Anchor: e.Anchor,
+				IncludeHeading: e.IncludeHeading, Expect: e.Expect, Body: e.Body,
+			}
+			// Absent and zero are different answers for a line bound, and the
+			// wire format has to keep them apart or "no line address" reads as
+			// "line 0".
+			if e.EndLine != 0 || e.StartLine != 0 {
+				end := e.EndLine
+				edit.EndLine = &end
+			}
+			req.Edits = append(req.Edits, edit)
+		}
+		out, err := c.Patch(ctx, in.Path, req)
 		if err != nil {
 			return fail(err.Error())
 		}

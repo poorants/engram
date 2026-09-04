@@ -52,6 +52,9 @@ the store
                           --limit --chars --archives --boost-repo --only-repo --only-owner
   get <path>              print one document
   put <path>              save a document (--file, or stdin; --note required)
+  patch <path>            change PART of one (--section/--anchor/--lines,
+                          --expect-file, --file; --note required). Prefer it
+                          over put for an edit: it sends only the change
   move <path> <new path>  move a document (the old path stays as an alias)
   revisions <path>        change history
   integrity               broken links, orphans, weak nodes
@@ -116,6 +119,8 @@ func run(args []string) int {
 		return cmdGet(rest)
 	case "put":
 		return cmdPut(rest)
+	case "patch":
+		return cmdPatch(rest)
 	case "move":
 		return cmdMove(rest)
 	case "revisions":

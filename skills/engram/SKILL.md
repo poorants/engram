@@ -45,7 +45,8 @@ surface over that one client — the address, the token, the path rules and the
 author byline live there, once.
 
 1. **MCP tools (prefer these in a session)** — `brain_search`, `brain_get`,
-   `brain_revisions`, `brain_integrity`, `brain_put`, `brain_move`. Same
+   `brain_revisions`, `brain_integrity`, `brain_put`, `brain_patch`,
+   `brain_move`. Same
    endpoints, same single ranking, no permission churn, and available before this
    skill even loads. One difference: an MCP server is spawned once per session
    and cannot see which checkout a call is about, so **you** supply the full
@@ -242,6 +243,8 @@ exists.
    conclusion first in each section; identifiers verbatim. Write it **through the
    store**: the `brain_put` MCP tool (body plus `note`), or `engram put
    <owner>/<repo>/<area>/<name>.md --file <draft> --note "<why this exists>"`.
+   `brain_put` is for a NEW document or a wholesale replacement; changing part of
+   one that already exists is `brain_patch` (see below).
    The note lands in the revision history, which is what replaces `git log` now
    that there are no files. If the store refuses the owner (403), `engram put`
    writes the local file brain itself and says where it landed; the MCP tool
@@ -364,8 +367,9 @@ First load [references/linking-rules.md](references/linking-rules.md).
    (`brain_search`/`engram search` for store documents; Grep/Glob only on a
    file brain) and either **weave a contextual wikilink into that document's
    prose** or add a line in the folder's `README.md` MOC. Store edits go through
-   `brain_put` (get → edit → put); never Edit a store document as if it were a
-   file.
+   `brain_patch` — one link is a one-line change, and re-sending the whole
+   document to add it costs the document's size, not the edit's. Never Edit a
+   store document as if it were a file.
 3. **Tidy MOCs** — check each folder's `README.md` actually ties its documents
    together, and fill in what is missing.
 4. **Re-check** — lint again, confirm the numbers moved, and report.
@@ -383,7 +387,7 @@ this removes *lonely spokes* (earns a contextual, cross-folder inbound).
 
 **File brains only** — `engram weave` walks a filesystem and cannot see the
 store. For store documents, work from `brain_integrity`'s weak-node list, use
-`brain_search` to find candidates, and weave with get → edit → `brain_put`.
+`brain_search` to find candidates, and weave with get → `brain_patch`.
 
 `engram weave --json` gives two advisory lists — **missing_links**
 (a document already names another note but does not link it; the cheapest
