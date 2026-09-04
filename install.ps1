@@ -110,10 +110,35 @@ try {
 
   New-Item -ItemType Directory -Path $InstallDir -Force | Out-Null
   $engram = Join-Path $InstallDir 'engram.exe'
-  # Replace by rename so a running process is never overwritten in place — on
-  # Windows the write would simply fail with the file locked.
-  Move-Item -Path $exe -Destination "$engram.new" -Force
-  Move-Item -Path "$engram.new" -Destination $engram -Force
+  # Windows will not let a running executable be deleted or overwritten, and the
+  # engram most people upgrade is the MCP server their editor is running at that
+  # very moment. What Windows does allow is *renaming* that running file: the
+  # process keeps its handle and keeps working, and the name is freed.
+  #
+  # So the old binary moves aside first and the new one takes the name it
+  # vacated. The reverse — moving the new file straight onto the live name — is
+  # what cannot work, with or without -Force: -Force deletes the destination
+  # first, and deleting the locked file is the one thing Windows refuses. That
+  # ordering failed with "Cannot create a file when that file already exists",
+  # which reads like a stale leftover and is really a lock.
+  #
+  # Sweep what earlier upgrades parked here, then pick a name nothing holds.
+  # Both are best effort: a copy still serving a running process refuses to go,
+  # and that is fine — it is 8MB, and the next upgrade sweeps it.
+  Get-ChildItem "$engram.old*" -ErrorAction SilentlyContinue |
+    ForEach-Object { Remove-Item $_.FullName -Force -ErrorAction SilentlyContinue }
+  $parked = "$engram.old"
+  if (Test-Path $parked) { $parked = "$engram.old-" + [Guid]::NewGuid().ToString('N').Substring(0, 8) }
+  if (Test-Path $engram) { Move-Item -Path $engram -Destination $parked }
+  try {
+    Move-Item -Path $exe -Destination $engram
+  } catch {
+    # Put the working binary back. A failed upgrade should cost the new version,
+    # never the one that was already running fine.
+    if (Test-Path $parked) { Move-Item -Path $parked -Destination $engram -Force }
+    Die "could not install to $engram — $($_.Exception.Message)"
+  }
+  Remove-Item $parked -Force -ErrorAction SilentlyContinue
 
   Write-Host "installed: $engram"
   & $engram version

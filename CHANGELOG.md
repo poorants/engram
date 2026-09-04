@@ -8,6 +8,38 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+
+## [0.5.0] — 2026-09-04
+
+### Fixed — upgrading on Windows while engram is running
+
+`install.ps1` could not replace a binary that was in use, which on Windows is
+the normal case rather than the edge one: the engram being upgraded is usually
+the MCP server the person's editor is running at that moment. The install died
+with
+
+```
+Move-Item: 파일이 이미 있으므로 만들 수 없습니다.
+Cannot create a file when that file already exists.
+```
+
+after the new binary had already downloaded — an error that reads like a stale
+leftover and is really a lock. The machine kept the old version, and the
+`.new` file sat next to it as the only trace.
+
+The replacement was already meant to be a rename, for exactly this reason, but
+it renamed the wrong file: it moved the *new* binary onto the live name, and
+`-Force` has to delete that destination first, which is the one thing a lock
+forbids. Windows does allow renaming a running executable — the process keeps
+its handle and keeps working — so the old binary now moves aside and the new one
+takes the name it vacated. If that second move fails, the old binary is put back:
+a failed upgrade costs the new version, never the working one.
+
+The parked copy is deleted on the next run, since a process still serving from
+it will refuse to go on this one. This is Windows-only; `install.sh` was never
+affected, because a Unix `mv` over a running binary replaces the directory entry
+and leaves the running inode alone.
+
 ### Added — the binary says when it is out of date
 
 Distribution is by GitHub release, so a fix merged to main reaches a machine
@@ -237,7 +269,10 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.5.0...HEAD
+[0.5.0]: https://github.com/poorants/engram/compare/v0.4.0...v0.5.0
+[0.4.0]: https://github.com/poorants/engram/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/poorants/engram/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/poorants/engram/compare/v0.1.1...v0.2.0
 [0.1.1]: https://github.com/poorants/engram/compare/v0.1.0...v0.1.1
 [0.1.0]: https://github.com/poorants/engram/releases/tag/v0.1.0
