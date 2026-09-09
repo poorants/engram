@@ -53,6 +53,8 @@ CLOSED_READS = [
     "/api/revisions/acme/repo/resources/x.md",
     "/api/integrity",
     "/api/export",
+    "/api/usage",
+    "/usage",
     "/",
     "/search?q=anything",
     "/changes",

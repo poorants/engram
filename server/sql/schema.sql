@@ -184,3 +184,30 @@ CREATE UNIQUE INDEX IF NOT EXISTS feedback_one_per_question
   ON feedback(doc_id, author, kind, (COALESCE(search_id, 0)), ((timezone('UTC', created_at))::date));
 CREATE INDEX IF NOT EXISTS feedback_doc_idx    ON feedback(doc_id);
 CREATE INDEX IF NOT EXISTS feedback_search_idx ON feedback(search_id);
+
+-- -- usage -----------------------------------------------------------------------
+-- What a session cost. One row per API call: which tool, what it was about,
+-- and how much text crossed the wire (bytes, and a tokenizer-agnostic token
+-- estimate — the ratio between sessions is what matters, not the absolute).
+-- The session is whatever the client sent as X-Engram-Session: the MCP server
+-- mints one per process, which is exactly one editor session; a bare CLI call
+-- has none and lands under ''. This is the table the tiers are measured
+-- against in production — tier-1 hit rate, tokens per session, whether votes
+-- happen at all — and the one that surfaces questions asked again and again,
+-- which are documents waiting to be written.
+CREATE TABLE IF NOT EXISTS calls (
+  id         bigserial PRIMARY KEY,
+  session    text NOT NULL DEFAULT '',
+  tool       text NOT NULL,                 -- search | doc | feedback | put | patch | move | revisions | integrity
+  ref        text NOT NULL DEFAULT '',      -- the question, or the document path
+  bytes      int  NOT NULL DEFAULT 0,
+  tokens     int  NOT NULL DEFAULT 0,
+  author     text NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS calls_session_idx ON calls(session, created_at);
+CREATE INDEX IF NOT EXISTS calls_at_idx      ON calls(created_at DESC);
+-- The search log learns the session too, so "tier 1, then tier 2 for the same
+-- question in the same session" — an escalation — can be counted.
+ALTER TABLE searches ADD COLUMN IF NOT EXISTS session text NOT NULL DEFAULT '';
+CREATE INDEX IF NOT EXISTS searches_session_idx ON searches(session, created_at);

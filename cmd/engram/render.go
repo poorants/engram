@@ -135,6 +135,53 @@ func renderSearch(res map[string]any, query string, chars int) {
 	}
 }
 
+func renderUsage(res map[string]any) {
+	t := mapOf(res["totals"])
+	out("last %s days · %s sessions · %s calls · ~%s tokens · %s searches · %s reads · %s votes · %s writes\n",
+		nOf(res, "days"), nOf(t, "sessions"), nOf(t, "calls"), nOf(t, "tokens"),
+		nOf(t, "searches"), nOf(t, "reads"), nOf(t, "votes"), nOf(t, "writes"))
+	if n := nOf(t, "tier1"); n != "0" && n != "?" {
+		out("tier-1 hit rate %.0f%%  (%s of %s tier-1 searches were widened)\n",
+			fOf(t, "tier1_hit_rate")*100, nOf(t, "escalated"), n)
+	}
+	if nOf(t, "searches") != "0" && nOf(t, "votes") == "0" {
+		out("no votes in this window — the ranking is not learning; check the wrap-up nudge lands\n")
+	}
+	sessions := listOf(res["sessions"])
+	if len(sessions) == 0 {
+		out("\nnothing logged in this window\n")
+		return
+	}
+	out("\n%-28s %-10s %-13s %6s %8s %6s %5s %5s %6s %8s\n",
+		"session", "who", "from → to", "calls", "tokens", "search", "read", "vote", "write", "tier1")
+	for _, s := range sessions {
+		m := mapOf(s)
+		id := sOf(m, "session")
+		if id == "" {
+			id = "(no session)"
+		}
+		hit := "—"
+		if nOf(m, "tier1") != "0" {
+			hit = fmt.Sprintf("%.0f%%", fOf(m, "tier1_hit_rate")*100)
+		}
+		first, last := sOf(m, "first"), sOf(m, "last")
+		span := ""
+		if len(first) >= 16 && len(last) >= 16 {
+			span = strings.Replace(first[5:16], "T", " ", 1) + "→" + last[11:16]
+		}
+		out("%-28s %-10s %-13s %6s %8s %6s %5s %5s %6s %8s\n",
+			clip(id, 28), clip(sOf(m, "author"), 10), span, nOf(m, "calls"), nOf(m, "tokens"),
+			nOf(m, "searches"), nOf(m, "reads"), nOf(m, "votes"), nOf(m, "writes"), hit)
+	}
+	if rep := listOf(res["repeated"]); len(rep) > 0 {
+		out("\nasked in more than one session — a document nobody wrote yet, or a hub that does not point at it:\n")
+		for _, r := range rep {
+			m := mapOf(r)
+			out("  %s sessions · %s times · %s\n", nOf(m, "sessions"), nOf(m, "times"), sOf(m, "q"))
+		}
+	}
+}
+
 func renderFeedback(res map[string]any) {
 	kind := sOf(res, "kind")
 	for _, r := range listOf(res["results"]) {

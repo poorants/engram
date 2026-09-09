@@ -1,0 +1,54 @@
+{% extends "base.html" %}
+{% block title %}usage — engram{% endblock %}
+{% block body %}
+<p class="meta">What sessions cost the brain over the last
+  {% for d in (1, 7, 30, 90) %}{% if d == days %}<strong>{{ d }}</strong>{% else %}<a href="/usage?days={{ d }}">{{ d }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %} days.
+  Tokens are an estimate (the bench's formula); the ratio between sessions is what to read.
+  {% if session %}· showing session <code>{{ session }}</code> — <a href="/usage?days={{ days }}">all</a>{% endif %}</p>
+
+{% set t = u.totals %}
+<div class="card">
+  <strong>{{ t.sessions }} sessions</strong> · {{ t.calls }} calls · <strong>{{ '{:,}'.format(t.tokens) }} tokens</strong>
+  · {{ t.searches }} searches · {{ t.reads }} reads · {{ t.votes }} votes · {{ t.writes }} writes
+  {% if t.tier1 %}· tier-1 hit rate <strong>{{ '%.0f'|format(t.tier1_hit_rate * 100) }}%</strong>
+    <span class="meta">({{ t.escalated }} of {{ t.tier1 }} tier-1 searches were widened)</span>{% endif %}
+  {% if t.searches and not t.votes %}· <span class="meta" title="Votes are how the ranking learns. None in this window means the nudge is not landing.">no votes at all</span>{% endif %}
+</div>
+
+{% if u.sessions %}
+<div class="card" style="overflow-x:auto">
+  <table style="width:100%;border-collapse:collapse;font-size:13.5px">
+    <tr class="meta"><th style="text-align:left;padding:4px 8px">session</th><th style="text-align:left;padding:4px 8px">who</th><th style="text-align:left;padding:4px 8px">from → to</th>
+      <th style="text-align:right;padding:4px 8px">calls</th><th style="text-align:right;padding:4px 8px">tokens</th>
+      <th style="text-align:right;padding:4px 8px">search</th><th style="text-align:right;padding:4px 8px">read</th><th style="text-align:right;padding:4px 8px">vote</th><th style="text-align:right;padding:4px 8px">write</th>
+      <th style="text-align:right;padding:4px 8px" title="of the tier-1 searches, the share not widened to a higher tier for the same question">tier-1 hit</th></tr>
+  {% for s in u.sessions %}
+    <tr style="border-top:1px solid var(--line)">
+      <td style="padding:5px 8px;white-space:nowrap"><a href="/usage?days={{ days }}&session={{ s.session|urlencode }}"><code>{{ s.session or '(no session)' }}</code></a></td>
+      <td style="padding:5px 8px" class="meta">{{ s.author or '—' }}</td>
+      <td style="padding:5px 8px;white-space:nowrap" class="meta">{{ s.first[5:16]|replace('T', ' ') }} → {{ s.last[11:16] }}</td>
+      <td style="padding:5px 8px;text-align:right">{{ s.calls }}</td>
+      <td style="padding:5px 8px;text-align:right"><strong>{{ '{:,}'.format(s.tokens) }}</strong></td>
+      <td style="padding:5px 8px;text-align:right">{{ s.searches }}</td>
+      <td style="padding:5px 8px;text-align:right">{{ s.reads }}</td>
+      <td style="padding:5px 8px;text-align:right">{{ s.votes }}</td>
+      <td style="padding:5px 8px;text-align:right">{{ s.writes }}</td>
+      <td style="padding:5px 8px;text-align:right">{% if s.tier1 %}{{ '%.0f'|format(s.tier1_hit_rate * 100) }}%{% else %}—{% endif %}</td>
+    </tr>
+  {% endfor %}
+  </table>
+</div>
+{% else %}
+<div class="empty">Nothing in this window. Calls are logged from the store's side; an older client shows up as <code>(no session)</code>.</div>
+{% endif %}
+
+{% if u.repeated %}
+<h2>Asked again and again</h2>
+<div class="card">
+  <div class="meta" style="margin-bottom:8px">Questions asked in more than one session. Each is a document nobody wrote yet, or a hub that does not point at it.</div>
+  {% for r in u.repeated %}
+  <div style="padding:4px 0"><a href="/search?q={{ r.q|urlencode }}">{{ r.q }}</a> <span class="meta">· {{ r.sessions }} sessions · {{ r.times }} times</span></div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

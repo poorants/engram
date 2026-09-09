@@ -52,6 +52,23 @@ answer for half the questions and checks the other half did not move (the
 lock-in check). On the corpus: voted questions went from 9/17 to 17/17 at
 rank 1, unvoted ones did not change.
 
+### Added — `engram usage`: what a session cost, and whether tier 1 was enough
+
+Every API call now leaves one row in `calls` — the tool, what it was about,
+and the bytes and estimated tokens that crossed the wire (the response for a
+read, the body for a write). The MCP server mints a session id per process
+and sends it as `X-Engram-Session` on every call (it logs the id to stderr at
+start); the CLI passes `ENGRAM_SESSION` when it has one. The search log
+learned the session too, so "tier 1, then tier 2 for the same question in the
+same session" can be counted — that is the tier-1 miss.
+
+`engram usage [--days N] [--session id]`, `GET /api/usage` and the viewer's
+`/usage` page report per session: calls, tokens, searches / reads / votes /
+writes, and the tier-1 hit rate; plus the questions asked in more than one
+session, which are documents nobody wrote yet. Nothing here is fed back into
+a session on its own — telling a session what it has spent would cost tokens
+on every call to save tokens on some.
+
 Wire format: a search called with `tier` answers compact hits (`path`,
 `heading_path`, `score`, `snippet` or `body`) plus `search_id`, `candidates`
 and `next`; the untiered answer gains `search_id`, `mem_rank` and `utility`

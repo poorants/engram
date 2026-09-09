@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -43,6 +47,17 @@ manuals, conventions) goes to <owner>/shared/.
 If the store is unreachable, reads and writes both fail on the spot. There is no
 cache and no queue. Say the store is down rather than answering from something
 older than the question.`
+
+// newSessionID is a random 16-hex-character id with the date in front, so a
+// list of sessions reads in order without a lookup. Random rather than a
+// counter because two editors on one machine start independently.
+func newSessionID() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return time.Now().Format("20060102") + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return time.Now().Format("20060102") + "-" + hex.EncodeToString(b[:])
+}
 
 func runMCP(args []string) int {
 	fs := flag.NewFlagSet("mcp", flag.ContinueOnError)
@@ -92,10 +107,21 @@ func runMCP(args []string) int {
 		// session — see noticeMiddleware.
 		server.AddReceivingMiddleware(noticeMiddleware(notice))
 	}
+	// One process is one editor session, so the session id the store groups
+	// its usage log by is minted here, once, unless something upstream (a
+	// wrapper that knows the editor's own id) already set ENGRAM_SESSION.
+	// Logged to stderr so `engram usage --session <id>` can be matched to
+	// the session a person is looking at.
+	bc := cfg.Brain()
+	if bc.Session == "" {
+		bc.Session = newSessionID()
+	}
+	log.Printf("session %s", bc.Session)
+
 	// Identity is resolved ONCE, here, and shared by every tool — the same
 	// resolver the CLI builds, so a document written from a session and one
 	// written from a hook carry the same byline.
-	mcpserver.Register(server, cfg.Brain(), identity.New(cfg.Author, nil).Author)
+	mcpserver.Register(server, bc, identity.New(cfg.Author, nil).Author)
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Printf("server stopped: %v", err)

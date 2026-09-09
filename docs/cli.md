@@ -117,6 +117,28 @@ Broken links, orphans and weak nodes across the store. `--limit <n>` caps each
 category. This is the health check for the graph — run it when the store starts
 feeling like a folder tree again.
 
+### `engram usage`
+
+What sessions cost the brain: per session, the calls, the estimated tokens
+that crossed the wire, searches / reads / votes / writes, and the **tier-1 hit
+rate** — of the tier-1 searches, the share that was not widened to a higher
+tier for the same question. Below that, the questions asked in more than one
+session: each is a document nobody wrote yet, or a hub that does not point at
+it.
+
+| Flag | Meaning |
+|---|---|
+| `--days <n>` | how far back (default 7) |
+| `--session <id>` | one session — the id the MCP server logs to stderr at start |
+| `--limit <n>` | sessions listed at most (default 30) |
+
+A session is what the client declares: the MCP server mints one id per
+process (one editor session) and stamps every call with it; a script can set
+`ENGRAM_SESSION`; a bare CLI call has none and lands under `(no session)`.
+Tokens are the bench's estimate — compare sessions with each other, not with
+a bill. The same report is at `/usage` in the viewer. Nothing here is told to
+a session on its own.
+
 ## Writing
 
 ### `engram put <path>`

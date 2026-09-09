@@ -65,6 +65,11 @@ type Config struct {
 	Token string
 	// Timeout bounds one request. Zero means DefaultTimeout.
 	Timeout time.Duration
+	// Session names the session every call belongs to, sent as
+	// X-Engram-Session. The store groups its usage log by it — tokens per
+	// session, the tier-1 hit rate — and nothing else. Empty means the calls
+	// are unattributed, which is correct for a bare CLI invocation.
+	Session string
 }
 
 // DefaultTimeout is the per-request ceiling. The store answers searches in
@@ -75,6 +80,10 @@ const DefaultTimeout = 10 * time.Second
 // TokenHeader carries the store's credential. Every request sends it when this
 // machine has one, because the store may require it for reads as well.
 const TokenHeader = "X-Engram-Token"
+
+// SessionHeader carries Config.Session. A claim the client makes, not a
+// credential: the store infers nothing from it and refuses nothing over it.
+const SessionHeader = "X-Engram-Session"
 
 // ErrNoStore means no store address is configured. It is a setup error, not an
 // outage: reporting it as one sends people to look at the network instead of at
@@ -91,6 +100,7 @@ var ErrNoToken = errors.New("no store token on this machine — run `engram stor
 type Client struct {
 	baseURL string
 	token   string
+	session string
 	http    *http.Client
 }
 
@@ -104,9 +114,13 @@ func New(cfg Config) *Client {
 	return &Client{
 		baseURL: strings.TrimRight(strings.TrimSpace(cfg.BaseURL), "/"),
 		token:   strings.TrimSpace(cfg.Token),
+		session: strings.TrimSpace(cfg.Session),
 		http:    &http.Client{Timeout: timeout},
 	}
 }
+
+// Session is the session id this client stamps on its calls ("" if none).
+func (c *Client) Session() string { return c.session }
 
 // BaseURL is the store origin this client talks to (quoted in reports).
 func (c *Client) BaseURL() string { return c.baseURL }
@@ -204,6 +218,9 @@ func (c *Client) do(ctx context.Context, method, path string, q url.Values, body
 	}
 	if c.token != "" {
 		req.Header.Set(TokenHeader, c.token)
+	}
+	if c.session != "" {
+		req.Header.Set(SessionHeader, c.session)
 	}
 
 	resp, err := c.http.Do(req)
@@ -407,6 +424,35 @@ func (c *Client) Integrity(ctx context.Context, limit int) (map[string]any, erro
 	}
 	var out map[string]any
 	if err := c.do(ctx, http.MethodGet, "/api/integrity", q, nil, false, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// UsageOpts selects a window of the store's usage log. Days is how far back
+// (0 means the store default, 7); Session narrows to one session; Limit caps
+// the sessions listed.
+type UsageOpts struct {
+	Days    int
+	Session string
+	Limit   int
+}
+
+// Usage reports what sessions cost — calls, estimated tokens, the tier-1 hit
+// rate, and the questions that keep coming back. Read-only.
+func (c *Client) Usage(ctx context.Context, opts UsageOpts) (map[string]any, error) {
+	q := url.Values{}
+	if opts.Days > 0 {
+		q.Set("days", strconv.Itoa(opts.Days))
+	}
+	if s := strings.TrimSpace(opts.Session); s != "" {
+		q.Set("session", s)
+	}
+	if opts.Limit > 0 {
+		q.Set("limit", strconv.Itoa(opts.Limit))
+	}
+	var out map[string]any
+	if err := c.do(ctx, http.MethodGet, "/api/usage", q, nil, false, &out); err != nil {
 		return nil, err
 	}
 	return out, nil
