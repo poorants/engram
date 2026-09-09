@@ -86,6 +86,8 @@ a file brain
                           payload on stdin. Registered by the plugin; not
                           something to run by hand.
 
+  update                  install the latest release over this binary
+                          (--version vX.Y.Z --check --force); settings untouched
   version                 print the version
 
 Every command prints for a person and takes --json for a machine.
@@ -135,6 +137,8 @@ func run(args []string) int {
 		return cmdRevisions(rest)
 	case "usage":
 		return cmdUsage(rest)
+	case "update":
+		return cmdUpdate(rest)
 	case "integrity":
 		return cmdIntegrity(rest)
 	case "status":

@@ -252,8 +252,18 @@ someone opens a different repo.
 
 ## Upgrading
 
-Re-run the installer. It replaces the binary by rename, so a running process is
-never overwritten in place.
+```bash
+engram update            # any OS — the latest release, checksum-verified, swapped in by rename
+engram update --check    # say what would happen
+```
+
+The settings, the token and the store are untouched. A running MCP server
+keeps the old binary until its session ends; start a new session to use the
+new one. This is what the update notice in a session asks for, and a model
+can run it. A development build (`make install`) is not replaced without
+`--force`, because the latest release may be older than it.
+
+Re-running the installer does the same thing:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/poorants/engram/main/install.sh | sh   # Linux, macOS

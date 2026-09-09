@@ -52,6 +52,22 @@ answer for half the questions and checks the other half did not move (the
 lock-in check). On the corpus: voted questions went from 9/17 to 17/17 at
 rank 1, unvoted ones did not change.
 
+### Added — `engram update`
+
+The update notice used to name a curl one-liner; now it names a verb the
+binary implements. `engram update` picks the release asset for this platform,
+verifies it against `SHA256SUMS`, unpacks it, swaps it in by rename (on
+Windows the running file moves to `engram.exe.old`, as the installer already
+did) and runs the result once to prove it answers. Settings, token and store
+are untouched; a running MCP server keeps the old file until its session
+ends. `--check` reports, `--version` pins, and a development build is not
+replaced without `--force` — the latest release may be older than it.
+
+Both installers now treat an already-registered MCP server as success on a
+re-run. Windows PowerShell 5.1 had been turning `claude mcp add`'s
+"already exists" on stderr into a terminating error, killing an upgrade
+right after the binary was replaced.
+
 ### Added — `engram usage`: what a session cost, and whether tier 1 was enough
 
 Every API call now leaves one row in `calls` — the tool, what it was about,
