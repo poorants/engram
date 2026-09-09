@@ -197,14 +197,15 @@ func cmdScope(args []string) int {
 
 func cmdSearch(args []string) int {
 	fs := flag.NewFlagSet("search", flag.ContinueOnError)
-	limit := fs.Int("limit", 0, "maximum results, 1..50")
+	tier := fs.Int("tier", 1, "token budget: 1 snippets, 2 full chunks, 3 wide (archives, no repo boost); 0 for the untiered page")
+	limit := fs.Int("limit", 0, "maximum results, 1..50 (overrides the tier's page)")
 	archives := fs.Bool("archives", false, "also search archived documents")
 	boost := fs.String("boost-repo", "", "lift this repo's documents (a boost, not a filter)")
 	onlyRepos := fs.String("only-repo", "", "restrict to these repos (comma-separated) — a filter, not a boost")
 	onlyOwners := fs.String("only-owner", "", "restrict to these owners (comma-separated)")
 	chars := fs.Int("chars", 400, "characters shown per chunk (human output only)")
 	asJSON := fs.Bool("json", false, "machine-readable output")
-	c, _, _, pos, err := clients(fs, args)
+	c, ident, _, pos, err := clients(fs, args)
 	if err != nil {
 		return usageError(err.Error())
 	}
@@ -218,9 +219,14 @@ func cmdSearch(args []string) int {
 	// never a filter, so nothing is hidden: what another repo already solved
 	// still appears, lower down. An explicit --boost-repo or any --only-* wins,
 	// and a directory with no git remote simply skips it.
+	//
+	// The author goes with the search so that a vote — `engram feedback`, or
+	// the viewer's button — can be attributed to the question that found the
+	// document. It is the same byline a write would carry.
 	opts := brain.SearchOpts{
 		Query: q, Limit: *limit, Archives: *archives, BoostRepo: strings.TrimSpace(*boost),
 		OnlyRepos: splitList(*onlyRepos), OnlyOwners: splitList(*onlyOwners),
+		Tier: *tier, Author: ident.Author(context.Background(), ""),
 	}
 	if opts.BoostRepo == "" && len(opts.OnlyRepos) == 0 && len(opts.OnlyOwners) == 0 {
 		if _, repo, err := repoScope(); err == nil {
@@ -246,8 +252,9 @@ func cmdSearch(args []string) int {
 func cmdGet(args []string) int {
 	fs := flag.NewFlagSet("get", flag.ContinueOnError)
 	outFile := fs.String("out", "", "write the body to this file and omit it from the response")
+	fromSearch := fs.Int64("from-search", 0, "the search id (from `engram search`) this read follows — records an implicit vote for the document")
 	asJSON := fs.Bool("json", false, "machine-readable output")
-	c, _, _, pos, err := clients(fs, args)
+	c, ident, _, pos, err := clients(fs, args)
 	if err != nil {
 		return usageError(err.Error())
 	}
@@ -258,7 +265,12 @@ func cmdGet(args []string) int {
 	if err != nil {
 		return usageError(err.Error())
 	}
-	doc, err := c.Doc(context.Background(), path)
+	ctx := context.Background()
+	var read brain.ReadOpts
+	if *fromSearch > 0 {
+		read = brain.ReadOpts{SearchID: *fromSearch, Author: ident.Author(ctx, "")}
+	}
+	doc, err := c.DocFrom(ctx, path, read)
 	if err != nil {
 		return fail(err)
 	}
@@ -275,6 +287,51 @@ func cmdGet(args []string) int {
 		return emit(doc)
 	}
 	renderDoc(doc)
+	return exitOK
+}
+
+// cmdFeedback is the explicit half of the feedback loop: a person, a hook or
+// a script saying that a document answered (or got in the way). The implicit
+// half — opening a hit — is `get --from-search`, and in a session the MCP
+// server does both without being asked.
+func cmdFeedback(args []string) int {
+	fs := flag.NewFlagSet("feedback", flag.ContinueOnError)
+	noise := fs.Bool("noise", false, "the document was in the way (default: it answered)")
+	searchID := fs.Int64("search", 0, "the search id that showed the document — attributes the vote to the question")
+	note := fs.String("note", "", "what it answered, in a few words")
+	author := fs.String("author", "", "recorded voter (resolved automatically when omitted)")
+	asJSON := fs.Bool("json", false, "machine-readable output")
+	c, ident, _, pos, err := clients(fs, args)
+	if err != nil {
+		return usageError(err.Error())
+	}
+	if len(pos) < 1 {
+		return usageError("at least one document path is required")
+	}
+	var paths []string
+	for _, p := range pos {
+		full, err := expandPath(p)
+		if err != nil {
+			return usageError(err.Error())
+		}
+		paths = append(paths, full)
+	}
+	kind := "useful"
+	if *noise {
+		kind = "noise"
+	}
+	ctx := context.Background()
+	res, err := c.Feedback(ctx, brain.Vote{
+		Paths: paths, Kind: kind, SearchID: *searchID, Note: *note,
+		Author: ident.Author(ctx, *author),
+	})
+	if err != nil {
+		return fail(err)
+	}
+	if *asJSON {
+		return emit(res)
+	}
+	renderFeedback(res)
 	return exitOK
 }
 

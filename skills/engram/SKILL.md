@@ -45,8 +45,8 @@ surface over that one client — the address, the token, the path rules and the
 author byline live there, once.
 
 1. **MCP tools (prefer these in a session)** — `brain_search`, `brain_get`,
-   `brain_revisions`, `brain_integrity`, `brain_put`, `brain_patch`,
-   `brain_move`. Same
+   `brain_feedback`, `brain_revisions`, `brain_integrity`, `brain_put`,
+   `brain_patch`, `brain_move`. Same
    endpoints, same single ranking, no permission churn, and available before this
    skill even loads. One difference: an MCP server is spawned once per session
    and cannot see which checkout a call is about, so **you** supply the full
@@ -333,6 +333,18 @@ approval gate): [references/migration-patterns.md](references/migration-patterns
   user's question, verbatim**. Ask it as a question, not as keywords: the ranking
   is tuned on natural questions. Report the returned chunks as
   `path ¶ heading_path`.
+  - **Tiers.** The default page (tier 1) is up to four documents as snippets,
+    one chunk each — a quarter of the tokens of a full page, same recall. If
+    the answer is not on it, call again with the **same question** and the tier
+    the result's `next` names: 2 is full chunks, 3 adds archives and widens.
+    Raise the tier before rephrasing; a new phrasing is a new search, and it
+    breaks the attribution a vote needs.
+  - **Vote when a document answered.** `brain_feedback` with the path (the
+    session's last search is attached by itself), or `engram feedback <path>
+    --search <id>`. The ranking learns from it: the document comes first for
+    that question and ones like it. `noise` is the other button. Opening a hit
+    with `brain_get` is a weaker vote recorded without any call. A vote is a
+    bonus, never a filter.
   - **Do not fall back to Grep when the store is down.** There is nothing local
     to grep, and grepping a repo's own source to answer a brain question yields a
     confident wrong answer. Say the store is down.
@@ -460,6 +472,11 @@ is worth keeping is the model's job. Three triggers:
 3. **Backstop** (`Stop` hook) — a throttled nudge (default 30 min) for long
    sessions with no sign-off. If nothing is worth keeping, say so in one line —
    no filler.
+
+The read-side counterpart: when a brain document **answered** something in the
+session, say so with `brain_feedback` before it ends. That is what makes the
+next session's first page right more often — the write side keeps the brain
+fed, the vote keeps its search honest.
 
 Hooks ship with the plugin and never block. Tune with
 `ENGRAM_CAPTURE_COOLDOWN_MIN` and `ENGRAM_CAPTURE_PHRASES`; disable with

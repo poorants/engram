@@ -7,6 +7,9 @@
     {% if doc.author %} · {{ doc.author }}{% endif %}{% if doc.note %} · {{ doc.note }}{% endif %}
   {% else %}<span class="pill">{{ doc.owner }}/{{ doc.repo }}</span><span class="pill">{{ doc.area }}</span>{{ doc.path }}
     {% if doc.updated_at %} · {{ doc.updated_at }}{% endif %}{% endif %} · {{ '{:,}'.format(doc.chars) }} chars
+  {% if doc.feedback and (doc.feedback.useful or doc.feedback.noise or doc.feedback.opened) %}
+    · <span title="Votes from searches — useful / noise / opened. utility is the decayed sum the ranking adds as a bonus (half-life 90 days).">👍 {{ doc.feedback.useful }} · 👎 {{ doc.feedback.noise }} · opened {{ doc.feedback.opened }} · utility {{ '%+.2f'|format(doc.feedback.utility) }}</span>
+  {% endif %}
 </div>
 {% if doc.is_revision %}
 <div class="card" style="border-color:#f59e0b">

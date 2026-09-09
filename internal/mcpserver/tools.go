@@ -17,6 +17,12 @@ import (
 // land here by mistake. The CLI, which runs IN a directory, is the surface that
 // can fill the coordinates in from `origin`.
 //
+// Being one process per session is also what lets this adapter close the
+// feedback loop the store cannot see: it remembers the last search (recent.go)
+// and tells the store when a brain_get opens one of its hits, so a document
+// that was read after being found earns an implicit vote without the model
+// doing anything.
+//
 // There is deliberately no brain_delete: the engram contract is "never delete,
 // move to archives", and archiving is brain_move with an archives/ target.
 
@@ -35,28 +41,39 @@ func Register(server *mcp.Server, cfg brain.Config, authorOf AuthorFunc) {
 		authorOf = func(_ context.Context, explicit string) string { return explicit }
 	}
 	readOnly := &mcp.ToolAnnotations{ReadOnlyHint: true, OpenWorldHint: ptr(true)}
+	mem := &recent{}
 
 	type searchIn struct {
 		Query     string   `json:"query" jsonschema:"The search query — pass the user's question as a whole sentence. Do not break it into keywords; the ranking is tuned on natural questions"`
-		Limit     int      `json:"limit,omitempty" jsonschema:"Maximum results, 1..50 (default 6)"`
-		Archives  bool     `json:"archives,omitempty" jsonschema:"true also searches archived documents"`
+		Tier      int      `json:"tier,omitempty" jsonschema:"The token budget, 1..3 (default 1). 1: up to 4 documents as short snippets — enough to recognise the answer at a fraction of the cost. 2: up to 6 full chunks. 3: up to 12 documents, archives included, repo boost off. If the answer is not on the page, call again with the SAME question and the next tier (the result says which) — raise the tier before rephrasing"`
+		Limit     int      `json:"limit,omitempty" jsonschema:"Override the tier's page size, 1..50"`
+		Archives  bool     `json:"archives,omitempty" jsonschema:"true also searches archived documents (tier 3 does by itself)"`
 		BoostRepo string   `json:"boostRepo,omitempty" jsonschema:"Lift this repo's documents without excluding the rest — pass the repo you are working in"`
 		OnlyRepos []string `json:"onlyRepos,omitempty" jsonschema:"Restrict to these repos (a filter, not a boost — it hides what other repos already solved)"`
 	}
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "brain_search",
 		Description: "Search the shared brain (the team knowledge store). Uses the same single ranking as the human search page. " +
-			"Results are CHUNKS with their heading_path, not whole documents — follow up with brain_get when you need the full text. " +
+			"Answers in tiers: tier 1 (default) is a few snippets, one per document; tier 2 the full chunks; tier 3 wide. " +
+			"Not there? Call again with the same question and the tier named in `next` — do not rephrase first. " +
+			"Results are CHUNKS with their heading_path, not whole documents — follow up with brain_get when you need the full text, " +
+			"and with brain_feedback when a document answered, so the next similar question finds it first. " +
 			"No token needed. If the store is unreachable this fails; there is no fallback and no cached answer.",
 		Annotations: readOnly,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in searchIn) (*mcp.CallToolResult, any, error) {
+		tier := in.Tier
+		if tier == 0 {
+			tier = 1
+		}
 		out, err := c.Search(ctx, brain.SearchOpts{
 			Query: in.Query, Limit: in.Limit, Archives: in.Archives,
 			BoostRepo: in.BoostRepo, OnlyRepos: in.OnlyRepos,
+			Tier: tier, Author: authorOf(ctx, ""),
 		})
 		if err != nil {
 			return fail(err.Error())
 		}
+		mem.remember(out)
 		return jsonResult(out)
 	})
 
@@ -66,10 +83,42 @@ func Register(server *mcp.Server, cfg brain.Config, authorOf AuthorFunc) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "brain_get",
 		Description: "Fetch one document in full — body, outgoing links, backlinks, and recent history. " +
-			"The path is usually taken verbatim from a brain_search hit.",
+			"The path is usually taken verbatim from a brain_search hit; opening a hit that way is remembered as a weak vote for it.",
 		Annotations: readOnly,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in getIn) (*mcp.CallToolResult, any, error) {
-		out, err := c.Doc(ctx, in.Path)
+		var opts brain.ReadOpts
+		if sid, shown := mem.lookup(in.Path); shown {
+			opts = brain.ReadOpts{SearchID: sid, Author: authorOf(ctx, "")}
+		}
+		out, err := c.DocFrom(ctx, in.Path, opts)
+		if err != nil {
+			return fail(err.Error())
+		}
+		return jsonResult(out)
+	})
+
+	type feedbackIn struct {
+		Paths    []string `json:"paths" jsonschema:"The documents the vote is about — paths as brain_search returned them"`
+		Kind     string   `json:"kind,omitempty" jsonschema:"useful (default): this document answered. noise: it was in the way"`
+		Note     string   `json:"note,omitempty" jsonschema:"Optional — what it answered, in a few words"`
+		SearchID int64    `json:"searchId,omitempty" jsonschema:"The search_id of the brain_search that showed these documents. Omit it and the last search of this session is used when it showed them"`
+	}
+	mcp.AddTool(server, &mcp.Tool{
+		Name: "brain_feedback",
+		Description: "Say which documents answered (or got in the way). Call it when a brain document settled something — " +
+			"the ranking learns from it: the document rises for this question and ones like it, and the next session's tier-1 page is right more often. " +
+			"A vote is a bonus, never a filter; the document must still match the question to appear. " +
+			"One vote per document per question per day counts. Needs the store token.",
+		Annotations: &mcp.ToolAnnotations{OpenWorldHint: ptr(true), IdempotentHint: true},
+	}, func(ctx context.Context, _ *mcp.CallToolRequest, in feedbackIn) (*mcp.CallToolResult, any, error) {
+		sid := in.SearchID
+		if sid == 0 {
+			sid = mem.forAny(in.Paths)
+		}
+		out, err := c.Feedback(ctx, brain.Vote{
+			Paths: in.Paths, Kind: in.Kind, SearchID: sid,
+			Author: authorOf(ctx, ""), Note: in.Note,
+		})
 		if err != nil {
 			return fail(err.Error())
 		}

@@ -6,15 +6,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 1056,
-  "wire": 1702,
+  "wire": 1322,
   "docs": 5,
-  "ms": 7.210493087768555,
+  "ms": 4.178762435913086,
   "top": [
    "resources/document-addressing.md",
    "README.md",
    "resources/author-identity.md"
   ],
-  "search_id": 2,
+  "search_id": 72,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/README.md",
@@ -31,15 +31,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 945,
-  "wire": 1561,
+  "wire": 1188,
   "docs": 5,
-  "ms": 4.095554351806641,
+  "ms": 4.227638244628906,
   "top": [
    "resources/store-api.md",
    "resources/scope-boundary.md",
    "resources/README.md"
   ],
-  "search_id": 3,
+  "search_id": 73,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/resources/scope-boundary.md",
@@ -56,15 +56,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 749,
-  "wire": 1368,
+  "wire": 990,
   "docs": 5,
-  "ms": 3.9603710174560547,
+  "ms": 4.132270812988281,
   "top": [
    "README.md",
    "projects/public-release.md",
    "areas/store-operations.md"
   ],
-  "search_id": 4,
+  "search_id": 74,
   "hit_paths": [
    "acme/shared/README.md",
    "acme/shared/projects/public-release.md",
@@ -81,15 +81,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 794,
-  "wire": 1346,
+  "wire": 1032,
   "docs": 3,
-  "ms": 10.012388229370117,
+  "ms": 3.456592559814453,
   "top": [
    "areas/search-quality.md",
    "areas/store-operations.md",
    "resources/search-ranking.md"
   ],
-  "search_id": 5,
+  "search_id": 75,
   "hit_paths": [
    "acme/shared/areas/search-quality.md",
    "acme/shared/areas/store-operations.md",
@@ -105,15 +105,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 930,
-  "wire": 1582,
+  "wire": 1194,
   "docs": 5,
-  "ms": 3.6826133728027344,
+  "ms": 3.606557846069336,
   "top": [
    "resources/client-exit-codes.md",
    "projects/public-release.md",
    "resources/store-api.md"
   ],
-  "search_id": 6,
+  "search_id": 76,
   "hit_paths": [
    "acme/shared/resources/client-exit-codes.md",
    "acme/shared/projects/public-release.md",
@@ -130,15 +130,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 737,
-  "wire": 1357,
+  "wire": 985,
   "docs": 3,
-  "ms": 3.4530162811279297,
+  "ms": 3.7076473236083984,
   "top": [
    "resources/chunking.md",
    "areas/search-quality.md",
    "resources/README.md"
   ],
-  "search_id": 7,
+  "search_id": 77,
   "hit_paths": [
    "acme/shared/resources/chunking.md",
    "acme/shared/areas/search-quality.md",
@@ -155,15 +155,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 828,
-  "wire": 1471,
+  "wire": 1090,
   "docs": 6,
-  "ms": 4.442930221557617,
+  "ms": 3.8268566131591797,
   "top": [
    "resources/store-api.md",
    "areas/store-operations.md",
    "resources/chunking.md"
   ],
-  "search_id": 8,
+  "search_id": 78,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/areas/store-operations.md",
@@ -180,15 +180,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 825,
-  "wire": 1480,
+  "wire": 1095,
   "docs": 5,
-  "ms": 3.726482391357422,
+  "ms": 4.276275634765625,
   "top": [
    "resources/document-addressing.md",
    "resources/lexeme-indexing.md",
    "resources/backup-and-recovery.md"
   ],
-  "search_id": 9,
+  "search_id": 79,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/lexeme-indexing.md",
@@ -205,15 +205,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 793,
-  "wire": 1431,
+  "wire": 1048,
   "docs": 4,
-  "ms": 3.8323402404785156,
+  "ms": 3.6497116088867188,
   "top": [
    "README.md",
    "projects/public-release.md",
    "areas/store-operations.md"
   ],
-  "search_id": 10,
+  "search_id": 80,
   "hit_paths": [
    "acme/shared/README.md",
    "acme/shared/projects/public-release.md",
@@ -230,15 +230,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 1097,
-  "wire": 1730,
+  "wire": 1358,
   "docs": 5,
-  "ms": 3.645181655883789,
+  "ms": 3.688812255859375,
   "top": [
    "resources/store-api.md",
    "resources/backup-and-recovery.md",
    "resources/linking-rules.md"
   ],
-  "search_id": 11,
+  "search_id": 81,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/resources/backup-and-recovery.md",
@@ -255,15 +255,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 586,
-  "wire": 1218,
+  "wire": 834,
   "docs": 5,
-  "ms": 3.6046504974365234,
+  "ms": 3.907918930053711,
   "top": [
    "resources/store-api.md",
    "areas/store-operations.md",
    "resources/client-exit-codes.md"
   ],
-  "search_id": 12,
+  "search_id": 82,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/areas/store-operations.md",
@@ -280,15 +280,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 811,
-  "wire": 1507,
+  "wire": 1109,
   "docs": 4,
-  "ms": 4.349470138549805,
+  "ms": 4.14586067199707,
   "top": [
    "resources/document-addressing.md",
    "resources/revisions-and-aliases.md",
    "resources/lexeme-indexing.md"
   ],
-  "search_id": 13,
+  "search_id": 83,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/revisions-and-aliases.md",
@@ -305,15 +305,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 909,
-  "wire": 1535,
+  "wire": 1166,
   "docs": 3,
-  "ms": 3.5660266876220703,
+  "ms": 5.28717041015625,
   "top": [
    "resources/linking-rules.md",
    "README.md",
    "areas/search-quality.md"
   ],
-  "search_id": 14,
+  "search_id": 84,
   "hit_paths": [
    "acme/shared/resources/linking-rules.md",
    "acme/shared/resources/linking-rules.md",
@@ -330,15 +330,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 948,
-  "wire": 1608,
+  "wire": 1221,
   "docs": 4,
-  "ms": 3.945589065551758,
+  "ms": 3.9136409759521484,
   "top": [
    "resources/author-identity.md",
    "resources/README.md",
    "resources/revisions-and-aliases.md"
   ],
-  "search_id": 15,
+  "search_id": 85,
   "hit_paths": [
    "acme/shared/resources/author-identity.md",
    "acme/shared/resources/README.md",
@@ -355,15 +355,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 872,
-  "wire": 1520,
+  "wire": 1143,
   "docs": 4,
-  "ms": 3.6804676055908203,
+  "ms": 4.126071929931641,
   "top": [
    "README.md",
    "resources/client-exit-codes.md",
    "resources/author-identity.md"
   ],
-  "search_id": 16,
+  "search_id": 86,
   "hit_paths": [
    "acme/shared/README.md",
    "acme/shared/resources/client-exit-codes.md",
@@ -380,15 +380,15 @@
   "hit1": false,
   "hit5": false,
   "tokens": 761,
-  "wire": 1397,
+  "wire": 1019,
   "docs": 4,
-  "ms": 3.6346912384033203,
+  "ms": 3.616809844970703,
   "top": [
    "areas/search-quality.md",
    "README.md",
    "resources/author-identity.md"
   ],
-  "search_id": 17,
+  "search_id": 87,
   "hit_paths": [
    "acme/shared/areas/search-quality.md",
    "acme/shared/README.md",
@@ -405,15 +405,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 852,
-  "wire": 1512,
+  "wire": 1131,
   "docs": 5,
-  "ms": 4.305124282836914,
+  "ms": 4.137277603149414,
   "top": [
    "resources/search-ranking.md",
    "resources/chunking.md",
    "areas/search-quality.md"
   ],
-  "search_id": 18,
+  "search_id": 88,
   "hit_paths": [
    "acme/shared/resources/search-ranking.md",
    "acme/shared/resources/chunking.md",
@@ -430,15 +430,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 887,
-  "wire": 1554,
+  "wire": 1168,
   "docs": 5,
-  "ms": 3.6025047302246094,
+  "ms": 3.8604736328125,
   "top": [
    "resources/search-ranking.md",
    "README.md",
    "resources/document-addressing.md"
   ],
-  "search_id": 19,
+  "search_id": 89,
   "hit_paths": [
    "acme/shared/resources/search-ranking.md",
    "acme/shared/README.md",
@@ -455,15 +455,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 1112,
-  "wire": 1780,
+  "wire": 1393,
   "docs": 6,
-  "ms": 3.9930343627929688,
+  "ms": 3.937959671020508,
   "top": [
    "resources/document-addressing.md",
    "resources/revisions-and-aliases.md",
    "resources/search-ranking.md"
   ],
-  "search_id": 20,
+  "search_id": 90,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/revisions-and-aliases.md",
@@ -480,15 +480,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 939,
-  "wire": 1605,
+  "wire": 1223,
   "docs": 6,
-  "ms": 3.702878952026367,
+  "ms": 3.874540328979492,
   "top": [
    "resources/author-identity.md",
    "projects/public-release.md",
    "resources/linking-rules.md"
   ],
-  "search_id": 21,
+  "search_id": 91,
   "hit_paths": [
    "acme/shared/resources/author-identity.md",
    "acme/shared/projects/public-release.md",
@@ -505,15 +505,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 700,
-  "wire": 1361,
+  "wire": 974,
   "docs": 4,
-  "ms": 3.6132335662841797,
+  "ms": 3.6177635192871094,
   "top": [
    "resources/backup-and-recovery.md",
    "areas/search-quality.md",
    "areas/store-operations.md"
   ],
-  "search_id": 22,
+  "search_id": 92,
   "hit_paths": [
    "acme/shared/resources/backup-and-recovery.md",
    "acme/shared/resources/backup-and-recovery.md",
@@ -530,15 +530,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 1101,
-  "wire": 1733,
+  "wire": 1355,
   "docs": 6,
-  "ms": 4.12297248840332,
+  "ms": 4.179716110229492,
   "top": [
    "resources/author-identity.md",
    "resources/search-ranking.md",
    "resources/README.md"
   ],
-  "search_id": 23,
+  "search_id": 93,
   "hit_paths": [
    "acme/shared/resources/author-identity.md",
    "acme/shared/resources/search-ranking.md",
@@ -555,15 +555,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 858,
-  "wire": 1477,
+  "wire": 1109,
   "docs": 3,
-  "ms": 3.547191619873047,
+  "ms": 3.7925243377685547,
   "top": [
    "resources/linking-rules.md",
    "README.md",
    "areas/search-quality.md"
   ],
-  "search_id": 24,
+  "search_id": 94,
   "hit_paths": [
    "acme/shared/resources/linking-rules.md",
    "acme/shared/resources/linking-rules.md",
@@ -580,15 +580,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 1110,
-  "wire": 1760,
+  "wire": 1385,
   "docs": 6,
-  "ms": 3.6661624908447266,
+  "ms": 3.8089752197265625,
   "top": [
    "resources/scope-boundary.md",
    "resources/document-addressing.md",
    "resources/search-ranking.md"
   ],
-  "search_id": 25,
+  "search_id": 95,
   "hit_paths": [
    "acme/shared/resources/scope-boundary.md",
    "acme/shared/resources/document-addressing.md",
@@ -605,15 +605,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 981,
-  "wire": 1626,
+  "wire": 1248,
   "docs": 4,
-  "ms": 3.8094520568847656,
+  "ms": 4.17780876159668,
   "top": [
    "README.md",
    "resources/document-addressing.md",
    "resources/backup-and-recovery.md"
   ],
-  "search_id": 26,
+  "search_id": 96,
   "hit_paths": [
    "acme/shared/README.md",
    "acme/shared/resources/document-addressing.md",
@@ -630,15 +630,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 682,
-  "wire": 1334,
+  "wire": 954,
   "docs": 3,
-  "ms": 3.6182403564453125,
+  "ms": 3.8573741912841797,
   "top": [
    "areas/store-operations.md",
    "resources/backup-and-recovery.md",
    "resources/store-api.md"
   ],
-  "search_id": 27,
+  "search_id": 97,
   "hit_paths": [
    "acme/shared/areas/store-operations.md",
    "acme/shared/areas/store-operations.md",
@@ -655,15 +655,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 1099,
-  "wire": 1721,
+  "wire": 1345,
   "docs": 5,
-  "ms": 4.301548004150391,
+  "ms": 4.108190536499023,
   "top": [
    "resources/document-addressing.md",
    "resources/para-areas.md",
    "resources/README.md"
   ],
-  "search_id": 28,
+  "search_id": 98,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/para-areas.md",
@@ -680,15 +680,15 @@
   "hit1": false,
   "hit5": true,
   "tokens": 655,
-  "wire": 1290,
+  "wire": 906,
   "docs": 5,
-  "ms": 4.024982452392578,
+  "ms": 3.985166549682617,
   "top": [
    "resources/store-api.md",
    "areas/store-operations.md",
    "resources/backup-and-recovery.md"
   ],
-  "search_id": 29,
+  "search_id": 99,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/areas/store-operations.md",
@@ -705,15 +705,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 785,
-  "wire": 1379,
+  "wire": 1010,
   "docs": 5,
-  "ms": 3.6666393280029297,
+  "ms": 3.7691593170166016,
   "top": [
    "areas/search-quality.md",
    "resources/search-ranking.md",
    "resources/store-api.md"
   ],
-  "search_id": 30,
+  "search_id": 100,
   "hit_paths": [
    "acme/shared/areas/search-quality.md",
    "acme/shared/resources/search-ranking.md",
@@ -730,15 +730,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 512,
-  "wire": 1160,
+  "wire": 775,
   "docs": 3,
-  "ms": 6.156444549560547,
+  "ms": 6.337404251098633,
   "top": [
    "archives/markdown-mirror.md",
    "archives/README.md",
    "resources/revisions-and-aliases.md"
   ],
-  "search_id": 31,
+  "search_id": 101,
   "hit_paths": [
    "acme/shared/archives/markdown-mirror.md",
    "acme/shared/archives/README.md",
@@ -755,15 +755,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 755,
-  "wire": 1420,
+  "wire": 1031,
   "docs": 4,
-  "ms": 3.6878585815429688,
+  "ms": 3.6721229553222656,
   "top": [
    "projects/public-release.md",
    "README.md",
    "resources/backup-and-recovery.md"
   ],
-  "search_id": 32,
+  "search_id": 102,
   "hit_paths": [
    "acme/shared/projects/public-release.md",
    "acme/shared/README.md",
@@ -780,15 +780,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 863,
-  "wire": 1535,
+  "wire": 1144,
   "docs": 5,
-  "ms": 3.846883773803711,
+  "ms": 9.875059127807617,
   "top": [
    "resources/document-addressing.md",
    "resources/revisions-and-aliases.md",
    "resources/store-api.md"
   ],
-  "search_id": 33,
+  "search_id": 103,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/revisions-and-aliases.md",
@@ -805,15 +805,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 808,
-  "wire": 1428,
+  "wire": 1055,
   "docs": 5,
-  "ms": 3.6292076110839844,
+  "ms": 5.029201507568359,
   "top": [
    "resources/store-api.md",
    "areas/store-operations.md",
    "resources/README.md"
   ],
-  "search_id": 34,
+  "search_id": 104,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/areas/store-operations.md",
@@ -830,15 +830,15 @@
   "hit1": true,
   "hit5": true,
   "tokens": 787,
-  "wire": 1427,
+  "wire": 1043,
   "docs": 5,
-  "ms": 3.854990005493164,
+  "ms": 4.728794097900391,
   "top": [
    "resources/store-api.md",
    "projects/public-release.md",
    "resources/author-identity.md"
   ],
-  "search_id": 35,
+  "search_id": 105,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/projects/public-release.md",

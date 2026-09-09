@@ -244,18 +244,30 @@ func errMessage(raw []byte) string {
 // store keeps those two ideas separate on purpose and so does this client.
 type SearchOpts struct {
 	Query      string
-	Limit      int // 1..50; 0 means the store default (6)
+	Limit      int // 1..50; 0 means the tier's page, or the store default (6) untiered
 	Archives   bool
 	BoostRepo  string
 	OnlyRepos  []string
 	OnlyOwners []string
+	// Tier is the token budget: 1 a few snippets, one per document — enough
+	// to recognise the answer at a fraction of the cost; 2 full chunks; 3
+	// wide (archives, more candidates, no repo boost). 0 asks for the untiered
+	// page the store always served: six full hits with every field.
+	Tier int
+	// Author is recorded with the search, so that a later vote — or the
+	// document being opened — can be attributed to the question that found it.
+	Author string
 }
 
 // Search runs the store's one ranking. The result is returned as the store
-// shaped it (hits are chunks with heading_path, plus index freshness).
+// shaped it: with a tier, compact hits (path, heading_path, score, snippet or
+// body) plus search_id and a `next` hint; without one, the full hits.
 func (c *Client) Search(ctx context.Context, opts SearchOpts) (map[string]any, error) {
 	if strings.TrimSpace(opts.Query) == "" {
 		return nil, fmt.Errorf("the query is empty")
+	}
+	if opts.Tier < 0 || opts.Tier > 3 {
+		return nil, fmt.Errorf("tier must be 1, 2 or 3 (0 for the untiered page), got %d", opts.Tier)
 	}
 	q := url.Values{"q": {opts.Query}}
 	if opts.Limit > 0 {
@@ -263,6 +275,12 @@ func (c *Client) Search(ctx context.Context, opts SearchOpts) (map[string]any, e
 	}
 	if opts.Archives {
 		q.Set("archives", "true")
+	}
+	if opts.Tier > 0 {
+		q.Set("tier", strconv.Itoa(opts.Tier))
+	}
+	if a := strings.TrimSpace(opts.Author); a != "" {
+		q.Set("author", a)
 	}
 	if r := strings.TrimSpace(opts.BoostRepo); r != "" {
 		q.Set("repo", r)
@@ -284,13 +302,82 @@ func (c *Client) Search(ctx context.Context, opts SearchOpts) (map[string]any, e
 	return out, nil
 }
 
+// ReadOpts says where a read came from. A SearchID names the search whose hit
+// is being opened; the store records that as an implicit vote ("opened") on
+// the document — the reader did not vote, but it did read, and that is the
+// one signal that costs nobody a call. Zero means the read is unattributed.
+type ReadOpts struct {
+	SearchID int64
+	Author   string
+}
+
 // Doc fetches one document — body, outgoing links, backlinks, revisions.
 func (c *Client) Doc(ctx context.Context, path string) (map[string]any, error) {
+	return c.DocFrom(ctx, path, ReadOpts{})
+}
+
+// DocFrom is Doc with the search that led here, when there was one.
+func (c *Client) DocFrom(ctx context.Context, path string, opts ReadOpts) (map[string]any, error) {
 	if err := ValidatePath(path); err != nil {
 		return nil, err
 	}
+	q := url.Values{}
+	if opts.SearchID > 0 {
+		q.Set("search", strconv.FormatInt(opts.SearchID, 10))
+		if a := strings.TrimSpace(opts.Author); a != "" {
+			q.Set("author", a)
+		}
+	}
 	var out map[string]any
-	if err := c.do(ctx, http.MethodGet, "/api/doc/"+escapePath(path), nil, nil, false, &out); err != nil {
+	if err := c.do(ctx, http.MethodGet, "/api/doc/"+escapePath(path), q, nil, false, &out); err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+// Vote is explicit feedback on documents: they answered (useful) or were in
+// the way (noise). "opened" is not a kind a client may send — the store
+// records that itself from DocFrom. SearchID ties the vote to the question
+// that showed the documents, which is what lets the ranking remember the
+// answer for the next similar question; without it the vote counts only
+// toward the document's general usefulness.
+type Vote struct {
+	Paths    []string
+	Kind     string // useful | noise
+	SearchID int64
+	Author   string
+	Note     string
+}
+
+// Feedback records a Vote. Needs the token: a vote changes what everyone
+// sees next, which makes it a write.
+func (c *Client) Feedback(ctx context.Context, v Vote) (map[string]any, error) {
+	kind := strings.TrimSpace(v.Kind)
+	if kind == "" {
+		kind = "useful"
+	}
+	if kind != "useful" && kind != "noise" {
+		return nil, fmt.Errorf("kind must be useful or noise, got %q", v.Kind)
+	}
+	var paths []string
+	for _, p := range v.Paths {
+		if p = strings.TrimSpace(p); p == "" {
+			continue
+		}
+		if err := ValidatePath(p); err != nil {
+			return nil, err
+		}
+		paths = append(paths, p)
+	}
+	if len(paths) == 0 {
+		return nil, fmt.Errorf("no document paths given — say which document the vote is about")
+	}
+	payload := map[string]any{"kind": kind, "paths": paths, "author": v.Author, "note": v.Note}
+	if v.SearchID > 0 {
+		payload["search_id"] = v.SearchID
+	}
+	var out map[string]any
+	if err := c.do(ctx, http.MethodPost, "/api/feedback", nil, payload, true, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

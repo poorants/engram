@@ -20,11 +20,33 @@ python bench/eval_index.py --url http://localhost:8081 --prefix acme/shared
 ```
 
 `eval_index.py` exits non-zero when the pass mark is missed (recall@5 ≥ 90% at
-≤ 3,000 tokens per question), so it can gate a change.
+≤ 3,000 tokens per question), so it can gate a change. Reads are closed by
+default, so pass `--token` unless the store was started with
+`ENGRAM_PUBLIC_READS=true`.
 
 Run both before and after touching the ranking, the chunking, or the lexeme
 rules. `baseline_grep.py naive` recomputes the baseline with mechanically
 extracted query terms instead of hand-picked ones.
+
+### Tiers and feedback
+
+```bash
+python bench/eval_index.py --url http://localhost:8081 --prefix acme/shared --tier 1
+python bench/eval_index.py --url http://localhost:8081 --prefix acme/shared --tier 1 \
+    --token "$ENGRAM_TOKEN" --vote-gold
+```
+
+`--tier N` measures one tier of the budget, reporting `tok` (the text a caller
+reads) and `wire` (the whole JSON hit list — what a model's context pays for)
+with a pass mark per tier: tier 1 recall@5 ≥ 80% at ≤ 600 wire tokens, tier 2
+≥ 90% at ≤ 1,500. Measured on this corpus: the untiered page costs ~1,500 wire
+tokens per question at 97% recall; tier 1 costs ~380 at the same 97%.
+
+`--vote-gold` is the lock-in check for usage feedback. It runs every question,
+votes the gold document "useful" for the even-indexed half through
+`/api/feedback`, runs everything again and reports the halves separately. The
+voted half should rise (it did: 9/17 → 17/17 at rank 1); the unvoted half must
+not move. It leaves the votes in the store, so run it against a bench store.
 
 ## What is in here
 
@@ -75,3 +97,17 @@ behaviour is pinned by tests in `server/tests/test_core.py`.
 This defect could not surface on the corpus engram grew up on, whose titles were
 identifiers and non-English. That is worth remembering when reading any measured
 claim about ranking: it holds for the corpus it was measured on.
+
+Three more, from the tiers and feedback work — each a number that looked
+reasonable until it was run:
+
+- **A tier-1 cut at half the top score** took recall from 94% to 65% at every
+  page size. RRF scores a document matched in two channels at about twice one
+  matched in one, so the cut kept only the double matches. 35% costs nothing.
+- **A usefulness bonus of 1/(RRF_K+4)** — "worth ranking 4th in one channel" —
+  put one voted document first for six unrelated questions it had merely
+  appeared on. Top-of-page RRF scores are a few ten-thousandths apart; the
+  ceiling is now the distance between ranks 1 and 4, a tie-breaker.
+- **One vote per document per day** made the same document rememberable for
+  only one of the two questions it answered that day; `--vote-gold` recorded
+  12 votes for 17 questions. Uniqueness is now per question too.

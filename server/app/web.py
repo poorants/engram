@@ -35,7 +35,8 @@ from ingest import (ALLOWED_OWNERS, PathRejected, ScopeDenied,  # noqa: E402
                     restore_doc, write_doc)
 from patch import (PatchConflict, PatchRejected,  # noqa: E402
                    apply_edits, check_base, diff, normalize, sha256 as body_sha256)
-from search import DSN, search  # noqa: E402
+import feedback as fb  # noqa: E402
+from search import DSN, query_lexemes, search, search_tier  # noqa: E402
 
 # -- authentication ----------------------------------------------------------
 #
@@ -420,32 +421,89 @@ def healthz() -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=503)
 
 
+def log_search(conn, q: str, author: str, tier: int, hits: list[dict]) -> int | None:
+    """Record the search for feedback to attach to. A failure here must never
+    fail the search — the log is a means, the answer is the end — so it is
+    reported and swallowed, and the caller gets no search_id."""
+    try:
+        return fb.log_search(conn, q, query_lexemes(q), author, tier, hits)
+    except Exception as e:
+        try:
+            conn.rollback()
+        except Exception:
+            pass
+        print(f"[feedback] could not log the search: {e}")
+        return None
+
+
 @app.get("/api/search")
 def api_search(q: str = Query(..., min_length=1),
-               limit: int = Query(6, ge=1, le=50),
-               archives: bool = False,
+               limit: int | None = Query(None, ge=1, le=50),
+               archives: bool | None = None,
+               tier: int | None = Query(None, ge=1, le=3,
+                                        description="the token budget: 1 snippets, 2 full chunks, 3 wide"),
+               view: str = Query("", pattern="^(full|compact)?$",
+                                 description="compact drops the envelope; default compact with a tier, full without"),
+               author: str = Query("", description="who is asking — recorded with the search, so a vote can be attributed"),
                repo: str = Query("", description="lift this repo (without excluding others)"),
                only_repo: list[str] = Query([], description="restrict to these repos"),
                only_owner: list[str] = Query([], description="restrict to these groups")) -> dict:
     """`repo` is a BONUS, `only_*` are FILTERS. Keeping them separate is the
     point — asking from one repo must not make another repo's existing answer
-    disappear."""
-    with pool.connection() as conn:
-        hits = search(q, limit=limit, include_archives=archives, conn=conn,
-                      boost_repo=repo or None, only_repos=list(only_repo) or None,
-                      only_owners=list(only_owner) or None)
+    disappear.
+
+    With `tier` the tier's budget applies (search.TIERS) and the hits come back
+    compact: path, heading_path, score and a snippet (tier 2: the chunk body).
+    Without it the call is what it always was — six full hits — so a client
+    that predates tiers sees nothing change. Every call is logged and answers
+    with a `search_id`, the handle a later vote names.
+    """
     m = meta()
-    return {"q": q, "count": len(hits), "hits": [h.as_dict() for h in hits],
-            "index": {"updated_at": m.get("updated_at", ""),
-                      "docs": int(m.get("docs", 0) or 0),
-                      "chunks": int(m.get("chunks", 0) or 0)}}
+    index = {"updated_at": m.get("updated_at", ""),
+             "docs": int(m.get("docs", 0) or 0),
+             "chunks": int(m.get("chunks", 0) or 0)}
+    compact = view == "compact" or (not view and tier is not None)
+    with pool.connection() as conn:
+        if tier is None:
+            hits = search(q, limit=limit or 6, include_archives=bool(archives), conn=conn,
+                          boost_repo=repo or None, only_repos=list(only_repo) or None,
+                          only_owners=list(only_owner) or None)
+            as_seen = [h.as_dict() for h in hits]
+            sid = log_search(conn, q, author, 0, as_seen)
+            payload = [h.compact(q, 0) for h in hits] if compact else as_seen
+            return {"q": q, "search_id": sid, "count": len(hits), "hits": payload,
+                    "index": index}
+        res = search_tier(q, tier, conn=conn, boost_repo=repo or None,
+                          only_repos=list(only_repo) or None,
+                          only_owners=list(only_owner) or None,
+                          limit=limit, include_archives=archives)
+        sid = log_search(conn, q, author, tier, [h.as_dict() for h in res.hits])
+    payload = res.payload(q) if compact else [h.as_dict() for h in res.hits]
+    return {"q": q, "tier": tier, "search_id": sid, "count": len(res.hits),
+            "candidates": res.candidates, "hits": payload, "next": res.next,
+            "index": index}
 
 
 @app.get("/api/doc/{path:path}")
-def api_doc(path: str) -> dict:
+def api_doc(path: str,
+            search: int | None = Query(None, description="the search_id that led here"),
+            author: str = Query("")) -> dict:
+    """One document. Naming the `search` that led here records an implicit
+    `opened` vote (feedback.py): the reader did not vote, but it did read, and
+    that is the one signal that costs nobody a call."""
     d = fetch_doc(path)
     if not d:
         raise HTTPException(404, f"no such document: {path}")
+    if search is not None:
+        try:
+            with pool.connection() as conn:
+                if fb.search_exists(conn, search):
+                    chunk = fb.chunk_from_search(conn, search, d["id"])
+                    fb.record(conn, d["id"], "opened", author=author, search_id=search,
+                              chunk_id=chunk)
+                    d["feedback"] = fb.summary(conn, d["id"])
+        except Exception as e:
+            print(f"[feedback] could not record the open: {e}")
     return d
 
 
@@ -463,6 +521,50 @@ def require_auth(request: Request) -> None:
     """
     if not authenticated(request):
         raise HTTPException(401, "invalid or missing token")
+
+
+@app.post("/api/feedback")
+async def api_feedback(request: Request, _: None = Depends(require_auth)) -> dict:
+    """Vote on documents: `kind` useful | noise | opened, for one `path` or a
+    list of `paths`. `search_id` (from the search that showed them) is what
+    makes a vote teach the ranking about the QUESTION, not only the document —
+    send it whenever there is one. A vote of a kind a person has already cast
+    on a document today answers `already` rather than counting twice.
+    """
+    payload = await request.json()
+    kind = (payload.get("kind") or "").strip()
+    if kind not in fb.KINDS:
+        raise HTTPException(400, f"kind must be one of {sorted(fb.KINDS)}")
+    paths = payload.get("paths")
+    if not paths:
+        paths = [payload.get("path")] if payload.get("path") else []
+    paths = [p.strip() for p in paths if isinstance(p, str) and p.strip()]
+    if not paths:
+        raise HTTPException(400, "path (or paths) is empty — say which document the vote is about")
+    author = (payload.get("author") or "").strip()
+    note = (payload.get("note") or "").strip()
+    search_id = payload.get("search_id")
+    results = []
+    with pool.connection() as conn:
+        if search_id is not None and not fb.search_exists(conn, int(search_id)):
+            # An unknown search is not an error worth failing a vote over, but
+            # it is worth saying: the vote lands on the document alone.
+            search_id = None
+            results.append({"warning": "search_id unknown — votes recorded without it"})
+        with conn.cursor() as cur:
+            for p in paths:
+                cur.execute("SELECT id FROM docs WHERE path = %s AND deleted_at IS NULL", (p,))
+                row = cur.fetchone()
+                if not row:
+                    results.append({"path": p, "status": "no such document"})
+                    continue
+                doc_id = row[0]
+                chunk = fb.chunk_from_search(conn, int(search_id), doc_id) if search_id else None
+                status = fb.record(conn, doc_id, kind, author=author, note=note,
+                                   search_id=int(search_id) if search_id else None,
+                                   chunk_id=chunk)
+                results.append({"path": p, "status": status, **fb.summary(conn, doc_id)})
+    return {"kind": kind, "search_id": search_id, "results": results}
 
 
 @app.put("/api/doc/{path:path}")
@@ -777,6 +879,7 @@ def fetch_doc(path: str) -> dict | None:
                     " ORDER BY created_at DESC LIMIT 20", (path,))
         revs = [{"id": r[0], "at": r[1].strftime("%Y-%m-%d %H:%M"), "author": r[2],
                  "note": r[3], "chars": r[4]} for r in cur.fetchall()]
+        votes = fb.summary(conn, doc_id)
     return dict(id=doc_id, path=row[1], title=row[2], area=row[3],
                 updated_at=row[4].strftime("%Y-%m-%d %H:%M") if row[4] else None,
                 chars=row[5], body=row[6], owner=row[7], repo=row[8],
@@ -784,7 +887,10 @@ def fetch_doc(path: str) -> dict | None:
                 # out with the body is what lets a caller prove it edited the
                 # version it actually read.
                 sha256=row[9],
-                outgoing=outgoing, backlinks=backlinks, revisions=revs)
+                outgoing=outgoing, backlinks=backlinks, revisions=revs,
+                # What the document has earned in searches. Shown so a person
+                # can see why it ranks where it does.
+                feedback=votes)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -807,14 +913,17 @@ def home(request: Request):
 @app.get("/search", response_class=HTMLResponse)
 def search_page(request: Request, q: str = "", archives: bool = False,
                 only_repo: list[str] = Query([]), limit: int = Query(20, ge=1, le=50)):
-    hits = []
+    hits, sid = [], None
     if q.strip():
         with pool.connection() as conn:
             hits = search(q, limit=limit, include_archives=archives, conn=conn,
                           only_repos=list(only_repo) or None)
+            # Logged like an agent's search, so a person's vote on this page
+            # teaches the ranking the same way.
+            sid = log_search(conn, q, "viewer", 0, [h.as_dict() for h in hits])
     return templates.TemplateResponse(request, "search.html", {
         "q": q, "hits": hits, "archives": archives, "only": only_repo,
-        "highlight": highlight, "meta": meta()})
+        "search_id": sid, "highlight": highlight, "meta": meta()})
 
 
 @app.get("/rev/{rev_id}", response_class=HTMLResponse)

@@ -117,7 +117,13 @@ func captureInstruction(info *brainInfo, wrapup bool) string {
 		record = "If there is, record it through the engram skill into the right PARA area — " +
 			"**via the store** (the brain_put MCP tool, or `engram put`; a note is required), " +
 			"never by writing a file. Weave links into the prose where the idea comes up, " +
-			"and check brain_integrity afterwards. "
+			"and check brain_integrity afterwards. " +
+			// The read-side half of the loop. A session that found its answer
+			// in the brain and says so makes the next session's first page
+			// right more often; this is the moment it still remembers which
+			// document that was.
+			"Also: if a brain document answered something in this session, say so with " +
+			"brain_feedback (or `engram feedback <path>`) — the ranking learns from it. "
 	} else {
 		// File-brain wording. MOC updating survives here because a file vault
 		// has no index and no search — the folder README is its only discovery

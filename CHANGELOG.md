@@ -8,6 +8,57 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Added — search in tiers, and a ranking that learns what answered
+
+A brain that keeps growing costs more to ask. Measured on a 255-document store,
+one `brain_search` cost 1,500–2,400 tokens, and 35–40% of that was envelope —
+`chunk_id`, `doc_id`, `owner`, `repo`, ranks — that a model never acts on. The
+real drain was the loop around it: a first page with the answer third, the wrong
+document fetched in full, the question asked again.
+
+**Tiers.** `brain_search` and `engram search` now answer in a token budget.
+Tier 1, the default, is up to four documents as 240-character snippets, one
+chunk per document — enough to recognise the answer at ~380 tokens on the
+bench (against ~1,500 for the old page) with the same recall. Tier 2 is up to
+six full chunks; tier 3 is up to twelve documents, archives included, without
+the repo boost. The result carries `next` — which tier to call and why — so a
+caller raises the tier with the same question rather than rephrasing. Tier 1
+that finds it costs a quarter of before; tier 1 then 2 costs about what one
+call used to. `--tier 0` (and the API without `tier`) is the old page,
+unchanged, for anything that predates this.
+
+**Feedback.** The store now records what answered. `brain_feedback` and
+`engram feedback <path>` vote a document useful (or noise); opening a hit with
+`brain_get` after a search is recorded as a weaker implicit vote, without the
+model doing anything — the MCP server remembers its last search and tells the
+store. The viewer's search page has the two buttons, and a document page shows
+its votes. Every search is logged with its hits (`searches`), so a vote is
+attributed to the question that found the document.
+
+Votes reach the ranking two ways. A **remembered channel** brings back a
+document voted useful for a question that shares at least half of this
+question's lexemes — it is a channel, so it can surface what the text
+channels ranked low, and it is gated on the question, so it cannot surface a
+popular document for an unrelated one. A **usefulness bonus**, log-saturated
+at ten net votes and decaying with a 90-day half-life, breaks ties among what
+the text already found; its ceiling is the distance between ranks 1 and 4 in
+one channel, because a first cut at 1/(RRF_K+4) was measured to put one voted
+document first for six unrelated questions. Neither is a filter: a document
+must still match the question to appear.
+
+The bench gates all of it: `eval_index.py --tier N` measures each tier's page
+and wire tokens against its own pass mark, and `--vote-gold` votes the gold
+answer for half the questions and checks the other half did not move (the
+lock-in check). On the corpus: voted questions went from 9/17 to 17/17 at
+rank 1, unvoted ones did not change.
+
+Wire format: a search called with `tier` answers compact hits (`path`,
+`heading_path`, `score`, `snippet` or `body`) plus `search_id`, `candidates`
+and `next`; the untiered answer gains `search_id`, `mem_rank` and `utility`
+per hit and is otherwise what it was. New: `POST /api/feedback`,
+`GET /api/doc/{path}?search=<id>`. Schema: two new tables, `searches` and
+`feedback`, created on boot like the rest.
+
 
 ## [0.5.0] — 2026-09-04
 

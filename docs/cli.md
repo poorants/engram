@@ -44,17 +44,26 @@ path, ranked by the one ranking — the same `/api/search` the web viewer uses.
 
 | Flag | Meaning |
 |---|---|
-| `--limit <n>` | maximum results, 1..50 |
-| `--archives` | also search archived documents (excluded by default) |
+| `--tier 1\|2\|3` | the token budget (default 1). 1: up to 4 documents as snippets, one chunk each. 2: up to 6 full chunks. 3: up to 12 documents, archives included, no repo boost. `0` is the untiered page: 6 full hits with every field |
+| `--limit <n>` | maximum results, 1..50 (overrides the tier's page) |
+| `--archives` | also search archived documents (tier 3 does by itself) |
 | `--boost-repo <repo>` | lift this repo's documents — a **boost**, not a filter |
 | `--only-repo <a,b>` | restrict to these repos — a **filter** |
 | `--only-owner <a,b>` | restrict to these owners |
-| `--chars <n>` | characters shown per chunk in the human report (default 400) |
+| `--chars <n>` | characters shown per chunk in the human report (default 400; snippets are already cut) |
 
 ```bash
-engram search "how do we handle a token rotation" --limit 5
+engram search "how do we handle a token rotation"              # tier 1: snippets
+engram search "how do we handle a token rotation" --tier 2     # not there? same question, full chunks
 engram search "the postgres locale decision" --boost-repo webapp
 ```
+
+The report ends with the search's id and, below the top tier, the exact
+command for the next one. **Raise the tier before rephrasing**: a tier is the
+same question with a wider budget, and the search log stays attributable — a
+vote on the result (`engram feedback`) then teaches the ranking about the
+question, not only the document. Tier 1 that finds the answer costs about a
+quarter of the untiered page; tier 1 then 2 costs about what the page used to.
 
 Boost and filter are different tools. A boost says *this repo is more likely to
 be relevant*; a filter says *nothing else may be returned*, which is how you
@@ -67,9 +76,36 @@ One document: body, outgoing links, backlinks, recent history.
 | Flag | Meaning |
 |---|---|
 | `--out <file>` | write the body to this file and omit it from the response |
+| `--from-search <id>` | the search (printed by `engram search`) this read follows — the store records that the document was opened for that question, a weak vote for it |
 
 `--out` exists so a large document can be handed to a tool that wants a file
-without the body also passing through a model's context.
+without the body also passing through a model's context. `--from-search` is
+what the MCP server does by itself for `brain_get`: it remembers the session's
+last search, so a hit that gets opened earns its vote without anyone naming
+the id.
+
+### `engram feedback <path>... `
+
+Say that documents answered — or, with `--noise`, that they got in the way.
+The ranking learns from it (see [design](design.md#search-remembers-what-answered)):
+the document rises for this question and ones like it, and a document that
+keeps answering breaks ties in its favour. A vote is a bonus, never a filter.
+
+| Flag | Meaning |
+|---|---|
+| `--noise` | the document was in the way (default: it answered) |
+| `--search <id>` | the search that showed the document — ties the vote to the **question**, which is what makes the next similar question find it first. Without it the vote counts toward the document's general usefulness only |
+| `--note <text>` | what it answered, in a few words |
+| `--author <name>` | recorded voter (resolved automatically when omitted) |
+
+```bash
+engram search "why does the copy button copy nothing"     # … search #812
+engram feedback acme/webapp/resources/clipboard.md --search 812
+```
+
+One vote of a kind per person per document per question per day counts; a
+second press is answered `already`. Needs the token — a vote changes what
+everyone sees next, which makes it a write.
 
 ### `engram revisions <path>`
 
@@ -346,12 +382,13 @@ claude mcp add engram -- engram mcp                 # this project
 claude mcp add --scope user engram -- engram mcp    # every project
 ```
 
-The six tools it exposes:
+The tools it exposes:
 
 | Tool | CLI equivalent |
 |---|---|
 | `brain_search` | `engram search` |
-| `brain_get` | `engram get` |
+| `brain_get` | `engram get` (with `--from-search` filled in from the session's last search) |
+| `brain_feedback` | `engram feedback` |
 | `brain_revisions` | `engram revisions` |
 | `brain_integrity` | `engram integrity` |
 | `brain_put` | `engram put` |

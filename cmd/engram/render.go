@@ -82,7 +82,6 @@ func renderSearch(res map[string]any, query string, chars int) {
 	hits := listOf(res["hits"])
 	if len(hits) == 0 {
 		out("no results: %s\n", query)
-		return
 	}
 	for i, h := range hits {
 		m := mapOf(h)
@@ -90,24 +89,75 @@ func renderSearch(res map[string]any, query string, chars int) {
 		if hp := sOf(m, "heading_path"); hp != "" {
 			loc += "  ¶ " + hp
 		}
-		repo := sOf(m, "repo")
-		if repo == "" {
-			repo = "?"
-		}
 		out("\n[%d] %s\n", i+1, loc)
-		out("    [%s] score=%.4f\n", repo, fOf(m, "score"))
-		body := strings.ReplaceAll(clip(sOf(m, "body"), chars), "\n", "\n    ")
-		out("    %s\n", body)
-	}
-	if idx := mapOf(res["index"]); len(idx) > 0 {
-		line := fmt.Sprintf("\n— store: %s documents · last write %s",
-			nOf(idx, "docs"), clip(sOf(idx, "updated_at"), 16))
-		// The boosted repo is echoed because a ranking nobody can explain is one
-		// nobody trusts.
-		if b := sOf(res, "boostRepo"); b != "" {
-			line += fmt.Sprintf(" · boosted this repo '%s'", b)
+		// A tiered page carries no repo (the path says it); the untiered one
+		// still does, and it is worth a glance there because that page is
+		// the one that mixes repos without a boost being echoed per hit.
+		if repo := sOf(m, "repo"); repo != "" {
+			out("    [%s] score=%.4f\n", repo, fOf(m, "score"))
+		} else {
+			out("    score=%.4f\n", fOf(m, "score"))
 		}
+		// A snippet is already cut to size by the store; a body is clipped
+		// here for a reader, and --json gets it whole.
+		text := sOf(m, "snippet")
+		if text == "" {
+			text = clip(sOf(m, "body"), chars)
+		}
+		out("    %s\n", strings.ReplaceAll(text, "\n", "\n    "))
+	}
+	var line string
+	if idx := mapOf(res["index"]); len(idx) > 0 {
+		line = fmt.Sprintf("\n— store: %s documents · last write %s",
+			nOf(idx, "docs"), clip(sOf(idx, "updated_at"), 16))
+	}
+	// The boosted repo is echoed because a ranking nobody can explain is one
+	// nobody trusts.
+	if b := sOf(res, "boostRepo"); b != "" {
+		line += fmt.Sprintf(" · boosted this repo '%s'", b)
+	}
+	// The search id is what a vote names — `engram feedback <path> --search N`
+	// or `engram get <path> --from-search N` — so it is printed, not hidden
+	// in the JSON.
+	if sid := nOf(res, "search_id"); sid != "?" && sid != "" {
+		line += " · search #" + sid
+	}
+	if t := nOf(res, "tier"); t != "?" {
+		line += " · tier " + t
+	}
+	if line != "" {
 		out("%s\n", line)
+	}
+	// The next tier is spelled out as the command to run, because the point
+	// of a tier is that the caller does not have to remember the ladder.
+	if next := mapOf(res["next"]); len(next) > 0 {
+		out("  not it? engram search --tier %s %q   (%s)\n", nOf(next, "tier"), query, sOf(next, "why"))
+	}
+}
+
+func renderFeedback(res map[string]any) {
+	kind := sOf(res, "kind")
+	for _, r := range listOf(res["results"]) {
+		m := mapOf(r)
+		if w := sOf(m, "warning"); w != "" {
+			out("note: %s\n", w)
+			continue
+		}
+		status := sOf(m, "status")
+		switch status {
+		case "recorded":
+			out("%s: %s  (utility now %+.2f · useful %s · noise %s · opened %s)\n",
+				kind, sOf(m, "path"), fOf(m, "utility"), nOf(m, "useful"), nOf(m, "noise"), nOf(m, "opened"))
+		case "already":
+			out("%s: %s  — already counted today (utility %+.2f)\n", kind, sOf(m, "path"), fOf(m, "utility"))
+		default:
+			out("%s: %s  — %s\n", kind, sOf(m, "path"), status)
+		}
+	}
+	if sid := nOf(res, "search_id"); sid != "?" && sid != "" {
+		out("— attributed to search #%s: the next similar question will find these first\n", sid)
+	} else {
+		out("— no search named: counted toward the documents' general usefulness only\n")
 	}
 }
 

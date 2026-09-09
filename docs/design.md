@@ -88,6 +88,41 @@ Two channels are fused with RRF inside the lexical ranking — see
 [bench](../server/bench/README.md). Ranking changes are the one kind of change
 that degrades invisibly, so a bench run is required in the PR.
 
+## Search remembers what answered
+
+Text tells the ranking which chunks match a question. It cannot tell it which
+of them answered, and on a brain that keeps growing that is the difference
+between a first page with the answer on it and a first page of things that
+share its words. So the store records the second kind of knowledge: every
+search is logged with its hits, and a vote — `brain_feedback`, `engram
+feedback`, the viewer's button, or opening a hit with `brain_get` — is tied to
+the search that showed the document.
+
+Two things are done with it, and the distinction is the design:
+
+- **A remembered channel.** A document voted useful for a question that shares
+  at least half of this question's lexemes enters the fusion as its own
+  channel, weighted above the text channels. It is *query-conditioned*: it can
+  lift a document the text ranked low, and it cannot lift a popular document
+  for an unrelated question, because the gate is the question.
+- **A usefulness bonus.** Decayed votes (90-day half-life), log-saturated at
+  ten, added after fusion — the same place as the repo bonus. Its ceiling is
+  deliberately tiny: the distance between ranks 1 and 4 in one channel. RRF
+  scores at the top of a page sit a few ten-thousandths apart, and the first
+  version, with a ceiling of 1/(RRF_K+4), put one voted document first for
+  six unrelated questions. Popularity that is not about the question may only
+  break ties.
+
+Neither is a filter. A document must still match the question to appear at
+all; that is what keeps the ranking explainable by the text.
+
+Tiers are the other half of the same problem. Tier 1 is a few snippets, one
+chunk per document, cut at 35% of the top score; tier 2 the full chunks; tier
+3 wide. The numbers came from a sweep on the bench, not from taste — a cut at
+50% dropped recall from 94% to 65%, because RRF scores a two-channel match at
+about twice a one-channel one. The bench's `--vote-gold` is the lock-in check:
+vote half the questions, verify the other half did not move.
+
 ## The three layers are not collapsed
 
 A skill cannot be an MCP server: a skill is instructions a model reads, an MCP
