@@ -157,3 +157,35 @@ def test_tier_one_cuts_the_page_when_one_answer_stands_out(conn):
     assert paths(res.hits)[0] == "unrelated.md"
     page = res.payload("docker log growth limits")
     assert set(page[0]) == {"path", "heading_path", "score", "snippet"}
+
+
+def test_a_vote_survives_the_document_being_rewritten_after_the_search(conn):
+    """Read at tier 2, improve the document, vote — the loop the brain asks for.
+
+    Rewriting replaces the document's chunks, so the id the search recorded is
+    gone by the time the vote arrives. It must degrade to a document-level vote,
+    not fail the chunk_id foreign key and lose the vote entirely.
+    """
+    import feedback as fb
+    from ingest import write_doc
+    from search import query_lexemes, search_tier
+    q = "how do I rotate the token"
+    res = search_tier(q, 2, conn=conn)
+    sid = fb.log_search(conn, q, query_lexemes(q), "reader", 2, [h.as_dict() for h in res.hits])
+    top = res.hits[0]
+    assert fb.chunk_from_search(conn, sid, top.doc_id) == top.chunk_id
+
+    write_doc(conn, top.path, DOCS[top.path] + "\nRotation is logged in the audit trail.\n",
+              author="reader", note="improve after reading")
+    with conn.cursor() as cur:
+        cur.execute("SELECT 1 FROM chunks WHERE id = %s", (top.chunk_id,))
+        assert cur.fetchone() is None, "the rewrite should have replaced that chunk"
+
+    assert fb.chunk_from_search(conn, sid, top.doc_id) is None
+    chunk = fb.chunk_from_search(conn, sid, top.doc_id)
+    assert fb.record(conn, top.doc_id, "useful", author="rewriter",
+                     search_id=sid, chunk_id=chunk) == "recorded"
+    with conn.cursor() as cur:
+        cur.execute("SELECT chunk_id, search_id FROM feedback"
+                    " WHERE doc_id = %s AND kind = 'useful' AND author = 'rewriter'", (top.doc_id,))
+        assert cur.fetchone() == (None, sid)

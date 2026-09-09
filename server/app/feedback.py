@@ -110,8 +110,17 @@ def log_search(conn: psycopg.Connection, q: str, q_lexemes: list[str], author: s
 
 def chunk_from_search(conn: psycopg.Connection, search_id: int, doc_id: int) -> int | None:
     """Which chunk of doc_id the search actually showed — so a vote can say what
-    was in front of the voter. None when the search is unknown or did not
-    return that document (a vote is still recorded; it just names no chunk)."""
+    was in front of the voter. None when the search is unknown, did not return
+    that document, or showed a chunk that no longer exists (a vote is still
+    recorded; it just names no chunk).
+
+    That last case is the ordinary one, not an edge: hits are a JSON snapshot,
+    not a foreign key, and rewriting a document replaces its chunks — the id the
+    search recorded goes with them. Read at tier 2, improve the document, vote:
+    that is the loop the brain asks for, and it lands here every time. Handing
+    the stale id to record() fails the chunk_id foreign key and costs the whole
+    vote, so it is checked here instead.
+    """
     with conn.cursor() as cur:
         cur.execute("SELECT hits FROM searches WHERE id = %s", (search_id,))
         row = cur.fetchone()
@@ -119,7 +128,9 @@ def chunk_from_search(conn: psycopg.Connection, search_id: int, doc_id: int) -> 
         return None
     for h in row[0] or []:
         if h.get("doc") == doc_id and h.get("chunk"):
-            return int(h["chunk"])
+            with conn.cursor() as cur:
+                cur.execute("SELECT 1 FROM chunks WHERE id = %s", (int(h["chunk"]),))
+                return int(h["chunk"]) if cur.fetchone() else None
     return None
 
 
