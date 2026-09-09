@@ -26,6 +26,13 @@ than code — decisions, conventions, traps, runbooks, past investigations. It
 returns chunks with their heading path, so an answer costs a fraction of what a
 file sweep does.
 
+brain_search answers in tiers. Tier 1 (the default) is a few snippets, one per
+document — enough to recognise the answer at a fraction of the cost. If it is
+not there, call again with the SAME question and the tier the result names
+(2: full chunks, 3: archives and more), before rephrasing. When a document
+answered, call brain_feedback with its path: the next similar question then
+finds it first.
+
 Document addresses are <owner>/<repo>/<area>/<name>.md, where area is one of
 projects|areas|resources|archives; a repo hub MOC is <owner>/<repo>/README.md.
 Take owner and repo from the working repo's git origin — never invent them.

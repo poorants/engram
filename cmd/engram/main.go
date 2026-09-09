@@ -49,8 +49,12 @@ usage: engram <command> [options]
 
 the store
   search <question>       search the store — pass the question as a sentence
+                          --tier 1|2|3 (snippets / full chunks / wide; 0 untiered)
                           --limit --chars --archives --boost-repo --only-repo --only-owner
-  get <path>              print one document
+  get <path>              print one document (--from-search <id> records that
+                          the search led here)
+  feedback <path>...      say the document(s) answered — or --noise, got in the
+                          way (--search <id> ties the vote to the question)
   put <path>              save a document (--file, or stdin; --note required)
   patch <path>            change PART of one (--section/--anchor/--lines,
                           --expect-file, --file; --note required). Prefer it
@@ -117,6 +121,8 @@ func run(args []string) int {
 		return cmdSearch(rest)
 	case "get":
 		return cmdGet(rest)
+	case "feedback":
+		return cmdFeedback(rest)
 	case "put":
 		return cmdPut(rest)
 	case "patch":
