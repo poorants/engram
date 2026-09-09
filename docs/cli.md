@@ -297,6 +297,25 @@ The `owner/repo` this directory's git origin resolves to. Nothing is chosen
 here; this reports what the address rules derive. Run it when a write is refused
 and you are not sure which repo the session thinks it is in.
 
+### `engram update`
+
+Install the latest release over this binary: pick the asset for this
+platform, verify it against the release's `SHA256SUMS`, unpack, swap in by
+rename, and run the result once to prove it answers. Settings, token and store
+are untouched. A running MCP server keeps serving from the old file; the next
+session starts the new one.
+
+| Flag | Meaning |
+|---|---|
+| `--version vX.Y.Z` | a specific release instead of the latest |
+| `--check` | report what would happen and change nothing |
+| `--force` | replace a development build (`make install` leaves one, and it may be newer than the release), or reinstall the current version |
+
+On Windows the old file is moved to `engram.exe.old` — a running executable
+can be renamed but not deleted — and swept on the next update. Exit `4` means
+GitHub could not be reached; `1` means the release refused to verify or the
+swap failed, in which case the old binary is still in place.
+
 ### `engram version`
 
 The version, the platform it was built for, and the Go toolchain that built it.

@@ -94,11 +94,10 @@ func updateNotice(c selfupdate.Checker) string {
 		return ""
 	}
 	return fmt.Sprintf(
-		"engram %s is running and %s is out. Update: curl -fsSL "+
-			"https://raw.githubusercontent.com/%s/main/install.sh | sh "+
+		"engram %s is running and %s is out. Update: run `engram update` "+
 			"(the settings, the token and the store are untouched). "+
 			"A new session has to be started before the new binary is in use.",
-		c.Current, latest, updateRepo)
+		c.Current, latest)
 }
 
 // serverInstructions puts the notice in front of the model, ahead of the
