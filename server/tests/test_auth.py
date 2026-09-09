@@ -73,6 +73,7 @@ def test_reads_are_closed_without_a_token(monkeypatch, path):
     ("post", "/api/doc/acme/repo/resources/x.md/restore"),
     ("post", "/api/rederive"),
     ("post", "/api/index"),
+    ("post", "/api/feedback"),
 ])
 def test_writes_are_closed_without_a_token(monkeypatch, method, path):
     web = load_app(monkeypatch)

@@ -5,23 +5,21 @@
   "q": "how many levels deep can a document sit below the document root",
   "hit1": true,
   "hit5": true,
-  "tokens": 1056,
-  "wire": 1702,
-  "docs": 5,
-  "ms": 7.210493087768555,
+  "tokens": 237,
+  "wire": 418,
+  "docs": 4,
+  "ms": 7.06791877746582,
   "top": [
    "resources/document-addressing.md",
    "README.md",
    "resources/author-identity.md"
   ],
-  "search_id": 2,
+  "search_id": 37,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/README.md",
-   "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/author-identity.md",
-   "acme/shared/resources/search-ranking.md",
-   "acme/shared/resources/README.md"
+   "acme/shared/resources/search-ranking.md"
   ]
  },
  {
@@ -30,23 +28,21 @@
   "q": "which HTTP header carries the write token",
   "hit1": true,
   "hit5": true,
-  "tokens": 945,
-  "wire": 1561,
-  "docs": 5,
-  "ms": 4.095554351806641,
+  "tokens": 186,
+  "wire": 334,
+  "docs": 4,
+  "ms": 4.305839538574219,
   "top": [
    "resources/store-api.md",
    "resources/scope-boundary.md",
    "resources/README.md"
   ],
-  "search_id": 3,
+  "search_id": 38,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/resources/scope-boundary.md",
    "acme/shared/resources/README.md",
-   "acme/shared/resources/store-api.md",
-   "acme/shared/README.md",
-   "acme/shared/areas/store-operations.md"
+   "acme/shared/README.md"
   ]
  },
  {
@@ -55,23 +51,21 @@
   "q": "what does ENGRAM_OWNERS do",
   "hit1": false,
   "hit5": true,
-  "tokens": 749,
-  "wire": 1368,
-  "docs": 5,
-  "ms": 3.9603710174560547,
+  "tokens": 212,
+  "wire": 362,
+  "docs": 4,
+  "ms": 4.1675567626953125,
   "top": [
    "README.md",
    "projects/public-release.md",
    "areas/store-operations.md"
   ],
-  "search_id": 4,
+  "search_id": 39,
   "hit_paths": [
    "acme/shared/README.md",
    "acme/shared/projects/public-release.md",
    "acme/shared/areas/store-operations.md",
-   "acme/shared/resources/scope-boundary.md",
-   "acme/shared/projects/README.md",
-   "acme/shared/projects/public-release.md"
+   "acme/shared/resources/scope-boundary.md"
   ]
  },
  {
@@ -80,21 +74,19 @@
   "q": "what value is RRF_K set to",
   "hit1": false,
   "hit5": true,
-  "tokens": 794,
-  "wire": 1346,
+  "tokens": 170,
+  "wire": 308,
   "docs": 3,
-  "ms": 10.012388229370117,
+  "ms": 3.7183761596679688,
   "top": [
    "areas/search-quality.md",
    "areas/store-operations.md",
    "resources/search-ranking.md"
   ],
-  "search_id": 5,
+  "search_id": 40,
   "hit_paths": [
    "acme/shared/areas/search-quality.md",
    "acme/shared/areas/store-operations.md",
-   "acme/shared/resources/search-ranking.md",
-   "acme/shared/resources/search-ranking.md",
    "acme/shared/resources/search-ranking.md"
   ]
  },
@@ -104,23 +96,21 @@
   "q": "what does exit code 3 mean",
   "hit1": true,
   "hit5": true,
-  "tokens": 930,
-  "wire": 1582,
-  "docs": 5,
-  "ms": 3.6826133728027344,
+  "tokens": 227,
+  "wire": 393,
+  "docs": 4,
+  "ms": 4.393339157104492,
   "top": [
    "resources/client-exit-codes.md",
    "projects/public-release.md",
    "resources/store-api.md"
   ],
-  "search_id": 6,
+  "search_id": 41,
   "hit_paths": [
    "acme/shared/resources/client-exit-codes.md",
    "acme/shared/projects/public-release.md",
    "acme/shared/resources/store-api.md",
-   "acme/shared/projects/public-release.md",
-   "acme/shared/resources/README.md",
-   "acme/shared/resources/author-identity.md"
+   "acme/shared/resources/README.md"
   ]
  },
  {
@@ -129,20 +119,17 @@
   "q": "what is the target chunk size in characters",
   "hit1": true,
   "hit5": true,
-  "tokens": 737,
-  "wire": 1357,
+  "tokens": 177,
+  "wire": 295,
   "docs": 3,
-  "ms": 3.4530162811279297,
+  "ms": 3.9119720458984375,
   "top": [
    "resources/chunking.md",
    "areas/search-quality.md",
    "resources/README.md"
   ],
-  "search_id": 7,
+  "search_id": 42,
   "hit_paths": [
-   "acme/shared/resources/chunking.md",
-   "acme/shared/areas/search-quality.md",
-   "acme/shared/resources/chunking.md",
    "acme/shared/resources/chunking.md",
    "acme/shared/areas/search-quality.md",
    "acme/shared/resources/README.md"
@@ -154,23 +141,21 @@
   "q": "what does POST /api/rederive rebuild",
   "hit1": false,
   "hit5": true,
-  "tokens": 828,
-  "wire": 1471,
-  "docs": 6,
-  "ms": 4.442930221557617,
+  "tokens": 233,
+  "wire": 408,
+  "docs": 4,
+  "ms": 4.157304763793945,
   "top": [
    "resources/store-api.md",
    "areas/store-operations.md",
    "resources/chunking.md"
   ],
-  "search_id": 8,
+  "search_id": 43,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/areas/store-operations.md",
    "acme/shared/resources/chunking.md",
-   "acme/shared/resources/revisions-and-aliases.md",
-   "acme/shared/resources/README.md",
-   "acme/shared/resources/backup-and-recovery.md"
+   "acme/shared/resources/revisions-and-aliases.md"
   ]
  },
  {
@@ -179,23 +164,21 @@
   "q": "which parts of a document get setweight A and which get B",
   "hit1": false,
   "hit5": true,
-  "tokens": 825,
-  "wire": 1480,
-  "docs": 5,
-  "ms": 3.726482391357422,
+  "tokens": 235,
+  "wire": 409,
+  "docs": 4,
+  "ms": 4.105329513549805,
   "top": [
    "resources/document-addressing.md",
    "resources/lexeme-indexing.md",
    "resources/backup-and-recovery.md"
   ],
-  "search_id": 9,
+  "search_id": 44,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/lexeme-indexing.md",
    "acme/shared/resources/backup-and-recovery.md",
-   "acme/shared/resources/lexeme-indexing.md",
-   "acme/shared/resources/linking-rules.md",
-   "acme/shared/resources/store-api.md"
+   "acme/shared/resources/linking-rules.md"
   ]
  },
  {
@@ -204,23 +187,21 @@
   "q": "what is ENGRAM_TZ for",
   "hit1": false,
   "hit5": true,
-  "tokens": 793,
-  "wire": 1431,
+  "tokens": 228,
+  "wire": 373,
   "docs": 4,
-  "ms": 3.8323402404785156,
+  "ms": 3.860950469970703,
   "top": [
    "README.md",
    "projects/public-release.md",
    "areas/store-operations.md"
   ],
-  "search_id": 10,
+  "search_id": 45,
   "hit_paths": [
    "acme/shared/README.md",
    "acme/shared/projects/public-release.md",
    "acme/shared/areas/store-operations.md",
-   "acme/shared/projects/README.md",
-   "acme/shared/projects/public-release.md",
-   "acme/shared/projects/public-release.md"
+   "acme/shared/projects/README.md"
   ]
  },
  {
@@ -229,23 +210,21 @@
   "q": "what does GET /api/export return",
   "hit1": true,
   "hit5": true,
-  "tokens": 1097,
-  "wire": 1730,
-  "docs": 5,
-  "ms": 3.645181655883789,
+  "tokens": 235,
+  "wire": 411,
+  "docs": 4,
+  "ms": 4.2877197265625,
   "top": [
    "resources/store-api.md",
    "resources/backup-and-recovery.md",
    "resources/linking-rules.md"
   ],
-  "search_id": 11,
+  "search_id": 46,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/resources/backup-and-recovery.md",
    "acme/shared/resources/linking-rules.md",
-   "acme/shared/areas/store-operations.md",
-   "acme/shared/areas/store-operations.md",
-   "acme/shared/resources/README.md"
+   "acme/shared/areas/store-operations.md"
   ]
  },
  {
@@ -254,23 +233,21 @@
   "q": "what does the store answer with 403",
   "hit1": true,
   "hit5": true,
-  "tokens": 586,
-  "wire": 1218,
-  "docs": 5,
-  "ms": 3.6046504974365234,
+  "tokens": 157,
+  "wire": 315,
+  "docs": 4,
+  "ms": 3.9234161376953125,
   "top": [
    "resources/store-api.md",
    "areas/store-operations.md",
    "resources/client-exit-codes.md"
   ],
-  "search_id": 12,
+  "search_id": 47,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/areas/store-operations.md",
    "acme/shared/resources/client-exit-codes.md",
-   "acme/shared/resources/client-exit-codes.md",
-   "acme/shared/resources/scope-boundary.md",
-   "acme/shared/README.md"
+   "acme/shared/resources/scope-boundary.md"
   ]
  },
  {
@@ -279,23 +256,21 @@
   "q": "which table keeps the previous body of a document",
   "hit1": false,
   "hit5": true,
-  "tokens": 811,
-  "wire": 1507,
+  "tokens": 235,
+  "wire": 412,
   "docs": 4,
-  "ms": 4.349470138549805,
+  "ms": 4.9152374267578125,
   "top": [
    "resources/document-addressing.md",
    "resources/revisions-and-aliases.md",
    "resources/lexeme-indexing.md"
   ],
-  "search_id": 13,
+  "search_id": 48,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/revisions-and-aliases.md",
    "acme/shared/resources/lexeme-indexing.md",
-   "acme/shared/resources/para-areas.md",
-   "acme/shared/resources/revisions-and-aliases.md",
-   "acme/shared/resources/revisions-and-aliases.md"
+   "acme/shared/resources/para-areas.md"
   ]
  },
  {
@@ -304,23 +279,21 @@
   "q": "a note is only reachable from its folder index page — is that connected enough",
   "hit1": true,
   "hit5": true,
-  "tokens": 909,
-  "wire": 1535,
-  "docs": 3,
-  "ms": 3.5660266876220703,
+  "tokens": 233,
+  "wire": 385,
+  "docs": 4,
+  "ms": 4.193782806396484,
   "top": [
    "resources/linking-rules.md",
    "README.md",
    "areas/search-quality.md"
   ],
-  "search_id": 14,
+  "search_id": 49,
   "hit_paths": [
-   "acme/shared/resources/linking-rules.md",
    "acme/shared/resources/linking-rules.md",
    "acme/shared/README.md",
    "acme/shared/areas/search-quality.md",
-   "acme/shared/areas/search-quality.md",
-   "acme/shared/areas/search-quality.md"
+   "acme/shared/resources/chunking.md"
   ]
  },
  {
@@ -329,23 +302,21 @@
   "q": "if I rename a note do the links other people wrote to it break",
   "hit1": false,
   "hit5": true,
-  "tokens": 948,
-  "wire": 1608,
+  "tokens": 235,
+  "wire": 406,
   "docs": 4,
-  "ms": 3.945589065551758,
+  "ms": 4.053592681884766,
   "top": [
    "resources/author-identity.md",
    "resources/README.md",
    "resources/revisions-and-aliases.md"
   ],
-  "search_id": 15,
+  "search_id": 50,
   "hit_paths": [
    "acme/shared/resources/author-identity.md",
    "acme/shared/resources/README.md",
    "acme/shared/resources/revisions-and-aliases.md",
-   "acme/shared/areas/store-operations.md",
-   "acme/shared/resources/author-identity.md",
-   "acme/shared/resources/author-identity.md"
+   "acme/shared/areas/store-operations.md"
   ]
  },
  {
@@ -354,22 +325,20 @@
   "q": "the brain is unreachable right now, should I answer from an older copy instead",
   "hit1": false,
   "hit5": true,
-  "tokens": 872,
-  "wire": 1520,
+  "tokens": 235,
+  "wire": 404,
   "docs": 4,
-  "ms": 3.6804676055908203,
+  "ms": 4.289150238037109,
   "top": [
    "README.md",
    "resources/client-exit-codes.md",
    "resources/author-identity.md"
   ],
-  "search_id": 16,
+  "search_id": 51,
   "hit_paths": [
    "acme/shared/README.md",
    "acme/shared/resources/client-exit-codes.md",
    "acme/shared/resources/author-identity.md",
-   "acme/shared/areas/search-quality.md",
-   "acme/shared/areas/search-quality.md",
    "acme/shared/areas/search-quality.md"
   ]
  },
@@ -379,21 +348,19 @@
   "q": "can someone read documents belonging to a team they are not on",
   "hit1": false,
   "hit5": false,
-  "tokens": 761,
-  "wire": 1397,
+  "tokens": 235,
+  "wire": 390,
   "docs": 4,
-  "ms": 3.6346912384033203,
+  "ms": 3.8564205169677734,
   "top": [
    "areas/search-quality.md",
    "README.md",
    "resources/author-identity.md"
   ],
-  "search_id": 17,
+  "search_id": 52,
   "hit_paths": [
    "acme/shared/areas/search-quality.md",
    "acme/shared/README.md",
-   "acme/shared/areas/search-quality.md",
-   "acme/shared/resources/author-identity.md",
    "acme/shared/resources/author-identity.md",
    "acme/shared/resources/chunking.md"
   ]
@@ -404,23 +371,21 @@
   "q": "why do results come back as a fragment instead of the whole file",
   "hit1": false,
   "hit5": true,
-  "tokens": 852,
-  "wire": 1512,
-  "docs": 5,
-  "ms": 4.305124282836914,
+  "tokens": 237,
+  "wire": 414,
+  "docs": 4,
+  "ms": 4.8694610595703125,
   "top": [
    "resources/search-ranking.md",
    "resources/chunking.md",
    "areas/search-quality.md"
   ],
-  "search_id": 18,
+  "search_id": 53,
   "hit_paths": [
    "acme/shared/resources/search-ranking.md",
    "acme/shared/resources/chunking.md",
    "acme/shared/areas/search-quality.md",
-   "acme/shared/resources/author-identity.md",
-   "acme/shared/resources/document-addressing.md",
-   "acme/shared/areas/search-quality.md"
+   "acme/shared/resources/author-identity.md"
   ]
  },
  {
@@ -429,23 +394,21 @@
   "q": "will searching from my repo hide what another repo already figured out",
   "hit1": true,
   "hit5": true,
-  "tokens": 887,
-  "wire": 1554,
-  "docs": 5,
-  "ms": 3.6025047302246094,
+  "tokens": 236,
+  "wire": 413,
+  "docs": 4,
+  "ms": 4.058122634887695,
   "top": [
    "resources/search-ranking.md",
    "README.md",
    "resources/document-addressing.md"
   ],
-  "search_id": 19,
+  "search_id": 54,
   "hit_paths": [
    "acme/shared/resources/search-ranking.md",
    "acme/shared/README.md",
    "acme/shared/resources/document-addressing.md",
-   "acme/shared/resources/document-addressing.md",
-   "acme/shared/resources/revisions-and-aliases.md",
-   "acme/shared/resources/scope-boundary.md"
+   "acme/shared/resources/revisions-and-aliases.md"
   ]
  },
  {
@@ -454,23 +417,21 @@
   "q": "how do I get rid of a document I do not need any more",
   "hit1": false,
   "hit5": true,
-  "tokens": 1112,
-  "wire": 1780,
-  "docs": 6,
-  "ms": 3.9930343627929688,
+  "tokens": 238,
+  "wire": 426,
+  "docs": 4,
+  "ms": 4.607200622558594,
   "top": [
    "resources/document-addressing.md",
    "resources/revisions-and-aliases.md",
    "resources/search-ranking.md"
   ],
-  "search_id": 20,
+  "search_id": 55,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/revisions-and-aliases.md",
    "acme/shared/resources/search-ranking.md",
-   "acme/shared/resources/store-api.md",
-   "acme/shared/resources/README.md",
-   "acme/shared/resources/backup-and-recovery.md"
+   "acme/shared/resources/store-api.md"
   ]
  },
  {
@@ -479,23 +440,21 @@
   "q": "my saved notes are credited to a machine account, where does that name come from",
   "hit1": true,
   "hit5": true,
-  "tokens": 939,
-  "wire": 1605,
-  "docs": 6,
-  "ms": 3.702878952026367,
+  "tokens": 238,
+  "wire": 420,
+  "docs": 4,
+  "ms": 4.074573516845703,
   "top": [
    "resources/author-identity.md",
    "projects/public-release.md",
    "resources/linking-rules.md"
   ],
-  "search_id": 21,
+  "search_id": 56,
   "hit_paths": [
    "acme/shared/resources/author-identity.md",
    "acme/shared/projects/public-release.md",
    "acme/shared/resources/linking-rules.md",
-   "acme/shared/areas/store-operations.md",
-   "acme/shared/resources/backup-and-recovery.md",
-   "acme/shared/resources/chunking.md"
+   "acme/shared/areas/store-operations.md"
   ]
  },
  {
@@ -504,22 +463,20 @@
   "q": "is the nightly dump enough if the server disk dies",
   "hit1": true,
   "hit5": true,
-  "tokens": 700,
-  "wire": 1361,
+  "tokens": 235,
+  "wire": 410,
   "docs": 4,
-  "ms": 3.6132335662841797,
+  "ms": 4.780292510986328,
   "top": [
    "resources/backup-and-recovery.md",
    "areas/search-quality.md",
    "areas/store-operations.md"
   ],
-  "search_id": 22,
+  "search_id": 57,
   "hit_paths": [
-   "acme/shared/resources/backup-and-recovery.md",
    "acme/shared/resources/backup-and-recovery.md",
    "acme/shared/areas/search-quality.md",
    "acme/shared/areas/store-operations.md",
-   "acme/shared/projects/public-release.md",
    "acme/shared/projects/public-release.md"
   ]
  },
@@ -529,23 +486,21 @@
   "q": "why not one combined score instead of fusing two separate rankings",
   "hit1": false,
   "hit5": true,
-  "tokens": 1101,
-  "wire": 1733,
-  "docs": 6,
-  "ms": 4.12297248840332,
+  "tokens": 234,
+  "wire": 404,
+  "docs": 4,
+  "ms": 4.815578460693359,
   "top": [
    "resources/author-identity.md",
    "resources/search-ranking.md",
    "resources/README.md"
   ],
-  "search_id": 23,
+  "search_id": 58,
   "hit_paths": [
    "acme/shared/resources/author-identity.md",
    "acme/shared/resources/search-ranking.md",
    "acme/shared/resources/README.md",
-   "acme/shared/resources/document-addressing.md",
-   "acme/shared/resources/linking-rules.md",
-   "acme/shared/resources/para-areas.md"
+   "acme/shared/resources/document-addressing.md"
   ]
  },
  {
@@ -554,23 +509,21 @@
   "q": "my folder index lists filenames in backticks and everything is still an orphan",
   "hit1": true,
   "hit5": true,
-  "tokens": 858,
-  "wire": 1477,
-  "docs": 3,
-  "ms": 3.547191619873047,
+  "tokens": 236,
+  "wire": 397,
+  "docs": 4,
+  "ms": 3.9353370666503906,
   "top": [
    "resources/linking-rules.md",
    "README.md",
    "areas/search-quality.md"
   ],
-  "search_id": 24,
+  "search_id": 59,
   "hit_paths": [
    "acme/shared/resources/linking-rules.md",
-   "acme/shared/resources/linking-rules.md",
    "acme/shared/README.md",
-   "acme/shared/resources/linking-rules.md",
-   "acme/shared/resources/linking-rules.md",
-   "acme/shared/areas/search-quality.md"
+   "acme/shared/areas/search-quality.md",
+   "acme/shared/resources/chunking.md"
   ]
  },
  {
@@ -579,23 +532,21 @@
   "q": "where should knowledge that several repos all depend on live",
   "hit1": false,
   "hit5": true,
-  "tokens": 1110,
-  "wire": 1760,
-  "docs": 6,
-  "ms": 3.6661624908447266,
+  "tokens": 234,
+  "wire": 420,
+  "docs": 4,
+  "ms": 4.145622253417969,
   "top": [
    "resources/scope-boundary.md",
    "resources/document-addressing.md",
    "resources/search-ranking.md"
   ],
-  "search_id": 25,
+  "search_id": 60,
   "hit_paths": [
    "acme/shared/resources/scope-boundary.md",
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/search-ranking.md",
-   "acme/shared/areas/search-quality.md",
-   "acme/shared/resources/README.md",
-   "acme/shared/resources/linking-rules.md"
+   "acme/shared/areas/search-quality.md"
   ]
  },
  {
@@ -604,22 +555,20 @@
   "q": "an example in my document shows link syntax and it is being counted as a real link",
   "hit1": false,
   "hit5": true,
-  "tokens": 981,
-  "wire": 1626,
+  "tokens": 236,
+  "wire": 404,
   "docs": 4,
-  "ms": 3.8094520568847656,
+  "ms": 4.182100296020508,
   "top": [
    "README.md",
    "resources/document-addressing.md",
    "resources/backup-and-recovery.md"
   ],
-  "search_id": 26,
+  "search_id": 61,
   "hit_paths": [
    "acme/shared/README.md",
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/backup-and-recovery.md",
-   "acme/shared/resources/document-addressing.md",
-   "acme/shared/resources/linking-rules.md",
    "acme/shared/resources/linking-rules.md"
   ]
  },
@@ -629,23 +578,21 @@
   "q": "the database container restarted and one request failed, why only one",
   "hit1": true,
   "hit5": true,
-  "tokens": 682,
-  "wire": 1334,
-  "docs": 3,
-  "ms": 3.6182403564453125,
+  "tokens": 231,
+  "wire": 410,
+  "docs": 4,
+  "ms": 4.383325576782227,
   "top": [
    "areas/store-operations.md",
    "resources/backup-and-recovery.md",
    "resources/store-api.md"
   ],
-  "search_id": 27,
+  "search_id": 62,
   "hit_paths": [
-   "acme/shared/areas/store-operations.md",
    "acme/shared/areas/store-operations.md",
    "acme/shared/resources/backup-and-recovery.md",
    "acme/shared/resources/store-api.md",
-   "acme/shared/resources/store-api.md",
-   "acme/shared/resources/store-api.md"
+   "acme/shared/areas/search-quality.md"
   ]
  },
  {
@@ -654,23 +601,21 @@
   "q": "how do I decide which PARA area a new document belongs in",
   "hit1": false,
   "hit5": true,
-  "tokens": 1099,
-  "wire": 1721,
-  "docs": 5,
-  "ms": 4.301548004150391,
+  "tokens": 238,
+  "wire": 379,
+  "docs": 4,
+  "ms": 4.468441009521484,
   "top": [
    "resources/document-addressing.md",
    "resources/para-areas.md",
    "resources/README.md"
   ],
-  "search_id": 28,
+  "search_id": 63,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/para-areas.md",
    "acme/shared/resources/README.md",
-   "acme/shared/resources/para-areas.md",
-   "acme/shared/README.md",
-   "acme/shared/resources/client-exit-codes.md"
+   "acme/shared/README.md"
   ]
  },
  {
@@ -679,23 +624,21 @@
   "q": "what do I need to configure to run a store",
   "hit1": false,
   "hit5": true,
-  "tokens": 655,
-  "wire": 1290,
-  "docs": 5,
-  "ms": 4.024982452392578,
+  "tokens": 204,
+  "wire": 368,
+  "docs": 4,
+  "ms": 4.0283203125,
   "top": [
    "resources/store-api.md",
    "areas/store-operations.md",
    "resources/backup-and-recovery.md"
   ],
-  "search_id": 29,
+  "search_id": 64,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/areas/store-operations.md",
    "acme/shared/resources/backup-and-recovery.md",
-   "acme/shared/resources/chunking.md",
-   "acme/shared/resources/scope-boundary.md",
-   "acme/shared/resources/store-api.md"
+   "acme/shared/resources/chunking.md"
   ]
  },
  {
@@ -704,23 +647,21 @@
   "q": "how do I tell whether a ranking change made search worse",
   "hit1": true,
   "hit5": true,
-  "tokens": 785,
-  "wire": 1379,
-  "docs": 5,
-  "ms": 3.6666393280029297,
+  "tokens": 196,
+  "wire": 341,
+  "docs": 4,
+  "ms": 4.36711311340332,
   "top": [
    "areas/search-quality.md",
    "resources/search-ranking.md",
    "resources/store-api.md"
   ],
-  "search_id": 30,
+  "search_id": 65,
   "hit_paths": [
    "acme/shared/areas/search-quality.md",
    "acme/shared/resources/search-ranking.md",
    "acme/shared/resources/store-api.md",
-   "acme/shared/areas/README.md",
-   "acme/shared/areas/search-quality.md",
-   "acme/shared/resources/README.md"
+   "acme/shared/areas/README.md"
   ]
  },
  {
@@ -729,23 +670,20 @@
   "q": "why was the markdown mirror export retired",
   "hit1": true,
   "hit5": true,
-  "tokens": 512,
-  "wire": 1160,
+  "tokens": 161,
+  "wire": 293,
   "docs": 3,
-  "ms": 6.156444549560547,
+  "ms": 6.698131561279297,
   "top": [
    "archives/markdown-mirror.md",
    "archives/README.md",
    "resources/revisions-and-aliases.md"
   ],
-  "search_id": 31,
+  "search_id": 66,
   "hit_paths": [
    "acme/shared/archives/markdown-mirror.md",
    "acme/shared/archives/README.md",
-   "acme/shared/archives/markdown-mirror.md",
-   "acme/shared/resources/revisions-and-aliases.md",
-   "acme/shared/archives/markdown-mirror.md",
-   "acme/shared/archives/markdown-mirror.md"
+   "acme/shared/resources/revisions-and-aliases.md"
   ]
  },
  {
@@ -754,23 +692,21 @@
   "q": "what was deliberately left out of engram and why",
   "hit1": true,
   "hit5": true,
-  "tokens": 755,
-  "wire": 1420,
+  "tokens": 232,
+  "wire": 409,
   "docs": 4,
-  "ms": 3.6878585815429688,
+  "ms": 4.215240478515625,
   "top": [
    "projects/public-release.md",
    "README.md",
    "resources/backup-and-recovery.md"
   ],
-  "search_id": 32,
+  "search_id": 67,
   "hit_paths": [
    "acme/shared/projects/public-release.md",
    "acme/shared/README.md",
    "acme/shared/resources/backup-and-recovery.md",
-   "acme/shared/areas/search-quality.md",
-   "acme/shared/projects/public-release.md",
-   "acme/shared/projects/public-release.md"
+   "acme/shared/areas/search-quality.md"
   ]
  },
  {
@@ -779,23 +715,21 @@
   "q": "how is a document address structured",
   "hit1": true,
   "hit5": true,
-  "tokens": 863,
-  "wire": 1535,
-  "docs": 5,
-  "ms": 3.846883773803711,
+  "tokens": 236,
+  "wire": 406,
+  "docs": 4,
+  "ms": 4.455327987670898,
   "top": [
    "resources/document-addressing.md",
    "resources/revisions-and-aliases.md",
    "resources/store-api.md"
   ],
-  "search_id": 33,
+  "search_id": 68,
   "hit_paths": [
    "acme/shared/resources/document-addressing.md",
    "acme/shared/resources/revisions-and-aliases.md",
    "acme/shared/resources/store-api.md",
-   "acme/shared/README.md",
-   "acme/shared/projects/public-release.md",
-   "acme/shared/projects/public-release.md"
+   "acme/shared/README.md"
   ]
  },
  {
@@ -804,23 +738,21 @@
   "q": "what makes the healthcheck consider the store healthy",
   "hit1": true,
   "hit5": true,
-  "tokens": 808,
-  "wire": 1428,
-  "docs": 5,
-  "ms": 3.6292076110839844,
+  "tokens": 192,
+  "wire": 345,
+  "docs": 4,
+  "ms": 4.429340362548828,
   "top": [
    "resources/store-api.md",
    "areas/store-operations.md",
    "resources/README.md"
   ],
-  "search_id": 34,
+  "search_id": 69,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/areas/store-operations.md",
    "acme/shared/resources/README.md",
-   "acme/shared/resources/linking-rules.md",
-   "acme/shared/resources/para-areas.md",
-   "acme/shared/resources/store-api.md"
+   "acme/shared/resources/linking-rules.md"
   ]
  },
  {
@@ -829,23 +761,21 @@
   "q": "what happens if the server has no ingest token configured",
   "hit1": true,
   "hit5": true,
-  "tokens": 787,
-  "wire": 1427,
-  "docs": 5,
-  "ms": 3.854990005493164,
+  "tokens": 203,
+  "wire": 370,
+  "docs": 4,
+  "ms": 3.9348602294921875,
   "top": [
    "resources/store-api.md",
    "projects/public-release.md",
    "resources/author-identity.md"
   ],
-  "search_id": 35,
+  "search_id": 70,
   "hit_paths": [
    "acme/shared/resources/store-api.md",
    "acme/shared/projects/public-release.md",
    "acme/shared/resources/author-identity.md",
-   "acme/shared/README.md",
-   "acme/shared/areas/store-operations.md",
-   "acme/shared/projects/public-release.md"
+   "acme/shared/README.md"
   ]
  }
 ]

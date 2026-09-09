@@ -10,15 +10,44 @@
   </div>
 {% else %}
   <p class="meta">{{ hits|length }} chunks · <strong>{{ q }}</strong>
-    {% if not archives %}· <a href="/search?q={{ q|urlencode }}&archives=true">include archives</a>{% endif %}</p>
+    {% if not archives %}· <a href="/search?q={{ q|urlencode }}&archives=true">include archives</a>{% endif %}
+    · <span title="A vote teaches the ranking: the document rises for this question and ones like it. It is a bonus, never a filter.">did one of these answer? vote on it</span></p>
   {% for h in hits %}
-  <div class="card">
+  <div class="card" data-path="{{ h.path }}">
     <a href="/doc/{{ h.path }}#c{{ h.ord }}"><span class="pill">{{ h.repo }}</span><span class="pill">{{ h.area }}</span><strong>{{ h.title }}</strong></a>
     <div class="crumb">{{ h.path }}{% if h.heading_path %} ¶ {{ highlight(h.heading_path, q)|safe }}{% endif %}</div>
     <div class="snippet">{{ highlight(h.body[:700], q)|safe }}</div>
     <div class="meta" style="margin-top:8px">score {{ '%.4f'|format(h.score) }}
-      · body rank {{ h.lex_rank or '—' }}</div>
+      · body rank {{ h.lex_rank or '—' }}{% if h.mem_rank %} · remembered #{{ h.mem_rank }}{% endif %}
+      {% if h.utility %} · utility {{ '%+.2f'|format(h.utility) }}{% endif %}
+      {% if search_id %}· <button class="vote" data-kind="useful" title="this answered">👍 useful</button>
+      <button class="vote" data-kind="noise" title="this was in the way">👎 noise</button>{% endif %}</div>
   </div>
   {% endfor %}
+  <script>
+  // A vote is one POST to the same /api/feedback an agent uses, bound to this
+  // page's search so the ranking learns the QUESTION, not only the document.
+  // The cookie carries the credential; nothing here knows the token.
+  (function () {
+    var sid = {{ search_id|tojson }};
+    document.querySelectorAll('button.vote').forEach(function (b) {
+      b.addEventListener('click', function () {
+        var card = b.closest('.card');
+        var body = {kind: b.dataset.kind, path: card.dataset.path, search_id: sid, author: 'viewer'};
+        b.disabled = true;
+        fetch('/api/feedback', {method: 'POST', credentials: 'same-origin',
+              headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
+          .then(function (r) { return r.json(); })
+          .then(function (j) {
+            var r = (j.results || [])[0] || {};
+            b.textContent = r.status === 'already' ? 'already voted today' : 'voted · utility ' + (r.utility >= 0 ? '+' : '') + r.utility;
+          })
+          .catch(function () { b.disabled = false; b.textContent = 'vote failed — retry'; });
+      });
+    });
+  })();
+  </script>
+  <style>button.vote{font:inherit;font-size:12px;padding:1px 8px;border:1px solid var(--line);border-radius:999px;background:transparent;cursor:pointer;color:inherit}
+  button.vote:disabled{cursor:default;opacity:.7}</style>
 {% endif %}
 {% endblock %}

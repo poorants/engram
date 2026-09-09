@@ -127,3 +127,60 @@ ALTER TABLE docs ADD COLUMN IF NOT EXISTS created_at timestamptz NOT NULL DEFAUL
 ALTER TABLE docs ADD COLUMN IF NOT EXISTS deleted_at timestamptz;
 ALTER TABLE docs ADD COLUMN IF NOT EXISTS owner text NOT NULL DEFAULT '';
 ALTER TABLE docs ADD COLUMN IF NOT EXISTS repo  text NOT NULL DEFAULT 'shared';
+
+-- -- usage feedback ------------------------------------------------------------
+-- What the ranking cannot learn from text alone: whether a document, once
+-- found, actually answered. Two tables, both derived-in-spirit (the brain is
+-- whole without them) but never rebuilt from anything — a vote that is lost is
+-- lost — so they live here with the canonical tables rather than with chunks.
+--
+-- searches is the query log: what was asked, by whom, at which tier, and what
+-- came back. It is what makes a later "this document was useful" attributable
+-- to the question that found it, which in turn is what lets search remember
+-- an answer for the NEXT time a similar question is asked (the remembered
+-- channel in search.py). q_tsv holds the query's lexemes, built by the same
+-- function as the index, so a new question can be matched against old ones
+-- with the operator the rest of the search already uses.
+CREATE TABLE IF NOT EXISTS searches (
+  id         bigserial PRIMARY KEY,
+  q          text NOT NULL,
+  q_tsv      tsvector,
+  author     text NOT NULL DEFAULT '',
+  tier       int  NOT NULL DEFAULT 0,        -- 0: a plain (untiered) call
+  hits       jsonb NOT NULL DEFAULT '[]',    -- [{chunk, doc, path, heading_path, score}] in rank order
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS searches_tsv_idx ON searches USING gin(q_tsv);
+CREATE INDEX IF NOT EXISTS searches_at_idx  ON searches(created_at DESC);
+
+-- feedback is one vote per row. kind is one of
+--   useful  — this document answered (explicit: brain_feedback, engram feedback, the viewer)
+--   noise   — this document was in the way (explicit)
+--   opened  — the document was fetched right after a search returned it
+--             (implicit; recorded by the store when brain_get names the search)
+-- The vote is on the DOCUMENT; chunk_id only says which fragment was in front
+-- of the voter, and it goes NULL when the document is re-chunked. search_id
+-- ties the vote to the question, and is what the remembered channel joins on.
+CREATE TABLE IF NOT EXISTS feedback (
+  id         bigserial PRIMARY KEY,
+  doc_id     int NOT NULL REFERENCES docs(id) ON DELETE CASCADE,
+  chunk_id   int REFERENCES chunks(id) ON DELETE SET NULL,
+  search_id  bigint REFERENCES searches(id) ON DELETE SET NULL,
+  kind       text NOT NULL,
+  author     text NOT NULL DEFAULT '',
+  note       text NOT NULL DEFAULT '',
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+-- One vote of a kind per person per document per QUESTION per day. Pressing
+-- the button twice is one "useful", and opening a document five times after
+-- one search is one "opened" — a vote is a fact about the document, not a
+-- counter to run up. But the same document answering two different questions
+-- on one day is two facts (the bench caught the version that keyed on the day
+-- alone: a document that was the answer to two questions could only be
+-- remembered for one of them). A vote with no search is keyed on 0.
+-- The day is taken in UTC because the expression has to be immutable to be
+-- indexed; which day a vote lands on does not matter, only that a day is a day.
+CREATE UNIQUE INDEX IF NOT EXISTS feedback_one_per_question
+  ON feedback(doc_id, author, kind, (COALESCE(search_id, 0)), ((timezone('UTC', created_at))::date));
+CREATE INDEX IF NOT EXISTS feedback_doc_idx    ON feedback(doc_id);
+CREATE INDEX IF NOT EXISTS feedback_search_idx ON feedback(search_id);
