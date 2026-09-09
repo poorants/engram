@@ -158,6 +158,16 @@ def test_compact_hit_with_no_snippet_budget_sends_the_body():
     assert c["body"] == LONG
 
 
+# -- the token estimate ---------------------------------------------------------------
+
+def test_token_estimate_counts_cjk_per_character_and_the_rest_per_four():
+    from core import est_tokens
+    assert est_tokens("") == 0
+    assert est_tokens("a" * 400) == 100
+    assert est_tokens("가" * 100) == 90
+    assert est_tokens("가" * 100 + "a" * 400) == 190
+
+
 # -- feedback arithmetic ------------------------------------------------------------
 
 def test_query_lexemes_drop_function_words_but_never_everything():

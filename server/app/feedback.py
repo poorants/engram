@@ -84,22 +84,25 @@ def saturate(u: float) -> float:
 
 
 def log_search(conn: psycopg.Connection, q: str, q_lexemes: list[str], author: str,
-               tier: int, hits: list[dict]) -> int:
+               tier: int, hits: list[dict], session: str = "") -> int:
     """Record one search and return its id — the handle a later vote names.
 
     hits is what the caller returned, in rank order; only the coordinates are
     kept (chunk, doc, path, heading_path, score), not the bodies. That is
     enough to attribute a vote to the fragment the voter saw and to measure
-    later how often the first tier was enough.
+    later how often the first tier was enough. session is the caller's
+    X-Engram-Session, so that "tier 2 after tier 1 for the same question" can
+    be told apart from two people asking the same thing.
     """
     slim = [{"chunk": h.get("chunk_id"), "doc": h.get("doc_id"), "path": h.get("path"),
              "heading_path": h.get("heading_path"), "score": round(float(h.get("score") or 0), 5)}
             for h in hits]
     with conn.cursor() as cur:
         cur.execute(
-            "INSERT INTO searches (q, q_tsv, author, tier, hits)"
-            " VALUES (%s, array_to_tsvector(%s::text[]), %s, %s, %s::jsonb) RETURNING id",
-            (q, q_lexemes, author or "", tier, json.dumps(slim, ensure_ascii=False)))
+            "INSERT INTO searches (q, q_tsv, author, tier, hits, session)"
+            " VALUES (%s, array_to_tsvector(%s::text[]), %s, %s, %s::jsonb, %s) RETURNING id",
+            (q, q_lexemes, author or "", tier, json.dumps(slim, ensure_ascii=False),
+             (session or "")[:64]))
         sid = cur.fetchone()[0]
     conn.commit()
     return int(sid)

@@ -335,6 +335,31 @@ func cmdFeedback(args []string) int {
 	return exitOK
 }
 
+// cmdUsage reads the store's usage log — what sessions cost, and whether tier
+// 1 was enough. Deliberately a command and a page, never something a session
+// is told on its own: telling a session what it has spent costs tokens on
+// every call to save tokens on some.
+func cmdUsage(args []string) int {
+	fs := flag.NewFlagSet("usage", flag.ContinueOnError)
+	days := fs.Int("days", 7, "how far back to look")
+	session := fs.String("session", "", "one session only (the id the MCP server logs at start)")
+	limit := fs.Int("limit", 30, "sessions listed at most")
+	asJSON := fs.Bool("json", false, "machine-readable output")
+	c, _, _, _, err := clients(fs, args)
+	if err != nil {
+		return usageError(err.Error())
+	}
+	res, err := c.Usage(context.Background(), brain.UsageOpts{Days: *days, Session: *session, Limit: *limit})
+	if err != nil {
+		return fail(err)
+	}
+	if *asJSON {
+		return emit(res)
+	}
+	renderUsage(res)
+	return exitOK
+}
+
 func cmdRevisions(args []string) int {
 	fs := flag.NewFlagSet("revisions", flag.ContinueOnError)
 	limit := fs.Int("limit", 0, "maximum revisions listed")

@@ -62,6 +62,8 @@ the store
   move <path> <new path>  move a document (the old path stays as an alias)
   revisions <path>        change history
   integrity               broken links, orphans, weak nodes
+  usage                   what sessions cost: calls, tokens, tier-1 hit rate,
+                          questions asked again and again (--days --session)
   status                  connection, scope, and who you write as
   scope                   owner/repo derived from this directory's git origin
 
@@ -131,6 +133,8 @@ func run(args []string) int {
 		return cmdMove(rest)
 	case "revisions":
 		return cmdRevisions(rest)
+	case "usage":
+		return cmdUsage(rest)
 	case "integrity":
 		return cmdIntegrity(rest)
 	case "status":

@@ -67,8 +67,14 @@ type Config struct {
 }
 
 // Brain projects the settings onto the transport's own config type.
+//
+// The session id is not a setting — it is not in the file and not something
+// to designate. It comes from ENGRAM_SESSION when a caller (a hook, a script
+// wrapping one editor session) has one to pass along; the MCP server mints
+// its own. A bare CLI call carries none, and that is correct.
 func (c Config) Brain() brain.Config {
-	return brain.Config{BaseURL: c.StoreURL, Token: c.Token}
+	return brain.Config{BaseURL: c.StoreURL, Token: c.Token,
+		Session: strings.TrimSpace(os.Getenv("ENGRAM_SESSION"))}
 }
 
 // Dir is the directory holding config.json and store.token.

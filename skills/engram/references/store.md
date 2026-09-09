@@ -70,6 +70,7 @@ deliberately into another repo's scope is never silently redirected.
 | save | `brain_put` / `engram put` | **yes** |
 | move / archive | `brain_move` / `engram move` | **yes** |
 | vote a document useful / noise | `brain_feedback` / `engram feedback` | **yes** |
+| what sessions cost, tier-1 hit rate | `engram usage` (CLI and viewer only, by design) | no |
 
 **Search answers in tiers.** Tier 1 (the default) is up to four documents as
 snippets, one chunk each — a quarter of the old page's tokens with the same

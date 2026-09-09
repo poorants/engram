@@ -31,6 +31,19 @@ _INLINE_CODE = re.compile(r"`[^`\n]*`")
 _HEADING = re.compile(r"^(#{1,6})\s+(.*)$")
 
 
+_CJK_CHARS = re.compile(r"[가-힣ᄀ-ᇿ㄰-㆏぀-ヿ一-鿿]")
+
+
+def est_tokens(text: str) -> int:
+    """A tokenizer-agnostic token estimate for mixed text: about one token per
+    CJK character, one per four of anything else. The same formula the bench
+    uses. It is an estimate on purpose — every model tokenizes differently —
+    and what it is for is comparing one call or session with another, where
+    the ratio holds under any tokenizer."""
+    c = len(_CJK_CHARS.findall(text))
+    return int(c * 0.9 + (len(text) - c) / 4)
+
+
 def lexemes(text: str) -> list[str]:
     """The lexemes that go into a tsvector. Postgres's own parser is not used,
     for two reasons.

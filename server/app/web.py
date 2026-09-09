@@ -36,6 +36,7 @@ from ingest import (ALLOWED_OWNERS, PathRejected, ScopeDenied,  # noqa: E402
 from patch import (PatchConflict, PatchRejected,  # noqa: E402
                    apply_edits, check_base, diff, normalize, sha256 as body_sha256)
 import feedback as fb  # noqa: E402
+import usage  # noqa: E402
 from search import DSN, query_lexemes, search, search_tier  # noqa: E402
 
 # -- authentication ----------------------------------------------------------
@@ -421,12 +422,33 @@ def healthz() -> JSONResponse:
         return JSONResponse({"ok": False, "error": str(e)}, status_code=503)
 
 
-def log_search(conn, q: str, author: str, tier: int, hits: list[dict]) -> int | None:
+# The session a call belongs to, as the client declared it. The MCP server
+# mints one per process (one editor session); the CLI passes ENGRAM_SESSION
+# when it has one. Nothing is inferred from addresses or timing: a session is
+# a claim the client makes, and an unclaimed call is simply unattributed.
+SESSION_HEADER = "x-engram-session"
+
+
+def session_of(request: Request) -> str:
+    return request.headers.get(SESSION_HEADER, "")[:64]
+
+
+def log_call(request: Request, tool: str, ref: str, payload, author: str = "") -> None:
+    """Record what a call cost (usage.py). Never fails the call it records."""
+    try:
+        with pool.connection() as conn:
+            usage.log_call(conn, session_of(request), tool, ref, payload, author)
+    except Exception as e:
+        print(f"[usage] could not log the call: {e}")
+
+
+def log_search(conn, q: str, author: str, tier: int, hits: list[dict],
+               session: str = "") -> int | None:
     """Record the search for feedback to attach to. A failure here must never
     fail the search — the log is a means, the answer is the end — so it is
     reported and swallowed, and the caller gets no search_id."""
     try:
-        return fb.log_search(conn, q, query_lexemes(q), author, tier, hits)
+        return fb.log_search(conn, q, query_lexemes(q), author, tier, hits, session)
     except Exception as e:
         try:
             conn.rollback()
@@ -437,7 +459,8 @@ def log_search(conn, q: str, author: str, tier: int, hits: list[dict]) -> int | 
 
 
 @app.get("/api/search")
-def api_search(q: str = Query(..., min_length=1),
+def api_search(request: Request,
+               q: str = Query(..., min_length=1),
                limit: int | None = Query(None, ge=1, le=50),
                archives: bool | None = None,
                tier: int | None = Query(None, ge=1, le=3,
@@ -469,23 +492,28 @@ def api_search(q: str = Query(..., min_length=1),
                           boost_repo=repo or None, only_repos=list(only_repo) or None,
                           only_owners=list(only_owner) or None)
             as_seen = [h.as_dict() for h in hits]
-            sid = log_search(conn, q, author, 0, as_seen)
+            sid = log_search(conn, q, author, 0, as_seen, session_of(request))
             payload = [h.compact(q, 0) for h in hits] if compact else as_seen
-            return {"q": q, "search_id": sid, "count": len(hits), "hits": payload,
-                    "index": index}
+            result = {"q": q, "search_id": sid, "count": len(hits), "hits": payload,
+                      "index": index}
+            log_call(request, "search", q, result, author)
+            return result
         res = search_tier(q, tier, conn=conn, boost_repo=repo or None,
                           only_repos=list(only_repo) or None,
                           only_owners=list(only_owner) or None,
                           limit=limit, include_archives=archives)
-        sid = log_search(conn, q, author, tier, [h.as_dict() for h in res.hits])
+        sid = log_search(conn, q, author, tier, [h.as_dict() for h in res.hits],
+                         session_of(request))
     payload = res.payload(q) if compact else [h.as_dict() for h in res.hits]
-    return {"q": q, "tier": tier, "search_id": sid, "count": len(res.hits),
-            "candidates": res.candidates, "hits": payload, "next": res.next,
-            "index": index}
+    result = {"q": q, "tier": tier, "search_id": sid, "count": len(res.hits),
+              "candidates": res.candidates, "hits": payload, "next": res.next,
+              "index": index}
+    log_call(request, "search", q, result, author)
+    return result
 
 
 @app.get("/api/doc/{path:path}")
-def api_doc(path: str,
+def api_doc(path: str, request: Request,
             search: int | None = Query(None, description="the search_id that led here"),
             author: str = Query("")) -> dict:
     """One document. Naming the `search` that led here records an implicit
@@ -504,6 +532,7 @@ def api_doc(path: str,
                     d["feedback"] = fb.summary(conn, d["id"])
         except Exception as e:
             print(f"[feedback] could not record the open: {e}")
+    log_call(request, "doc", path, d, author)
     return d
 
 
@@ -564,7 +593,9 @@ async def api_feedback(request: Request, _: None = Depends(require_auth)) -> dic
                                    search_id=int(search_id) if search_id else None,
                                    chunk_id=chunk)
                 results.append({"path": p, "status": status, **fb.summary(conn, doc_id)})
-    return {"kind": kind, "search_id": search_id, "results": results}
+    result = {"kind": kind, "search_id": search_id, "results": results}
+    log_call(request, "feedback", ", ".join(paths), result, author)
+    return result
 
 
 @app.put("/api/doc/{path:path}")
@@ -587,9 +618,9 @@ async def api_put_doc(path: str, request: Request,
                                  "carry one; send it escaped (\\x00) instead")
     try:
         with pool.connection() as conn:
-            return write_doc(conn, path, body, author=payload.get("author", ""),
-                             note=payload.get("note", ""),
-                             updated_at=payload.get("updated_at"))
+            result = write_doc(conn, path, body, author=payload.get("author", ""),
+                               note=payload.get("note", ""),
+                               updated_at=payload.get("updated_at"))
     except PathRejected as e:
         # A malformed address is a **bad request**, hence 400. The rules live in
         # core.validate_path alone and the client mirrors that one copy.
@@ -598,6 +629,9 @@ async def api_put_doc(path: str, request: Request,
         # 403, not 400. The request is not malformed — this simply must not go
         # in here.
         raise HTTPException(403, str(e))
+    # What a put costs is the body that was sent, not the receipt.
+    log_call(request, "put", path, body, payload.get("author", ""))
+    return result
 
 
 @app.patch("/api/doc/{path:path}")
@@ -666,6 +700,7 @@ async def api_patch_doc(path: str, request: Request,
     result["edits"] = applied.edits
     result["sha256"] = body_sha256(after)
     result["chars"] = len(after)
+    log_call(request, "patch", path, edits, payload.get("author", ""))
     return result
 
 
@@ -687,11 +722,13 @@ async def api_move_doc(path: str, request: Request,
         raise HTTPException(400, "the destination path (to) is empty")
     try:
         with pool.connection() as conn:
-            return move_doc(conn, path, to, author=payload.get("author", ""))
+            result = move_doc(conn, path, to, author=payload.get("author", ""))
     except PathRejected as e:
         raise HTTPException(400, str(e))
     except ScopeDenied as e:
         raise HTTPException(403, str(e))
+    log_call(request, "move", path + " -> " + to, result, payload.get("author", ""))
+    return result
 
 
 @app.post("/api/doc/{path:path}/restore")
@@ -702,16 +739,18 @@ def api_restore_doc(path: str, author: str = "",
 
 
 @app.get("/api/revisions/{path:path}")
-def api_revisions(path: str, limit: int = Query(20, ge=1, le=200)) -> dict:
+def api_revisions(path: str, request: Request, limit: int = Query(20, ge=1, le=200)) -> dict:
     """How this document has changed. The slot git log used to fill."""
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute("SELECT id, created_at, author, note, sha256, length(body)"
                     " FROM revisions WHERE path = %s"
                     " ORDER BY created_at DESC LIMIT %s", (path, limit))
         rows = cur.fetchall()
-    return {"path": path, "count": len(rows), "revisions": [
+    result = {"path": path, "count": len(rows), "revisions": [
         {"id": r[0], "at": r[1].isoformat(), "author": r[2], "note": r[3],
          "sha256": r[4][:12], "chars": r[5]} for r in rows]}
+    log_call(request, "revisions", path, result)
+    return result
 
 
 @app.get("/api/revision/{rev_id}")
@@ -738,7 +777,7 @@ def api_rederive(_: None = Depends(require_auth)) -> dict:
 
 
 @app.get("/api/integrity")
-def api_integrity(limit: int = Query(50, ge=1, le=500)) -> dict:
+def api_integrity(request: Request, limit: int = Query(50, ge=1, le=500)) -> dict:
     """Graph integrity — broken links, orphans, weak nodes.
 
     This is where a machine measures what engram's linking rules ask for. **The
@@ -797,10 +836,22 @@ def api_integrity(limit: int = Query(50, ge=1, le=500)) -> dict:
                                       WHERE l.dst=d.id AND l.kind='wiki'
                                         AND s.deleted_at IS NULL))""")
         n_broken, n_orphan, n_weak = cur.fetchone()
-    return {"broken_links": broken, "orphans": orphans, "weak_nodes": weak,
-            "truncated": len(broken) >= limit or len(orphans) >= limit,
-            "counts": {"broken": n_broken, "orphans": n_orphan,
-                       "weak": n_weak, "by_kind": by_kind}}
+    result = {"broken_links": broken, "orphans": orphans, "weak_nodes": weak,
+              "truncated": len(broken) >= limit or len(orphans) >= limit,
+              "counts": {"broken": n_broken, "orphans": n_orphan,
+                         "weak": n_weak, "by_kind": by_kind}}
+    log_call(request, "integrity", "", result)
+    return result
+
+
+@app.get("/api/usage")
+def api_usage(days: int = Query(7, ge=1, le=365),
+              session: str = Query("", description="one session only"),
+              limit: int = Query(30, ge=1, le=500)) -> dict:
+    """What sessions cost, and whether the tiers paid off — see usage.py.
+    Read-only and never fed back into a session by itself."""
+    with pool.connection() as conn:
+        return usage.report(conn, days=days, session=session or None, limit=limit)
 
 
 @app.get("/api/export")
@@ -966,6 +1017,16 @@ def changes_page(request: Request, limit: int = Query(80, ge=1, le=300)):
                 for r in cur.fetchall()]
     return templates.TemplateResponse(request, "changes.html",
                                       {"rows": rows, "q": "", "meta": meta()})
+
+
+@app.get("/usage", response_class=HTMLResponse)
+def usage_page(request: Request, days: int = Query(7, ge=1, le=365),
+               session: str = Query("")):
+    with pool.connection() as conn:
+        rep = usage.report(conn, days=days, session=session or None)
+    return templates.TemplateResponse(request, "usage.html",
+                                      {"u": rep, "days": days, "session": session,
+                                       "q": "", "meta": meta()})
 
 
 @app.get("/doc/{path:path}", response_class=HTMLResponse)
