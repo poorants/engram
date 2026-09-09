@@ -219,7 +219,10 @@ if [ "$WIRE_CLAUDE" -eq 1 ] && command -v claude >/dev/null 2>&1; then
   # --scope user: the brain is not a property of one checkout. Registering it
   # per-project means the tools vanish the first time someone opens a different
   # repo, which reads as engram being broken.
-  claude mcp add --scope user engram -- engram mcp >/dev/null 2>&1
+  #
+  # Already registered is success, not a failure to register: `mcp add` refuses
+  # a name that exists, and an upgrade — the normal re-run — always finds one.
+  claude mcp get engram >/dev/null 2>&1 || claude mcp add --scope user engram -- engram mcp >/dev/null 2>&1
   mcp_rc=$?
   set -e
   if [ "$plugin_rc" -eq 0 ]; then

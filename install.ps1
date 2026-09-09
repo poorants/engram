@@ -181,14 +181,33 @@ try {
   if (-not $NoClaude -and $claude) {
     Write-Host ""
     Write-Host "wiring engram into Claude Code..."
-    & claude plugin marketplace add $Repo *> $null
-    & claude plugin install engram@engram *> $null
-    $pluginOk = ($LASTEXITCODE -eq 0)
-    # --scope user: the brain is not a property of one checkout. Registering it
-    # per-project means the tools vanish the first time someone opens a
-    # different repo, which reads as engram being broken.
-    & claude mcp add --scope user engram -- engram mcp *> $null
-    $mcpOk = ($LASTEXITCODE -eq 0)
+    # claude writes ordinary progress to stderr, and under
+    # $ErrorActionPreference = 'Stop' Windows PowerShell 5.1 turns a native
+    # command's stderr into a terminating NativeCommandError even when it is
+    # redirected. "MCP server engram already exists in user config" killed the
+    # second run of this script — an upgrade, the normal case — right after the
+    # binary had been replaced, so the person saw a red error for a step that
+    # had nothing to do. Best effort means nothing in this block is fatal.
+    $ErrorActionPreference = 'Continue'
+    try {
+      & claude plugin marketplace add $Repo *> $null
+      & claude plugin install engram@engram *> $null
+      $pluginOk = ($LASTEXITCODE -eq 0)
+      # --scope user: the brain is not a property of one checkout. Registering
+      # it per-project means the tools vanish the first time someone opens a
+      # different repo, which reads as engram being broken.
+      #
+      # Already registered is success, not a failure to register: `mcp add`
+      # refuses a name that exists, and an upgrade always finds one.
+      & claude mcp get engram *> $null
+      $mcpOk = ($LASTEXITCODE -eq 0)
+      if (-not $mcpOk) {
+        & claude mcp add --scope user engram -- engram mcp *> $null
+        $mcpOk = ($LASTEXITCODE -eq 0)
+      }
+    } finally {
+      $ErrorActionPreference = 'Stop'
+    }
 
     if ($pluginOk) { Write-Host "  skill + capture hooks: installed" }
     else { Write-Host "  skill: could not install - run: claude plugin install engram@engram" -ForegroundColor Yellow }
