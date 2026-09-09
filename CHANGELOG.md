@@ -8,6 +8,9 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+
+## [0.6.0] — 2026-09-09
+
 ### Added — search in tiers, and a ranking that learns what answered
 
 A brain that keeps growing costs more to ask. Measured on a 255-document store,
