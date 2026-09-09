@@ -69,6 +69,21 @@ deliberately into another repo's scope is never silently redirected.
 | link-graph health | `brain_integrity` / `engram integrity` | no |
 | save | `brain_put` / `engram put` | **yes** |
 | move / archive | `brain_move` / `engram move` | **yes** |
+| vote a document useful / noise | `brain_feedback` / `engram feedback` | **yes** |
+
+**Search answers in tiers.** Tier 1 (the default) is up to four documents as
+snippets, one chunk each — a quarter of the old page's tokens with the same
+recall on the bench. If the answer is not on it, call again with the **same
+question** and the tier the result names (`next`): 2 is the full chunks, 3 adds
+archives and drops the repo boost. Raise the tier before rephrasing; a
+rephrased question is a new search and a vote on it teaches the ranking
+nothing about the first one.
+
+**A vote is how the ranking learns.** When a brain document settled something,
+`brain_feedback` with its path (the session's last search is attached by
+itself). The document then comes first for that question and ones like it;
+opening a hit with `brain_get` is recorded as a weaker vote without any call.
+It is a bonus, never a filter — the document must still match the question.
 
 There is deliberately **no delete tool**. The contract is *never delete, move to
 archives*. The store's soft delete stays reachable for an operator with curl, not
