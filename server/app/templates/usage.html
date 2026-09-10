@@ -38,8 +38,19 @@
       <div class="cal-dows"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span></div>
       <div class="cal-grid" style="grid-template-columns:repeat({{ a.weeks|length }},13px)">
         {% for col in a.weeks %}{% for c in col %}
-          <i class="d{{ c.level }}{% if c.future %} fut{% endif %}"
-             title="{{ c.date }} — {{ c.calls }} call{{ '' if c.calls == 1 else 's' }}{% if c.tokens %}, {{ '{:,}'.format(c.tokens) }} tokens{% endif %}"></i>
+          <i class="d{{ c.level }}{% if c.future %} fut{% endif %}">
+            {%- if not c.future %}
+            <span class="tip">
+              <b>{{ c.date }}</b>
+              {%- if c.calls %}
+              <em>{{ c.calls }} call{{ '' if c.calls == 1 else 's' }} · {{ '{:,}'.format(c.tokens) }} tokens</em>
+              {%- for s in c.split %}
+              <span><i class="sw {{ s.name }}"></i>{{ s.name }}<u>{{ s.calls }}</u><u>{{ '{:,}'.format(s.tokens) }}</u></span>
+              {%- endfor %}
+              {%- else %}<em>no calls</em>{% endif %}
+            </span>
+            {%- endif %}
+          </i>
         {% endfor %}{% endfor %}
       </div>
     </div>
@@ -88,7 +99,7 @@
   <table style="width:100%;border-collapse:collapse;font-size:13.5px">
     <tr class="meta"><th style="text-align:left;padding:4px 8px">session</th><th style="text-align:left;padding:4px 8px">who</th><th style="text-align:left;padding:4px 8px">from → to</th>
       <th style="text-align:right;padding:4px 8px">calls</th><th style="text-align:right;padding:4px 8px">tokens</th>
-      <th style="text-align:right;padding:4px 8px">search</th><th style="text-align:right;padding:4px 8px">read</th><th style="text-align:right;padding:4px 8px">vote</th><th style="text-align:right;padding:4px 8px">write</th>
+      <th style="text-align:right;padding:4px 8px">search<br><span class="meta" style="font-weight:400;font-size:10.5px">calls / tokens</span></th><th style="text-align:right;padding:4px 8px">read</th><th style="text-align:right;padding:4px 8px">vote</th><th style="text-align:right;padding:4px 8px">write</th>
       <th style="text-align:right;padding:4px 8px" title="of the tier-1 searches, the share not widened to a higher tier for the same question">tier-1 hit</th></tr>
   {% for s in u.sessions %}
     <tr style="border-top:1px solid var(--line)">
@@ -97,10 +108,9 @@
       <td style="padding:5px 8px;white-space:nowrap" class="meta">{{ s.first[5:16]|replace('T', ' ') }} → {{ s.last[11:16] }}</td>
       <td style="padding:5px 8px;text-align:right">{{ s.calls }}</td>
       <td style="padding:5px 8px;text-align:right"><strong>{{ '{:,}'.format(s.tokens) }}</strong></td>
-      <td style="padding:5px 8px;text-align:right">{{ s.searches }}</td>
-      <td style="padding:5px 8px;text-align:right">{{ s.reads }}</td>
-      <td style="padding:5px 8px;text-align:right">{{ s.votes }}</td>
-      <td style="padding:5px 8px;text-align:right">{{ s.writes }}</td>
+      {% for k, n in (("search", s.searches), ("read", s.reads), ("vote", s.votes), ("write", s.writes)) %}
+      <td style="padding:5px 8px;text-align:right">{{ n }}<br><span class="meta" style="font-size:11px">{{ "{:,}".format(s.tok[k]) if s.tok[k] else "—" }}</span></td>
+      {% endfor %}
       <td style="padding:5px 8px;text-align:right">{% if s.tier1 %}{{ '%.0f'|format(s.tier1_hit_rate * 100) }}%{% else %}—{% endif %}</td>
     </tr>
   {% endfor %}

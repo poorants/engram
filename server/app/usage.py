@@ -60,7 +60,15 @@ def report(conn: psycopg.Connection, days: int = 7, session: str | None = None,
                    count(*) FILTER (WHERE tool = 'search'),
                    count(*) FILTER (WHERE tool = 'doc'),
                    count(*) FILTER (WHERE tool = 'feedback'),
-                   count(*) FILTER (WHERE tool IN ('put', 'patch', 'move'))
+                   count(*) FILTER (WHERE tool IN ('put', 'patch', 'move')),
+                   -- Tokens per kind of call. No new column and no new table:
+                   -- one row per call already carries both `tool` and
+                   -- `tokens`, so the split is a GROUP BY the report was
+                   -- summing away, not something that has to be collected.
+                   coalesce(sum(tokens) FILTER (WHERE tool = 'search'), 0),
+                   coalesce(sum(tokens) FILTER (WHERE tool IN ('doc', 'revisions', 'integrity')), 0),
+                   coalesce(sum(tokens) FILTER (WHERE tool = 'feedback'), 0),
+                   coalesce(sum(tokens) FILTER (WHERE tool IN ('put', 'patch', 'move')), 0)
             FROM calls
             WHERE created_at >= now() - make_interval(days => %(days)s){only}
             GROUP BY session
@@ -71,6 +79,8 @@ def report(conn: psycopg.Connection, days: int = 7, session: str | None = None,
             "first": r[2].isoformat(timespec="minutes"), "last": r[3].isoformat(timespec="minutes"),
             "calls": int(r[4]), "tokens": int(r[5]), "bytes": int(r[6]),
             "searches": int(r[7]), "reads": int(r[8]), "votes": int(r[9]), "writes": int(r[10]),
+            "tok": {"search": int(r[11]), "read": int(r[12]),
+                    "vote": int(r[13]), "write": int(r[14])},
             "tier1": 0, "escalated": 0,
         } for r in cur.fetchall()}
 
@@ -142,6 +152,18 @@ GRID_WEEKS_MIN = 12
 GRID_WEEKS_MAX = 53
 
 
+# The four groups are the ledger's columns, and they are what a day's tokens
+# are worth splitting by. There is only ONE kind of token in `calls` (see
+# log_call: the response for a read, the request body for a write), so "by
+# kind" is not a question this table can answer — "by tool" is.
+_GROUPS = {
+    "search": ("search",),
+    "read": ("doc", "revisions", "integrity"),
+    "write": ("put", "patch", "move"),
+    "vote": ("feedback",),
+}
+
+
 def _bucket_rows(conn: psycopg.Connection, unit: str, since_days: int) -> list[dict]:
     """calls grouped into one time unit. `unit` is trusted — it is never user
     input, only the three literals below."""
@@ -151,13 +173,27 @@ def _bucket_rows(conn: psycopg.Connection, unit: str, since_days: int) -> list[d
                    count(*), coalesce(sum(tokens), 0),
                    count(DISTINCT session) FILTER (WHERE session <> ''),
                    count(*) FILTER (WHERE tool = 'search'),
-                   count(*) FILTER (WHERE tool IN ('put', 'patch', 'move'))
+                   count(*) FILTER (WHERE tool IN ('put', 'patch', 'move')),
+                   tool, coalesce(sum(tokens), 0)
             FROM calls
             WHERE created_at >= now() - make_interval(days => %s)
-            GROUP BY 1 ORDER BY 1""", (since_days,))
-        return [{"bucket": r[0], "calls": int(r[1]), "tokens": int(r[2]),
-                 "sessions": int(r[3]), "searches": int(r[4]), "writes": int(r[5])}
-                for r in cur.fetchall()]
+            GROUP BY GROUPING SETS ((1), (1, 7)) ORDER BY 1""", (since_days,))
+        rows, by_tool = {}, {}
+        for b, calls, toks, sess, srch, wr, tool, ttoks in cur.fetchall():
+            if tool is None:            # the (bucket) set — the totals line
+                rows[b] = {"bucket": b, "calls": int(calls), "tokens": int(toks),
+                           "sessions": int(sess), "searches": int(srch), "writes": int(wr)}
+            else:                       # the (bucket, tool) set — the split
+                by_tool.setdefault(b, []).append((tool, int(calls), int(ttoks)))
+    for b, row in rows.items():
+        split = {g: {"calls": 0, "tokens": 0} for g in _GROUPS}
+        for tool, calls, toks in by_tool.get(b, []):
+            for g, members in _GROUPS.items():
+                if tool in members:
+                    split[g]["calls"] += calls
+                    split[g]["tokens"] += toks
+        row["split"] = [{"name": g, **v} for g, v in split.items() if v["calls"]]
+    return list(rows.values())
 
 
 def _levels(values: list[int]) -> list[int]:
@@ -206,6 +242,7 @@ def activity(conn: psycopg.Connection) -> dict:
             n = row["calls"] if row else 0
             lvl = 0 if not n else (1 if n <= cuts[0] else 2 if n <= cuts[1] else 3 if n <= cuts[2] else 4)
             col.append({"date": d, "calls": n, "tokens": row["tokens"] if row else 0,
+                        "split": row["split"] if row else [],
                         "level": lvl, "future": d > today})
             d += _dt.timedelta(days=1)
         grid.append(col)

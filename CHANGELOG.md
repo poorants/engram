@@ -9,6 +9,32 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 ## [Unreleased]
 
 
+## [0.10.1] — 2026-09-11
+
+### Changed — the day cell says what the tokens went on, not just how many
+
+Hovering a day showed a native `title`: about a second to appear, unstyled, and
+one number. One number for a day says *how much*; it cannot say **on what**,
+which is the part worth seeing — a day that spent 500k tokens reading documents
+and a day that spent it on searches are different days.
+
+- **A CSS hover panel** on each day cell: the date, calls and tokens, then the
+  split by kind of call (search · read · vote · write) with a colour swatch per
+  row. No JavaScript — the viewer has none and a hover panel does not need any.
+  The calendar reserves headroom rather than letting the panel escape, because
+  the card scrolls horizontally and that clips the vertical axis too.
+- **The ledger's four columns carry tokens under their counts.** They said how
+  many calls of each kind and left the tokens as one total beside them.
+
+**No new collection and no schema change.** One row per call already carries
+both `tool` and `tokens`, so the split is a `GROUP BY` the report was summing
+away — the day query gets it from one `GROUPING SETS` pass rather than a second
+round trip.
+
+There is still exactly **one kind of token** in `calls`: an estimate of the text
+that crossed the wire for that call — the response for a read, the request body
+for a write. It is not an input/output split and not a model's count.
+
 ## [0.10.0] — 2026-09-11
 
 ### Added — an activity dashboard, and the ledger moves to a tab
@@ -508,7 +534,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.10.0...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.10.1...HEAD
+[0.10.1]: https://github.com/poorants/engram/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/poorants/engram/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/poorants/engram/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/poorants/engram/compare/v0.8.0...v0.9.0

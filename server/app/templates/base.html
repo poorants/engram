@@ -88,13 +88,38 @@ footer code{background:var(--code);padding:1px 5px;border-radius:4px}
    would crowd 11px rows into noise. The five shades are steps of the accent,
    so the grid stays the store's colour in either theme rather than borrowing
    GitHub's green. */
-.cal{display:inline-block;min-width:100%}
+/* padding-top is the tooltip's headroom: the card scrolls horizontally, which
+   clips the vertical axis too, so the panel has to open inside the box. */
+.cal{display:inline-block;min-width:100%;padding-top:96px;margin-top:-96px}
 .cal-months{display:grid;gap:2px;font-size:10.5px;color:var(--muted);margin-left:30px;height:14px}
 .cal-body{display:flex;gap:4px}
 .cal-dows{display:grid;grid-template-rows:repeat(7,13px);gap:2px;width:26px;
   font-size:9.5px;color:var(--muted);line-height:13px;text-align:right}
 .cal-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,11px);gap:2px}
-.cal-grid i{width:11px;height:11px;border-radius:2px;display:block}
+.cal-grid i{width:11px;height:11px;border-radius:2px;display:block;position:relative}
+
+/* The day tooltip. CSS only — this viewer has no JavaScript, and a hover
+   panel does not need any. The native `title` it replaces took about a second
+   to appear and could not show the split, which is the part worth seeing:
+   one number for a day says how much, the split says on WHAT.
+   The scroll container clips its overflow in both axes, so .cal reserves
+   headroom (padding-top) for the panel instead of letting it escape. */
+.cal-grid i .tip{display:none;position:absolute;bottom:calc(100% + 7px);left:50%;
+  transform:translateX(-50%);z-index:4;width:max-content;max-width:230px;
+  background:var(--panel);border:1px solid var(--line);border-radius:8px;
+  padding:8px 10px;box-shadow:0 6px 20px rgba(0,0,0,.13);
+  font-size:12px;line-height:1.55;color:var(--fg);text-align:left;font-style:normal}
+.cal-grid i:hover .tip{display:block}
+.cal-grid i .tip b{display:block;font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--muted);font-weight:600}
+.cal-grid i .tip em{display:block;font-style:normal;font-weight:600;margin-bottom:3px;white-space:nowrap}
+.cal-grid i .tip > span{display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--muted)}
+.cal-grid i .tip u{margin-left:auto;text-decoration:none;font-variant-numeric:tabular-nums;color:var(--fg)}
+.cal-grid i .tip u:first-of-type{min-width:26px;text-align:right}
+.cal-grid i .tip u:last-of-type{min-width:58px;text-align:right}
+/* Swatches tie each row of the split to the colour the rest of the page uses
+   for that kind of call. */
+.sw{width:7px;height:7px;border-radius:2px;flex:none;background:var(--accent)}
+.sw.read{opacity:.72} .sw.vote{opacity:.48} .sw.write{opacity:1;background:var(--fg)}
 .cal-key{margin-top:10px;display:flex;align-items:center;gap:3px;font-size:11.5px}
 .cal-key i{width:11px;height:11px;border-radius:2px;display:inline-block}
 .d0{background:var(--line)} .d1{background:var(--accent);opacity:.28}
