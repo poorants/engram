@@ -8,6 +8,9 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+
+## [0.8.0] — 2026-09-11
+
 ### Added — `-tags noupdate`, for a machine that will not tolerate a self-updating binary
 
 `engram update` downloads an executable, renames the running binary aside and
@@ -412,7 +415,10 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.5.0...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.8.0...HEAD
+[0.8.0]: https://github.com/poorants/engram/compare/v0.7.0...v0.8.0
+[0.7.0]: https://github.com/poorants/engram/compare/v0.6.0...v0.7.0
+[0.6.0]: https://github.com/poorants/engram/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/poorants/engram/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/poorants/engram/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/poorants/engram/compare/v0.2.0...v0.3.0
