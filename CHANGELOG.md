@@ -6,7 +6,10 @@ and anything that does will say so here.
 
 Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
-## 0.7.0 — 2026-09-10
+## [Unreleased]
+
+
+## [0.7.0] — 2026-09-10
 
 **The viewer stops using search as a table of contents.** The home page's scope
 and area cards linked to `/search?q=<name>`, which ranks documents by how much
@@ -31,9 +34,6 @@ hit rate above all.
 
 Server-only. The client binary is unchanged; a store is updated by redeploying
 it (`server/setup.sh`, or compose up --build against this tree).
-
-## [Unreleased]
-
 
 ## [0.6.0] — 2026-09-09
 
