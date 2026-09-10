@@ -187,6 +187,59 @@ go install github.com/poorants/engram/cmd/engram@latest
 `go install` builds from the module path and does not stamp the version, so
 `engram version` reports the module's pseudo-version rather than a release tag.
 
+## Frozen builds — engram that cannot update itself
+
+On a managed endpoint — a work laptop under corporate antivirus or EDR — the
+self-update is the problem, not the fix. Build with `-tags noupdate` instead:
+
+```bash
+make build-frozen     # ./engram, self-update compiled out
+```
+
+Or, without `make`:
+
+```bash
+CGO_ENABLED=0 go build -trimpath -tags noupdate \
+  -ldflags "-s -w -X main.version=$(git describe --tags --always --dirty)+noupdate" \
+  -o engram ./cmd/engram
+```
+
+Install it by plain copy rather than by installer. Stop any running
+`engram mcp` first — Windows refuses to write a running executable:
+
+```powershell
+Get-Process engram | Stop-Process -Force
+Copy-Item .\engram.exe "$env:LOCALAPPDATA\engram\bin\engram.exe" -Force
+Remove-Item "$env:LOCALAPPDATA\engram\bin\engram.exe.old*" -Force -EA SilentlyContinue
+```
+
+`engram version` then carries a `+noupdate` suffix. `engram update` still
+exists, and says that this build is frozen and how to replace it from outside.
+Everything else — the MCP server, the CLI, the store, the settings — is
+identical.
+
+### Why a managed endpoint needs this
+
+An unsigned binary that downloads an executable, renames itself aside and runs
+what it just wrote is, step for step, what a dropper does. A behaviour scanner
+that reaches that conclusion does not block the network call — it suspends the
+process at creation, before the Go runtime starts. The symptom is confusing,
+because an *already running* `engram mcp` keeps serving normally: the store
+still answers, documents still save, and only newly spawned processes (the
+capture hooks, `engram status`, the next session's server) hang. Observed on
+AhnLab V3 in 2026-09; the suspended processes showed `Threads=1, CPU=0.00`,
+which for a Go program means not one line of it ran.
+
+`install.ps1` performs the same file operations and is not treated the same
+way, because the actor differs: `powershell.exe` is Microsoft-signed and
+ubiquitous, while `engram.exe` is unsigned and rare. Signing the release is the
+real fix; a frozen build is the one available to someone who cannot grant an
+allowlist entry on their own machine.
+
+`-tags noupdate` removes the version check, the download and the swap. Nothing
+is disabled at runtime and there is no environment variable to forget: the code
+is not in the binary.
+
 ## Connecting to a store by hand
 
 The installer does this for you when you pass `--store`. To do it later, or to
@@ -262,6 +315,10 @@ keeps the old binary until its session ends; start a new session to use the
 new one. This is what the update notice in a session asks for, and a model
 can run it. A development build (`make install`) is not replaced without
 `--force`, because the latest release may be older than it.
+
+On a work machine under corporate antivirus, do not use this path — `engram
+update` is the thing such a scanner objects to. Build a frozen binary and copy
+it in instead: [Frozen builds](#frozen-builds--engram-that-cannot-update-itself).
 
 Re-running the installer does the same thing:
 

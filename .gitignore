@@ -1,5 +1,6 @@
 # Go build output
 /engram
+/engram.exe
 /dist/
 
 # Server runtime state — the database lives here; never commit it.

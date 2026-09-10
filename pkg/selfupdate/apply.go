@@ -1,3 +1,5 @@
+//go:build !noupdate
+
 package selfupdate
 
 // The other half of an update: not "a newer release exists" but "put it here".

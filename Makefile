@@ -5,7 +5,7 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 # The client runs everywhere; the store (Postgres) is Linux/macOS only.
 PLATFORMS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64
 
-.PHONY: build test lint install clean dist server-up server-down server-logs bench bench-seed
+.PHONY: build build-frozen test lint install clean dist server-up server-down server-logs bench bench-seed
 
 ENGRAM_URL ?= http://127.0.0.1:8081
 
@@ -79,3 +79,15 @@ bench-seed:
 bench:
 	cd server && python3 bench/baseline_grep.py
 	cd server && python3 bench/eval_index.py --url $(ENGRAM_URL) --prefix acme/shared
+
+# build-frozen: engram without self-update.
+#
+# `-tags noupdate` drops the version check, the download and the swap
+# (pkg/selfupdate/apply.go, cmd/engram/selfupdate_cmd.go). The result cannot
+# rewrite itself, which is what a managed endpoint wants: an unsigned binary
+# that downloads an executable and renames itself aside looks exactly like a
+# dropper to a behaviour scanner, and its hash moves on every update. The
+# +noupdate stamp makes `engram version` say which build this is.
+build-frozen:
+	CGO_ENABLED=0 go build -trimpath -tags noupdate \
+	  -ldflags "-s -w -X main.version=$(VERSION)+noupdate" -o engram ./cmd/engram
