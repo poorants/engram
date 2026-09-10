@@ -1019,13 +1019,53 @@ def changes_page(request: Request, limit: int = Query(80, ge=1, le=300)):
                                       {"rows": rows, "q": "", "meta": meta()})
 
 
+@app.get("/browse", response_class=HTMLResponse)
+def browse_page(request: Request, owner: str = Query(""), repo: str = Query(""),
+                area: str = Query("")):
+    """Every document in one scope (or area), by path.
+
+    The home page's scope cards used to link to `/search?q=<repo>`, which ranks
+    documents by how much they say the word — not the same question as "what is
+    in this repo". The second question does not need a ranking at all: the path
+    is already the answer, and a ranking over it only hides the shape of the
+    scope behind relevance.
+
+    So this does not go through search, and it is not logged as a call. Paging
+    through a list is not a question, and counting it as one would blur the very
+    numbers /usage exists to show — tier-1 hit rate above all.
+    """
+    where, params = ["deleted_at IS NULL"], {}
+    for col, val in (("owner", owner), ("repo", repo), ("area", area)):
+        if val:
+            where.append(f"{col} = %({col})s")
+            params[col] = val
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("SELECT owner, repo, area, path, title, updated_at FROM docs"
+                    " WHERE " + " AND ".join(where) + " ORDER BY area, path", params)
+        rows = cur.fetchall()
+    # Grouped by area, because PARA is how this brain is organised: what one
+    # wants to see about a scope is "two projects, nineteen resources".
+    groups: dict[str, list] = {}
+    for _owner, _repo, _area, path, title, updated in rows:
+        groups.setdefault(_area or "root", []).append(
+            {"path": path, "title": title or path,
+             "updated": updated.strftime("%Y-%m-%d") if updated else ""})
+    order = ["projects", "areas", "resources", "archives", "root"]
+    grouped = sorted(groups.items(),
+                     key=lambda kv: (order.index(kv[0]) if kv[0] in order else 99, kv[0]))
+    scope = "/".join(x for x in (owner, repo) if x) or area or "everything"
+    return templates.TemplateResponse(request, "browse.html", {
+        "grouped": grouped, "total": len(rows), "scope": scope,
+        "owner": owner, "repo": repo, "area": area, "q": "", "meta": meta()})
+
+
 @app.get("/usage", response_class=HTMLResponse)
 def usage_page(request: Request, days: int = Query(7, ge=1, le=365),
                session: str = Query("")):
     with pool.connection() as conn:
         rep = usage.report(conn, days=days, session=session or None)
     return templates.TemplateResponse(request, "usage.html",
-                                      {"u": rep, "days": days, "session": session,
+                                      {"nav": "usage", "u": rep, "days": days, "session": session,
                                        "q": "", "meta": meta()})
 
 

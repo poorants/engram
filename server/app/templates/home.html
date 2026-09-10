@@ -6,14 +6,14 @@
 <h2>Areas</h2>
 <div class="grid">
   {% for area, n in areas %}
-  <a class="card" href="/search?q={{ area }}"><strong>{{ area }}</strong> <span class="meta">· {{ n }}</span></a>
+  <a class="card" href="/browse?area={{ area }}"><strong>{{ area }}</strong> <span class="meta">· {{ n }}</span></a>
   {% endfor %}
 </div>
 
 <h2>Scopes</h2>
 <div class="grid">
   {% for owner, repo, n in scopes %}
-  <a class="card" href="/search?q={{ repo }}&only_repo={{ repo }}"><strong>{{ owner }}/{{ repo }}</strong> <span class="meta">· {{ n }}</span></a>
+  <a class="card" href="/browse?owner={{ owner }}&repo={{ repo }}"><strong>{{ owner }}/{{ repo }}</strong> <span class="meta">· {{ n }}</span></a>
   {% endfor %}
 </div>
 

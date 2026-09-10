@@ -6,6 +6,32 @@ and anything that does will say so here.
 
 Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
+## 0.7.0 — 2026-09-10
+
+**The viewer stops using search as a table of contents.** The home page's scope
+and area cards linked to `/search?q=<name>`, which ranks documents by how much
+they say that word. That is not the same question as "what is in this scope",
+and the second one does not need a ranking at all — the path is already the
+answer, and relevance ordering only hides the shape of the scope.
+
+- **`/browse`** — every document in a scope (`?owner=&repo=`) or an area
+  (`?area=`), grouped by PARA area and ordered by path. What one wants to know
+  about a scope is "two projects, nineteen resources", and a ranked page never
+  says that. The scope view offers "search inside this scope" for the other
+  question; browsing and asking are different acts and now have different pages.
+- **`/usage` is in the header.** Its only door was one link at the tail of the
+  footer's statistics line, which is where a page goes to not be found.
+  `/changes` deliberately stays out of the nav: the home page's "Recent changes
+  · see all →" is already that door, and two doors to one room are each read
+  half as often.
+
+`/browse` is not logged as a call. Paging through a list is not a question, and
+counting it as one would blur the numbers `/usage` exists to show — the tier-1
+hit rate above all.
+
+Server-only. The client binary is unchanged; a store is updated by redeploying
+it (`server/setup.sh`, or compose up --build against this tree).
+
 ## [Unreleased]
 
 

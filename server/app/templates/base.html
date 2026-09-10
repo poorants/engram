@@ -66,6 +66,15 @@ footer code{background:var(--code);padding:1px 5px;border-radius:4px}
 .prose blockquote{margin:0 0 14px;padding:2px 0 2px 14px;border-left:3px solid var(--line);color:var(--muted)}
 .prose li{margin:3px 0}
 .cols{display:grid;grid-template-columns:1fr;gap:10px}
+
+/* Header nav. The only way to /usage was one link at the tail of the footer's
+   statistics line, which is where a page goes to not be found. /changes is
+   deliberately not here: the home page's "Recent changes · see all →" is
+   already that door, and two doors to one room are each read half as often. */
+.nav{display:flex;gap:14px;white-space:nowrap;font-size:13px}
+.nav a{color:var(--muted)}
+.nav a:hover{color:var(--accent)}
+.nav a[aria-current=page]{color:var(--fg);font-weight:600}
 </style>
 </head>
 <body>
@@ -75,6 +84,9 @@ footer code{background:var(--code);padding:1px 5px;border-radius:4px}
     <input type="search" name="q" value="{{ q|default('') }}" placeholder="Search the brain — ask a whole question, not keywords" autofocus>
     <button type="submit">Search</button>
   </form>
+  <nav class="nav">
+    <a href="/usage" {% if nav|default('') == 'usage' %}aria-current="page"{% endif %}>usage</a>
+  </nav>
 </div></header>
 <main class="wrap">{% block body %}{% endblock %}</main>
 <footer class="wrap">
@@ -82,6 +94,5 @@ footer code{background:var(--code);padding:1px 5px;border-radius:4px}
   {% if meta.get('broken_links','0') != '0' %}· {{ meta.broken_links }} broken links{% endif %}
   {% if meta.get('updated_at') %}· last write {{ meta.updated_at[:16] }}{% endif %}
   · agents hit the same ranking at <code>/api/search?q=</code>
-  · <a href="/usage">usage</a>
 </footer>
 </body></html>

@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}{{ scope }} — engram{% endblock %}
+{% block body %}
+<h1>{{ scope }}</h1>
+<p class="meta">{{ total }} documents · by path
+  {% if repo %}· <a href="/search?q={{ repo }}&only_repo={{ repo }}">search inside this scope</a>{% endif %}
+  {% if area and repo %}· <a href="/browse?owner={{ owner }}&repo={{ repo }}">the whole scope</a>{% endif %}</p>
+
+{% for area_name, docs in grouped %}
+<h2>{{ area_name }} · {{ docs|length }}</h2>
+{% for d in docs %}
+<a class="card" href="/doc/{{ d.path }}" style="display:block;padding:9px 14px">
+  <strong>{{ d.title }}</strong>{% if d.updated %} <span class="meta">· {{ d.updated }}</span>{% endif %}
+  <div class="crumb">{{ d.path }}</div>
+</a>
+{% endfor %}
+{% endfor %}
+
+{% if not grouped %}
+<div class="empty">Nothing here.</div>
+{% endif %}
+{% endblock %}
