@@ -8,6 +8,9 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+
+## [0.10.0] — 2026-09-11
+
 ### Added — an activity dashboard, and the ledger moves to a tab
 
 `/usage` answered one question: what did each session cost. It could not answer
@@ -505,7 +508,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.9.1...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.10.0...HEAD
+[0.10.0]: https://github.com/poorants/engram/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/poorants/engram/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/poorants/engram/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/poorants/engram/compare/v0.7.0...v0.8.0
