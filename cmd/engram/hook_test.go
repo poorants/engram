@@ -312,3 +312,57 @@ func TestCaptureDisableAlsoSilencesSessionStart(t *testing.T) {
 		t.Fatalf("disable must silence SessionStart too; got %q (exit %d)", stdout, code)
 	}
 }
+
+// The case the first SessionStart test missed. A store is designated per
+// MACHINE, so it resolves in a directory that is no repo at all — a home
+// folder, a downloads folder — and the earlier test only proved silence when
+// there was no store configured anywhere, which is not how anyone runs this.
+// Left unguarded, every session on the machine opened with "This repo is
+// connected to …(?/Downloads)": a repo that does not exist, and a scope
+// invented from the folder's name.
+func TestUnscopedDirectoryNeitherClaimsARepoNorInventsAScope(t *testing.T) {
+	storeSettings(t) // a store, designated the way a real machine has one
+	outside := t.TempDir()
+	stdout, code := runHook(t, payload(t, map[string]any{
+		"hook_event_name": "SessionStart",
+		"cwd":             outside,
+	}))
+	if code != exitOK {
+		t.Fatalf("exit = %d — a hook must never fail a session", code)
+	}
+	var out struct {
+		HookSpecificOutput struct {
+			AdditionalContext string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("stdout is not the hook protocol: %v (%q)", err, stdout)
+	}
+	ctx := out.HookSpecificOutput.AdditionalContext
+	if strings.Contains(ctx, "This repo is connected") {
+		t.Errorf("claimed a repo outside one: %q", ctx)
+	}
+	if strings.Contains(ctx, "?/") || strings.Contains(ctx, filepath.Base(outside)) {
+		t.Errorf("invented a scope from the folder name: %q", ctx)
+	}
+	// The brain is still reachable from here, so it is still announced.
+	if !strings.Contains(ctx, "in reach from here") || !strings.Contains(ctx, "brain_search") {
+		t.Errorf("the brain must still be announced outside a repo: %q", ctx)
+	}
+}
+
+// The capture half shares the opening clause, so it inherits the same fix.
+func TestCaptureOutsideARepoAlsoClaimsNoRepo(t *testing.T) {
+	storeSettings(t)
+	stdout, code := runHook(t, payload(t, map[string]any{
+		"hook_event_name": "UserPromptSubmit",
+		"prompt":          "오늘 고생했어, 이만 마무리하자",
+		"cwd":             t.TempDir(),
+	}))
+	if code != exitOK {
+		t.Fatalf("exit = %d", code)
+	}
+	if strings.Contains(stdout, "This repo is connected") || strings.Contains(stdout, "?/") {
+		t.Errorf("capture claimed a repo outside one: %q", stdout)
+	}
+}

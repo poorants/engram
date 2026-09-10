@@ -81,6 +81,12 @@ type hookInput struct {
 type brainInfo struct {
 	display string
 	store   bool
+	// scoped says the cwd resolved to a real repo with a real owner/repo pair.
+	// A designated store is reachable from anywhere on the machine, so Resolve
+	// answers SourceStore in a directory that is no repo at all — and then the
+	// owner is unknown and the "repo" is just the folder's name. Saying "this
+	// repo" there is false, and naming a scope like `?/Downloads` invents one.
+	scoped bool
 }
 
 // describeBrain answers what feeds this directory, or nil when nothing does.
@@ -100,14 +106,13 @@ func describeBrain(cwd string) *brainInfo {
 			}
 			return nil
 		}
-		owner, repo := r.Owner, r.Repo
-		if owner == "" {
-			owner = "?"
+		// A scope is only named when there is one to name. Outside a repo the
+		// store is still reachable and still worth searching, so the brain is
+		// reported — just without a coordinate it does not have.
+		if r.RepoRoot == "" || r.Owner == "" || r.Repo == "" {
+			return &brainInfo{display: "the shared store " + r.Store, store: true}
 		}
-		if repo == "" {
-			repo = "?"
-		}
-		return &brainInfo{display: "the shared store " + r.Store + " (" + owner + "/" + repo + ")", store: true}
+		return &brainInfo{display: "the shared store " + r.Store + " (" + r.Owner + "/" + r.Repo + ")", store: true, scoped: true}
 	case workspace.SourceAbsorb, workspace.SourceShared, workspace.SourceLocal:
 		if r.Base == "" {
 			return nil
@@ -115,6 +120,24 @@ func describeBrain(cwd string) *brainInfo {
 		return &brainInfo{display: "the file brain at " + filepath.ToSlash(r.Base)}
 	}
 	return nil
+}
+
+// connected is the opening clause both injections share: what brain is in
+// reach, and whether it is this repo's.
+//
+// "This repo is connected to …" is only true where there IS a repo. A store is
+// designated per machine, not per checkout, so a session opened in a home
+// directory or a downloads folder resolves to the store as well — and saying
+// "this repo" there names something that does not exist, next to a scope
+// (`?/Downloads`) invented out of the folder's name. The brain is still worth
+// announcing in such a directory; it is the claim about a repo that has to go.
+func connected(info *brainInfo) string {
+	if info.scoped {
+		return "This repo is connected to an engram brain — " + info.display + "."
+	}
+	return "An engram brain is in reach from here — " + info.display +
+		". This directory is not a repo the brain has a scope for, so a document's " +
+		"owner and repo have to be given rather than derived."
 }
 
 // recallInstruction is the READ half of the loop, injected once at SessionStart.
@@ -147,8 +170,8 @@ func recallInstruction(info *brainInfo) string {
 	if !info.store {
 		where = "`engram lint` and the PARA folders"
 	}
-	return "[engram — brain available] This repo is connected to an engram brain — " +
-		info.display + ". It holds what the code and the git history do not: design " +
+	return "[engram — brain available] " + connected(info) +
+		" It holds what the code and the git history do not: design " +
 		"decisions and why they went that way, conventions, traps someone already hit, " +
 		"runbooks, and the state of ongoing work.\n\n" +
 		"So when a question is about knowledge rather than code — what this project is " +
@@ -186,7 +209,7 @@ func captureInstruction(info *brainInfo, wrapup bool) string {
 			"weave links into the prose, update that folder's MOC (README.md), and run `engram lint` " +
 			"to check integrity. "
 	}
-	body := "This repo is connected to an engram brain — " + info.display + ". Look back over this " +
+	body := connected(info) + " Look back over this " +
 		"session and judge whether anything worth keeping came out of it: a concept that got " +
 		"pinned down, a design decision, a research conclusion, a trap or constraint someone " +
 		"will hit again. " + record +

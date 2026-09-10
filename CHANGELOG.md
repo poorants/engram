@@ -9,6 +9,31 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 ## [Unreleased]
 
 
+## [0.9.1] — 2026-09-11
+
+### Fixed — the recall injection no longer claims a repo it is not in
+
+A store is designated per **machine**, not per checkout, so `workspace.Resolve`
+answers `SourceStore` in a directory that is no repo at all. The injection then
+opened with "This repo is connected to an engram brain" in a home or downloads
+folder, and named a scope invented out of the folder's name: `?/Downloads`,
+`?/kimdh`, `?/Windows`.
+
+The bug was in `describeBrain`, which filled an empty owner or repo with `"?"`,
+and it predates 0.9.0 — but capture only fires on a wrap-up phrase, so it was
+nearly invisible. `SessionStart` fires in **every** session in **every**
+directory, which is what surfaced it.
+
+Outside a repo the brain is still announced, because a networked store really is
+reachable from anywhere and still worth searching. What is dropped is the claim
+about a repo and the coordinate that does not exist; the injection says instead
+that an owner and repo have to be given rather than derived.
+
+The 0.9.0 test missed this by clearing `ENGRAM_STORE_URL` — proving silence when
+no store is configured anywhere, which is not how anyone runs it. The regression
+test now designates a store the way a real machine has one and then leaves the
+repo.
+
 ## [0.9.0] — 2026-09-11
 
 ### Added — the brain announces itself at SessionStart
@@ -452,7 +477,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.9.0...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.9.1...HEAD
+[0.9.1]: https://github.com/poorants/engram/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/poorants/engram/compare/v0.8.0...v0.9.0
 [0.8.0]: https://github.com/poorants/engram/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/poorants/engram/compare/v0.6.0...v0.7.0
