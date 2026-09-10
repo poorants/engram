@@ -1061,11 +1061,24 @@ def browse_page(request: Request, owner: str = Query(""), repo: str = Query(""),
 
 @app.get("/usage", response_class=HTMLResponse)
 def usage_page(request: Request, days: int = Query(7, ge=1, le=365),
-               session: str = Query("")):
+               session: str = Query(""), tab: str = Query("activity")):
+    """Two tabs over one log. `activity` asks whether the brain is used at all
+    and where that is going; `sessions` is the ledger — what each session cost.
+
+    Naming a session pins the ledger, so it forces that tab: the link that got
+    the reader here is a row in it, and answering with a chart of every session
+    would be answering a question they did not ask.
+    """
+    if tab not in ("activity", "sessions"):
+        tab = "activity"
+    if session:
+        tab = "sessions"
     with pool.connection() as conn:
         rep = usage.report(conn, days=days, session=session or None)
+        act = usage.activity(conn) if tab == "activity" else {"empty": True}
     return templates.TemplateResponse(request, "usage.html",
-                                      {"nav": "usage", "u": rep, "days": days, "session": session,
+                                      {"nav": "usage", "u": rep, "act": act, "tab": tab,
+                                       "days": days, "session": session,
                                        "q": "", "meta": meta()})
 
 

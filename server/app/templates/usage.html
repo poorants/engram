@@ -1,6 +1,74 @@
 {% extends "base.html" %}
 {% block title %}usage — engram{% endblock %}
 {% block body %}
+
+{# Two questions, two tabs. "What did this session cost" and "is the brain
+   being used, and is that going up" want different shapes; one longer page
+   would make each of them harder to read. The tab is a query parameter
+   because this viewer has no JavaScript at all and gains nothing by starting
+   here — the ?days= links beside it already work this way. #}
+<nav class="tabs">
+  <a href="/usage?tab=activity&days={{ days }}" {% if tab == 'activity' %}aria-current="page"{% endif %}>Activity</a>
+  <a href="/usage?tab=sessions&days={{ days }}" {% if tab == 'sessions' %}aria-current="page"{% endif %}>Sessions</a>
+</nav>
+
+{% if tab == 'activity' %}
+{% set a = act %}
+{% if a.empty %}
+<div class="empty">No calls logged yet. This fills in as sessions use the brain.</div>
+{% else %}
+<p class="meta">Every call the store served, by the day it landed.
+  Tokens are an estimate (the bench's formula) — read the ratio, not the absolute.</p>
+
+{% set t = a.totals %}
+<div class="card">
+  <strong>{{ '{:,}'.format(t.calls) }} calls</strong> · <strong>{{ '{:,}'.format(t.tokens) }} tokens</strong>
+  · {{ t.searches }} searches · {{ t.writes }} writes
+  · active on <strong>{{ t.active_days }}</strong> of {{ a.days }} day{{ '' if a.days == 1 else 's' }} since {{ a.first }}
+  {% if t.busiest %}· busiest {{ t.busiest.bucket }} ({{ t.busiest.calls }} calls){% endif %}
+</div>
+
+<h2>By day</h2>
+<div class="card" style="overflow-x:auto">
+  <div class="cal">
+    <div class="cal-months" style="grid-template-columns:repeat({{ a.weeks|length }},13px)">
+      {% for m in a.months %}<span style="grid-column:{{ m.col + 1 }}">{{ m.label }}</span>{% endfor %}
+    </div>
+    <div class="cal-body">
+      <div class="cal-dows"><span></span><span>Mon</span><span></span><span>Wed</span><span></span><span>Fri</span><span></span></div>
+      <div class="cal-grid" style="grid-template-columns:repeat({{ a.weeks|length }},13px)">
+        {% for col in a.weeks %}{% for c in col %}
+          <i class="d{{ c.level }}{% if c.future %} fut{% endif %}"
+             title="{{ c.date }} — {{ c.calls }} call{{ '' if c.calls == 1 else 's' }}{% if c.tokens %}, {{ '{:,}'.format(c.tokens) }} tokens{% endif %}"></i>
+        {% endfor %}{% endfor %}
+      </div>
+    </div>
+    <div class="cal-key meta">Less <i class="d0"></i><i class="d1"></i><i class="d2"></i><i class="d3"></i><i class="d4"></i> More
+      <span style="margin-left:8px">· shades cut at quartiles of the days that had calls ({{ a.cuts|join(' · ') }})</span></div>
+  </div>
+</div>
+
+{% for series, heading, note in ((a.weekly, 'By week', 'Week beginning.'), (a.monthly, 'By month', 'Month beginning.')) %}
+{% if series %}
+<h2>{{ heading }}</h2>
+<div class="card">
+  <div class="meta" style="margin-bottom:10px">{{ note }} Bars are calls; the number beside each is tokens.</div>
+  {% set top = series|map(attribute='calls')|max %}
+  {% for r in series|reverse %}
+  <div class="bar-row">
+    <span class="bar-label meta">{{ r.bucket }}</span>
+    <span class="bar-track"><span class="bar-fill" style="width:{{ (100 * r.calls / top)|round(1) }}%"></span></span>
+    <span class="bar-num">{{ r.calls }}</span>
+    <span class="bar-num meta">{{ '{:,}'.format(r.tokens) }}</span>
+    <span class="bar-num meta">{{ r.sessions }}s</span>
+  </div>
+  {% endfor %}
+</div>
+{% endif %}
+{% endfor %}
+{% endif %}
+
+{% else %}
 <p class="meta">What sessions cost the brain over the last
   {% for d in (1, 7, 30, 90) %}{% if d == days %}<strong>{{ d }}</strong>{% else %}<a href="/usage?days={{ d }}">{{ d }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %} days.
   Tokens are an estimate (the bench's formula); the ratio between sessions is what to read.
@@ -50,5 +118,6 @@
   <div style="padding:4px 0"><a href="/search?q={{ r.q|urlencode }}">{{ r.q }}</a> <span class="meta">· {{ r.sessions }} sessions · {{ r.times }} times</span></div>
   {% endfor %}
 </div>
+{% endif %}
 {% endif %}
 {% endblock %}

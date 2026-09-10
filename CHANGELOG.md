@@ -8,6 +8,34 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Added — an activity dashboard, and the ledger moves to a tab
+
+`/usage` answered one question: what did each session cost. It could not answer
+the other one anybody asks of a log — *is this being used at all, and is that
+going up or down* — and the two want different shapes, which is why they are
+now two tabs rather than one longer page.
+
+- **Activity (the new default)** — every call by the day it landed. A
+  contribution grid for days, bars for weeks and months. The grid is right for
+  a daily series because the only thing worth reading off one is whether the
+  habit held; the week and month views are bars because there the question IS
+  the magnitude and its direction, which a grid cannot show.
+- **Sessions** — the ledger, unchanged. Naming a session forces this tab: the
+  link that got the reader here is a row in it.
+
+**The grid sizes itself to the data** (`GRID_WEEKS_MIN`..`MAX`, 12–53 weeks).
+A fixed 52-week grid on a store that started three days ago is 361 empty cells
+and 3 filled ones, which reads as a broken page rather than a young one. The
+window runs from the first call to today, with a floor so the grid keeps a
+recognisable shape and a ceiling of a year.
+
+The four shades are cut at **quartiles of the days that had calls**, not of all
+days. Cutting on all days puts every real day in the top bucket while the store
+is young, because the median of mostly-zero is zero. The shades are steps of
+the viewer's accent, so the grid stays engram's colour in both themes.
+
+Server-only; the client binary is unchanged. No schema change — `calls` already
+carries `created_at` and its index.
 
 ## [0.9.1] — 2026-09-11
 
