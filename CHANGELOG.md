@@ -8,6 +8,40 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Added — the brain announces itself at SessionStart
+
+The loop was only half hooked. Capture had a trigger because it has an obvious
+moment — the end of a session, while what was learned is still in reach — and
+recall was left to the MCP server's standing instructions, which are correct
+and **passive**: read once at registration, competing with everything else in
+context by the time a question actually arrives.
+
+Recall has a moment too, and it is the opening one. "Where did we get to",
+"what did we decide and why", "how is this usually done here" cluster in the
+first turns of a session — exactly when the working tree is the tempting place
+to look and the brain is the place that answers.
+
+- **`SessionStart` now injects the recall rule**: a knowledge question goes to
+  `brain_search` before it goes to grep. Once per session.
+- **It fetches nothing.** No store call, no document list, no count. The
+  session-start path is walked by every session, so a network call there is
+  paid by every session and, on a machine that cannot reach the store, paid as
+  a timeout — the same constraint the update check lives under.
+- **It is a condition, not a command.** The injection says so in its last line.
+  A hook that ordered a search would spend a call on every session that had no
+  question, and only the model can tell a knowledge question from a code one.
+
+`ENGRAM_CAPTURE_DISABLE=1` silences it along with the rest, and a directory
+with no brain gets nothing.
+
+**This one needs a plugin update, not just a binary update.** The hook is
+registered in `.claude-plugin/marketplace.json`, so a machine that only
+replaces `engram` keeps the old two hooks — the drift 0.6.0 warned about:
+
+```
+claude plugin marketplace update engram
+claude plugin update engram@engram    # applies after a Claude Code restart
+```
 
 ## [0.8.0] — 2026-09-11
 
