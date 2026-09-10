@@ -13,17 +13,27 @@ import (
 	"github.com/poorants/engram/pkg/workspace"
 )
 
-// The capture-loop hook: wrap-up detection on UserPromptSubmit, plus a throttled
-// Stop backstop. It nudges the model to look back over the session and capture
-// durable new concepts, decisions and traps into the brain.
+// The brain-loop hook. Both halves of the loop have a moment, and each gets the
+// hook that fits it: a recall rule at SessionStart, then wrap-up detection on
+// UserPromptSubmit with a throttled Stop backstop.
 //
-// **The hooks are not the engine.** Three layers, and only the first one does
+// The read half was the one missing. Capture was nudged because it has an
+// obvious moment — the end, while what was learned is still in reach — and
+// recall was left to the MCP server's standing instructions, which are correct
+// and passive. But recall has a moment too, and it is the opening one: the
+// questions the brain answers best cluster in the first turns.
+//
+// **The hooks are not the engine.** Four layers, and only the first one does
 // the judging:
 //
 //   - Engine (primary): the model saves things as they crystallize, during the
-//     work. A hook cannot judge what is worth keeping; it can only fire the
-//     reflection at the right moment.
-//   - Primary trigger — UserPromptSubmit: when the user's message looks like the
+//     work, and searches when it has a question. A hook cannot judge what is
+//     worth keeping, or what a question really wants; it can only put the right
+//     thing in front of the model at the right moment.
+//   - Read trigger — SessionStart: inject the rule that a knowledge question
+//     goes to the brain before it goes to grep. Once per session, and it
+//     fetches nothing — see recallInstruction.
+//   - Write trigger — UserPromptSubmit: when the user's message looks like the
 //     end of a session, inject a reflect-and-save instruction. It fires at the
 //     natural closing moment, before the last ideas are gone.
 //   - Backstop — Stop: a time-throttled nudge for long sessions that never got a
@@ -105,6 +115,49 @@ func describeBrain(cwd string) *brainInfo {
 		return &brainInfo{display: "the file brain at " + filepath.ToSlash(r.Base)}
 	}
 	return nil
+}
+
+// recallInstruction is the READ half of the loop, injected once at SessionStart.
+//
+// The write half had a trigger and the read half did not. Capture is nudged by
+// hooks because it has a moment — the end of a session, when what was learned
+// is still in reach. Recall was left to the MCP server's standing instructions,
+// which are correct and passive: they are read once at registration and compete
+// with everything else in context by the time a question actually arrives.
+//
+// Recall has a moment too, and it is the opening one. "Where did we get to",
+// "what did we decide", "why is it done this way" cluster in the first turns of
+// a session — exactly when the working tree is the tempting place to look and
+// the brain is the place that answers. So the rule is put in front of the model
+// before the first question, not after.
+//
+// It is a CONDITION, not a command: no search is performed here, and none is
+// asked for. A hook that ordered a search on every session would spend a store
+// call on sessions that had no question — and the model, not the hook, is the
+// only thing that can tell a knowledge question from a code one.
+//
+// **Nothing is fetched.** The store is not called, no document is listed, no
+// count is taken. That is the same constraint the update check lives under
+// (pkg/selfupdate/selfupdate.go): the session-start path is walked by every
+// session, so a network call there is paid by every session, and on a machine
+// that cannot reach the store it is paid as a timeout. What the brain holds is
+// searched when there is a question; what the hook injects is only the rule.
+func recallInstruction(info *brainInfo) string {
+	where := "`brain_search` (or `engram search`)"
+	if !info.store {
+		where = "`engram lint` and the PARA folders"
+	}
+	return "[engram — brain available] This repo is connected to an engram brain — " +
+		info.display + ". It holds what the code and the git history do not: design " +
+		"decisions and why they went that way, conventions, traps someone already hit, " +
+		"runbooks, and the state of ongoing work.\n\n" +
+		"So when a question is about knowledge rather than code — what this project is " +
+		"for, where the work got to, what was decided and why, how something is usually " +
+		"done here, whether this trap has been hit before — search the brain with " +
+		where + " BEFORE grepping the working tree. It answers at a fraction of the " +
+		"cost of a file sweep, and a repo's tree cannot answer 'why' at all.\n\n" +
+		"This is background, not an instruction to act on now. Nothing needs searching " +
+		"until there is a question that wants it."
 }
 
 func captureInstruction(info *brainInfo, wrapup bool) string {
@@ -232,6 +285,12 @@ func cmdHook(args []string) int {
 	}
 
 	switch in.HookEventName {
+	case "SessionStart":
+		emitHook(map[string]any{"hookSpecificOutput": map[string]any{
+			"hookEventName":     "SessionStart",
+			"additionalContext": recallInstruction(info),
+		}})
+
 	case "UserPromptSubmit":
 		prompt := strings.ToLower(in.Prompt)
 		phrases := wrapUpPhrases

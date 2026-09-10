@@ -241,3 +241,74 @@ func TestCountsRenderFromBothIntAndFloat(t *testing.T) {
 		}
 	}
 }
+
+// SessionStart is the read half of the loop. It must fire unconditionally —
+// there is no prompt to match yet, and that is the point — and it must stay
+// offline: the session-start path is walked by every session, so a store call
+// here is paid by every session and, on a machine that cannot reach the store,
+// paid as a timeout. The test pins the shape and the wording that carries the
+// condition, because an injection that reads as "search now" would spend a call
+// on every session that had no question.
+func TestSessionStartInjectsTheRecallRule(t *testing.T) {
+	repo := storeSettings(t)
+	stdout, code := runHook(t, payload(t, map[string]any{
+		"hook_event_name": "SessionStart",
+		"cwd":             repo,
+	}))
+	if code != exitOK {
+		t.Fatalf("exit = %d — a hook must never fail a session", code)
+	}
+	var out struct {
+		HookSpecificOutput struct {
+			HookEventName     string `json:"hookEventName"`
+			AdditionalContext string `json:"additionalContext"`
+		} `json:"hookSpecificOutput"`
+	}
+	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
+		t.Fatalf("stdout is not the hook protocol: %v (%q)", err, stdout)
+	}
+	if out.HookSpecificOutput.HookEventName != "SessionStart" {
+		t.Errorf("hookEventName = %q", out.HookSpecificOutput.HookEventName)
+	}
+	ctx := out.HookSpecificOutput.AdditionalContext
+	for _, want := range []string{"brain available", "brain_search", "BEFORE grepping"} {
+		if !strings.Contains(ctx, want) {
+			t.Errorf("recall rule is missing %q: %q", want, ctx)
+		}
+	}
+	// The rule is a condition, not an order. If this sentence goes, a session
+	// with nothing to ask still opens with a search.
+	if !strings.Contains(ctx, "background, not an instruction to act on now") {
+		t.Errorf("the injection must frame itself as background: %q", ctx)
+	}
+}
+
+// A directory with no brain gets nothing at SessionStart either. The recall
+// rule names a store; injected where none is designated, it would point the
+// model at a tool that answers with an error.
+func TestSessionStartIsSilentWithoutABrain(t *testing.T) {
+	t.Setenv("ENGRAM_CONFIG_DIR", t.TempDir())
+	t.Setenv("ENGRAM_STORE_URL", "")
+	t.Setenv("ENGRAM_CAPTURE_DISABLE", "")
+	stdout, code := runHook(t, payload(t, map[string]any{
+		"hook_event_name": "SessionStart",
+		"cwd":             t.TempDir(),
+	}))
+	if code != exitOK || stdout != "" {
+		t.Fatalf("no brain must mean no injection; got %q (exit %d)", stdout, code)
+	}
+}
+
+// ENGRAM_CAPTURE_DISABLE=1 is documented as turning the hooks off entirely.
+// SessionStart is a hook, so "entirely" has to include it.
+func TestCaptureDisableAlsoSilencesSessionStart(t *testing.T) {
+	repo := storeSettings(t)
+	t.Setenv("ENGRAM_CAPTURE_DISABLE", "1")
+	stdout, code := runHook(t, payload(t, map[string]any{
+		"hook_event_name": "SessionStart",
+		"cwd":             repo,
+	}))
+	if code != exitOK || stdout != "" {
+		t.Fatalf("disable must silence SessionStart too; got %q (exit %d)", stdout, code)
+	}
+}

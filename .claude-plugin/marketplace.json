@@ -16,6 +16,16 @@
       "strict": false,
       "skills": ["./skills/engram"],
       "hooks": {
+        "SessionStart": [
+          {
+            "hooks": [
+              {
+                "type": "command",
+                "command": "engram hook"
+              }
+            ]
+          }
+        ],
         "UserPromptSubmit": [
           {
             "hooks": [
