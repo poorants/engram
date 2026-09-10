@@ -119,3 +119,126 @@ def report(conn: psycopg.Connection, days: int = 7, session: str | None = None,
         "tier1_hit_rate": round(1 - esc / t1, 3) if t1 else None,
     }
     return {"days": days, "sessions": rows, "totals": totals, "repeated": repeated}
+
+
+# -- activity ------------------------------------------------------------------
+# The ledger above answers "what did THIS session cost". This answers a
+# different question — "is the brain being used at all, and is that going up or
+# down" — and the two want different shapes, which is why they are different
+# tabs rather than one longer page.
+#
+# The day view is a contribution grid, because the only thing worth reading off
+# a daily series is whether the habit held; a bar chart of 300 days answers that
+# worse and costs more pixels. The week and month views are bars, because there
+# the question IS the magnitude and its direction, and a grid cannot show either.
+#
+# **The grid sizes itself to the data.** A fixed 52-week grid on a store that
+# started three days ago is 361 empty cells and 3 filled ones, which reads as a
+# broken page rather than a young one. So the window runs from the first call
+# to today, with a floor (a grid needs a recognisable shape) and a ceiling (a
+# year is as far back as this question is ever asked).
+
+GRID_WEEKS_MIN = 12
+GRID_WEEKS_MAX = 53
+
+
+def _bucket_rows(conn: psycopg.Connection, unit: str, since_days: int) -> list[dict]:
+    """calls grouped into one time unit. `unit` is trusted — it is never user
+    input, only the three literals below."""
+    with conn.cursor() as cur:
+        cur.execute(f"""
+            SELECT date_trunc('{unit}', created_at)::date AS b,
+                   count(*), coalesce(sum(tokens), 0),
+                   count(DISTINCT session) FILTER (WHERE session <> ''),
+                   count(*) FILTER (WHERE tool = 'search'),
+                   count(*) FILTER (WHERE tool IN ('put', 'patch', 'move'))
+            FROM calls
+            WHERE created_at >= now() - make_interval(days => %s)
+            GROUP BY 1 ORDER BY 1""", (since_days,))
+        return [{"bucket": r[0], "calls": int(r[1]), "tokens": int(r[2]),
+                 "sessions": int(r[3]), "searches": int(r[4]), "writes": int(r[5])}
+                for r in cur.fetchall()]
+
+
+def _levels(values: list[int]) -> list[int]:
+    """GitHub's four shades, cut at quartiles of the NON-EMPTY days.
+
+    Cutting on all days would put every real day in the top bucket while the
+    store is young, since the median of mostly-zero is zero. Quartiles of the
+    days that happened describe the days that happened.
+    """
+    live = sorted(v for v in values if v > 0)
+    if not live:
+        return [0, 0, 0]
+    q = lambda p: live[min(len(live) - 1, int(len(live) * p))]  # noqa: E731
+    return [max(1, q(0.25)), max(2, q(0.50)), max(3, q(0.75))]
+
+
+def activity(conn: psycopg.Connection) -> dict:
+    """The day grid, plus weekly and monthly bars."""
+    import datetime as _dt
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT min(created_at)::date, max(created_at)::date FROM calls")
+        first, last = cur.fetchone()
+    today = _dt.date.today()
+    if first is None:
+        return {"empty": True, "weeks": [], "weekly": [], "monthly": [],
+                "cuts": [0, 0, 0], "first": None, "days": 0, "totals": {}}
+
+    # The grid ends on the Saturday of this week so the last column is whole,
+    # and starts on a Sunday — the column is a week, and a week that begins
+    # mid-column is not one.
+    end = today + _dt.timedelta(days=6 - ((today.weekday() + 1) % 7))
+    span_weeks = ((end - first).days // 7) + 1
+    weeks = max(GRID_WEEKS_MIN, min(GRID_WEEKS_MAX, span_weeks))
+    start = end - _dt.timedelta(days=weeks * 7 - 1)
+
+    daily = {r["bucket"]: r for r in _bucket_rows(conn, "day", (today - start).days + 1)}
+    cuts = _levels([r["calls"] for r in daily.values()])
+
+    grid = []
+    d = start
+    while d <= end:
+        col = []
+        for _ in range(7):
+            row = daily.get(d)
+            n = row["calls"] if row else 0
+            lvl = 0 if not n else (1 if n <= cuts[0] else 2 if n <= cuts[1] else 3 if n <= cuts[2] else 4)
+            col.append({"date": d, "calls": n, "tokens": row["tokens"] if row else 0,
+                        "level": lvl, "future": d > today})
+            d += _dt.timedelta(days=1)
+        grid.append(col)
+
+    since = (today - first).days + 1
+    weekly = _bucket_rows(conn, "week", min(since, 370))
+    monthly = _bucket_rows(conn, "month", min(since, 370))
+    tot = {
+        "calls": sum(r["calls"] for r in daily.values()),
+        "tokens": sum(r["tokens"] for r in daily.values()),
+        "searches": sum(r["searches"] for r in daily.values()),
+        "writes": sum(r["writes"] for r in daily.values()),
+        "active_days": len([1 for r in daily.values() if r["calls"]]),
+        "busiest": max(daily.values(), key=lambda r: r["calls"]) if daily else None,
+    }
+    return {"empty": False, "weeks": grid, "weekly": weekly, "monthly": monthly,
+            "cuts": cuts, "first": first, "last": last, "days": since,
+            "months": _month_labels(grid), "totals": tot}
+
+
+def _month_labels(grid: list[list[dict]]) -> list[dict]:
+    """Where each month starts along the columns, for the strip above the grid.
+
+    A label is placed on the first column whose first day is in a new month,
+    and the very first column is skipped unless it happens to start one — a
+    label over a column that is mostly the previous month points at the wrong
+    place.
+    """
+    out, seen = [], None
+    for i, col in enumerate(grid):
+        m = col[0]["date"].strftime("%b")
+        if m != seen:
+            if seen is not None or col[0]["date"].day <= 7:
+                out.append({"col": i, "label": m})
+            seen = m
+    return out
