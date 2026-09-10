@@ -141,7 +141,7 @@ Full reference: [docs/cli.md](docs/cli.md).
 
 | | |
 |---|---|
-| [Installation](docs/install.md) | the two installers, every platform, upgrading, building from source |
+| [Installation](docs/install.md) | the two installers, every platform, upgrading, building from source, frozen builds for managed endpoints |
 | [Concepts](docs/concepts.md) | how a document is addressed, PARA areas, links, the scope boundary |
 | [CLI & MCP reference](docs/cli.md) | every verb, flag, and exit code |
 | [Self-hosting the store](server/README.md) | configuration, seeding, backups |

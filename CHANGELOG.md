@@ -8,6 +8,36 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Added — `-tags noupdate`, for a machine that will not tolerate a self-updating binary
+
+`engram update` downloads an executable, renames the running binary aside and
+runs what it just wrote. That is the whole feature, and it is also, step for
+step, what a dropper does. On a managed endpoint the behaviour scanner reaches
+the second conclusion: observed on AhnLab V3, **every newly spawned
+`engram.exe` was suspended at process creation, before the Go runtime started**
+(`Threads=1, CPU=0.00`). Already-running MCP servers kept serving, so the store
+still answered and documents still saved — only the capture hooks and every new
+process silently hung, which reads as anything but an antivirus.
+
+Turning the check off at runtime does not help: a scanner does not read
+environment variables, and the download-and-replace code is still in the file.
+
+- **`make build-frozen`** builds with `-tags noupdate`, which compiles out the
+  version check, the download and the swap (`pkg/selfupdate/apply.go`,
+  `cmd/engram/selfupdate_cmd.go`). The binary cannot rewrite itself because the
+  code to do it is not in it. `engram version` carries a `+noupdate` suffix.
+- **Call sites are unchanged.** The frozen `newUpdateChecker` returns
+  `Fetch: nil, Path: ""`, and the nil guards that were already in `engram mcp`
+  and `engram status` then make no network call and read no cache. No notice is
+  ever composed.
+- **`engram update` still exists** in a frozen build, and says that this build
+  cannot update itself and how to replace it from outside. Dropping the verb
+  would send the reader looking for a typo instead.
+
+Signing the release is the real fix for an unsigned binary; a frozen build is
+the one available to someone who cannot grant an allowlist entry on their own
+machine. `docs/install.md` has the procedure and the diagnosis; `CLAUDE.md` is
+new and tells a session to reach for this build on a work machine.
 
 ## [0.7.0] — 2026-09-10
 
