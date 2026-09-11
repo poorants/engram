@@ -9,6 +9,32 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 ## [Unreleased]
 
 
+## [0.10.4] — 2026-09-11
+
+### Fixed — three layout faults, measured with a browser rather than guessed
+
+Driving the page with CDP and reading the boxes turned up what eyeballing had
+missed. Each of these was a number, not an impression.
+
+- **The calendar card was 451px tall around 147px of content.** 0.10.2 gave the
+  tooltip headroom with `padding` and pulled it back with negative margins, so
+  the card started above the card before it and swallowed the `By week` heading
+  after it. The panel now escapes instead: `overflow` is visible, and the
+  `overflow-x:auto` that clipped it returns only under a narrow viewport, where
+  there is no hover to clip. A full year is 53 x 13px — it never needs to
+  scroll on a normal window.
+- **The weekday labels drifted 2px a row** and sat a whole cell low by Friday:
+  `.cal-dows` had 13px rows against the grid's 11px. Small enough to read as a
+  rendering quirk and wrong every time.
+- **The bar rows and the header both overflowed a phone.** The bars' fixed
+  widths came to 372px against ~318px of usable width at 390, and the header
+  ran to 492px in a 390px viewport — the whole page got a horizontal
+  scrollbar. The bars shrink below 560px and the search box drops to its own
+  line. (The header has been this way since the nav arrived in 0.7.0.)
+
+Verified at 1280 / 820 / 700 / 390px, and across the home, search, sessions and
+browse pages: no overflow, no overlapping siblings, no element outside the wrap.
+
 ## [0.10.3] — 2026-09-11
 
 ### Fixed — the sessionless bucket stopped pretending to be a session
@@ -569,7 +595,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.10.3...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.10.4...HEAD
+[0.10.4]: https://github.com/poorants/engram/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/poorants/engram/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/poorants/engram/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/poorants/engram/compare/v0.10.0...v0.10.1

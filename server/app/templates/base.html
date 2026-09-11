@@ -75,6 +75,14 @@ footer code{background:var(--code);padding:1px 5px;border-radius:4px}
 .nav a{color:var(--muted)}
 .nav a:hover{color:var(--accent)}
 .nav a[aria-current=page]{color:var(--fg);font-weight:600}
+/* One row does not hold brand + search + nav on a phone: at 390px the bar ran
+   to 492px and took the whole page's horizontal scrollbar with it. The search
+   box is the part that wants the width, so it drops to its own line and the
+   two short things share the first. */
+@media (max-width:560px){
+  .bar{flex-wrap:wrap;gap:10px}
+  form.search{order:3;flex-basis:100%}
+}
 
 /* Tabs inside a page. Two questions that want different shapes — see the
    comment at the top of usage.html. */
@@ -88,19 +96,25 @@ footer code{background:var(--code);padding:1px 5px;border-radius:4px}
    would crowd 11px rows into noise. The five shades are steps of the accent,
    so the grid stays the store's colour in either theme rather than borrowing
    GitHub's green. */
-/* The card scrolls horizontally, and overflow-x clips the vertical axis too, so
-   the panel has to open INSIDE the box — hence the headroom here rather than
-   letting it escape. A fixed 96px was not enough: a day with all four kinds of
-   call is about 140px tall, and the top rows had their date line cut off. The
-   panel now flips direction by row (below .cal-tip rules), so each side needs
-   room for one panel, not for a panel plus the grid. */
-.cal-card{overflow-x:auto;padding-top:150px;padding-bottom:150px;
-  margin-top:-136px;margin-bottom:-136px}
+/* The tooltip escapes the card rather than the card making room for it.
+   Reserving headroom with padding was the wrong trade: it made a 147px
+   calendar sit in a 451px box that started above the card before it and
+   swallowed the heading after it (measured, not guessed).
+   `overflow-x:auto` is what clipped the panel, and it is only needed when the
+   grid is wider than the page — a full year is 53 x 13px = 689px, so on a
+   normal window it never is. It comes back under a narrow viewport, where
+   there is no hover to clip anyway. */
+.cal-card{overflow:visible}
+@media (max-width:820px){ .cal-card{overflow-x:auto} }
 .cal{display:inline-block;min-width:100%}
 .cal-months{display:grid;gap:2px;font-size:10.5px;color:var(--muted);margin-left:30px;height:14px}
 .cal-body{display:flex;gap:4px}
-.cal-dows{display:grid;grid-template-rows:repeat(7,13px);gap:2px;width:26px;
-  font-size:9.5px;color:var(--muted);line-height:13px;text-align:right}
+/* The row pitch has to be the grid's, not a near-enough one. At 13px rows
+   against the grid's 11px the labels drifted 2px per row and sat a whole cell
+   low by Friday — small enough to look like a rendering quirk and wrong every
+   time. Keep these two numbers equal to .cal-grid's. */
+.cal-dows{display:grid;grid-template-rows:repeat(7,11px);gap:2px;width:26px;
+  font-size:9.5px;color:var(--muted);line-height:11px;text-align:right}
 .cal-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,11px);gap:2px}
 .cal-grid i{width:11px;height:11px;border-radius:2px;display:block;position:relative}
 
@@ -148,6 +162,15 @@ footer code{background:var(--code);padding:1px 5px;border-radius:4px}
 .bar-track{flex:1;background:var(--line);border-radius:3px;height:11px;min-width:60px}
 .bar-fill{display:block;background:var(--accent);border-radius:3px;height:11px}
 .bar-num{width:62px;flex:none;text-align:right;font-variant-numeric:tabular-nums}
+/* The fixed widths add up to more than a phone has: 86 + 60 + 3x62 + gaps is
+   372px against about 318px of usable width at 390, and the numbers were
+   pushed out of the wrap. Only the track can give, and it alone is not
+   enough, so the fixed parts shrink too. */
+@media (max-width:560px){
+  .bar-label{width:64px}
+  .bar-track{min-width:28px}
+  .bar-num{width:52px}
+}
 </style>
 </head>
 <body>
