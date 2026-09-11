@@ -128,7 +128,25 @@ def report(conn: psycopg.Connection, days: int = 7, session: str | None = None,
         "tier1": t1, "escalated": esc,
         "tier1_hit_rate": round(1 - esc / t1, 3) if t1 else None,
     }
-    return {"days": days, "sessions": rows, "totals": totals, "repeated": repeated}
+
+    # The sessionless bucket is not a session, and listing it as one is how it
+    # gets misread — it sorts in among the sessions, spans days rather than
+    # hours, and is usually the biggest row on the page.
+    #
+    # It is what calls that carried no X-Engram-Session land in: a bare CLI
+    # invocation (a terminal, a script, a hook) has no session because one
+    # invocation is not an editor session, and giving each its own id would
+    # make a hundred one-call "sessions" — worse, not better. A caller that
+    # DOES belong to a session can say so by exporting ENGRAM_SESSION, which
+    # both the CLI and the MCP server already honour (config.Brain()).
+    #
+    # So it is pulled out of the list and shown apart, under its own name.
+    # It stays inside `totals`: the calls are real usage.
+    loose = next((r for r in rows if not r["session"]), None)
+    rows = [r for r in rows if r["session"]]
+    totals["sessions"] = len(rows)
+    return {"days": days, "sessions": rows, "loose": loose,
+            "totals": totals, "repeated": repeated}
 
 
 # -- activity ------------------------------------------------------------------

@@ -9,6 +9,27 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 ## [Unreleased]
 
 
+## [0.10.3] — 2026-09-11
+
+### Fixed — the sessionless bucket stopped pretending to be a session
+
+`(no session)` sat in the ledger sorted among the sessions, and it read as one:
+usually the biggest row on the page, with a `from → to` spanning days rather
+than a sitting. It is not a session. It is where every call that arrived
+without an `X-Engram-Session` header lands, so it covers the whole window.
+
+- It is **pulled out of the list and shown last**, under a rule, named
+  `no session · CLI & hooks`, with a **date range** instead of a clock range.
+- A note under the table says what it is and how to avoid it: a caller that
+  does belong to a session can export `ENGRAM_SESSION`, which the CLI and the
+  MCP server already honour.
+- The session count in the summary no longer includes it; the calls and tokens
+  still do, because they are real usage.
+
+Nothing changed about how calls are attributed. A bare CLI run genuinely has no
+session — one invocation is not an editor session, and minting an id per call
+would turn a hundred calls into a hundred one-call sessions.
+
 ## [0.10.2] — 2026-09-11
 
 ### Fixed — the day tooltip was clipped by the card it opens in
@@ -548,7 +569,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.10.2...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.10.3...HEAD
+[0.10.3]: https://github.com/poorants/engram/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/poorants/engram/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/poorants/engram/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/poorants/engram/compare/v0.9.1...v0.10.0

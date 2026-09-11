@@ -94,7 +94,7 @@
   {% if t.searches and not t.votes %}· <span class="meta" title="Votes are how the ranking learns. None in this window means the nudge is not landing.">no votes at all</span>{% endif %}
 </div>
 
-{% if u.sessions %}
+{% if u.sessions or u.loose %}
 <div class="card" style="overflow-x:auto">
   <table style="width:100%;border-collapse:collapse;font-size:13.5px">
     <tr class="meta"><th style="text-align:left;padding:4px 8px">session</th><th style="text-align:left;padding:4px 8px">who</th><th style="text-align:left;padding:4px 8px">from → to</th>
@@ -114,10 +114,36 @@
       <td style="padding:5px 8px;text-align:right">{% if s.tier1 %}{{ '%.0f'|format(s.tier1_hit_rate * 100) }}%{% else %}—{% endif %}</td>
     </tr>
   {% endfor %}
+  {# The sessionless bucket, apart and last. It is not a session — see the
+     comment in usage.py — and sorted in among them it reads as the longest,
+     biggest one on the page rather than as a catch-all. #}
+  {% if u.loose %}
+    {% set l = u.loose %}
+    <tr style="border-top:2px solid var(--line)">
+      <td style="padding:5px 8px;white-space:nowrap" title="Calls that carried no X-Engram-Session header. A bare CLI run — a terminal, a script, a hook — has no session, because one invocation is not an editor session. Export ENGRAM_SESSION to group them.">no session <span class="meta">· CLI &amp; hooks</span></td>
+      <td style="padding:5px 8px" class="meta">{{ l.author or '—' }}</td>
+      <td style="padding:5px 8px;white-space:nowrap" class="meta">{{ l.first[:10] }} → {{ l.last[:10] }}</td>
+      <td style="padding:5px 8px;text-align:right">{{ l.calls }}</td>
+      <td style="padding:5px 8px;text-align:right"><strong>{{ '{:,}'.format(l.tokens) }}</strong></td>
+      {% for k, n in (("search", l.searches), ("read", l.reads), ("vote", l.votes), ("write", l.writes)) %}
+      <td style="padding:5px 8px;text-align:right">{{ n }}<br><span class="meta" style="font-size:11px">{{ "{:,}".format(l.tok[k]) if l.tok[k] else "—" }}</span></td>
+      {% endfor %}
+      <td style="padding:5px 8px;text-align:right">{% if l.tier1 %}{{ '%.0f'|format(l.tier1_hit_rate * 100) }}%{% else %}—{% endif %}</td>
+    </tr>
+  {% endif %}
   </table>
+  {% if u.loose %}
+  <div class="meta" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
+    <strong>no session</strong> is a bucket, not a session: every call that arrived without an
+    <code>X-Engram-Session</code> header lands in it, so it spans the whole window rather than one
+    sitting. A bare CLI run has none — one invocation is not an editor session, and minting an id
+    per call would make a hundred one-call sessions. A caller that does belong to a session can say
+    so by exporting <code>ENGRAM_SESSION</code>; the CLI and the MCP server both honour it.
+  </div>
+  {% endif %}
 </div>
 {% else %}
-<div class="empty">Nothing in this window. Calls are logged from the store's side; an older client shows up as <code>(no session)</code>.</div>
+<div class="empty">Nothing in this window. Calls are logged from the store's side.</div>
 {% endif %}
 
 {% if u.repeated %}
