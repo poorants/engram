@@ -29,7 +29,7 @@
 </div>
 
 <h2>By day</h2>
-<div class="card" style="overflow-x:auto">
+<div class="card cal-card">
   <div class="cal">
     <div class="cal-months" style="grid-template-columns:repeat({{ a.weeks|length }},13px)">
       {% for m in a.months %}<span style="grid-column:{{ m.col + 1 }}">{{ m.label }}</span>{% endfor %}

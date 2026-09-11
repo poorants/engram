@@ -88,9 +88,15 @@ footer code{background:var(--code);padding:1px 5px;border-radius:4px}
    would crowd 11px rows into noise. The five shades are steps of the accent,
    so the grid stays the store's colour in either theme rather than borrowing
    GitHub's green. */
-/* padding-top is the tooltip's headroom: the card scrolls horizontally, which
-   clips the vertical axis too, so the panel has to open inside the box. */
-.cal{display:inline-block;min-width:100%;padding-top:96px;margin-top:-96px}
+/* The card scrolls horizontally, and overflow-x clips the vertical axis too, so
+   the panel has to open INSIDE the box — hence the headroom here rather than
+   letting it escape. A fixed 96px was not enough: a day with all four kinds of
+   call is about 140px tall, and the top rows had their date line cut off. The
+   panel now flips direction by row (below .cal-tip rules), so each side needs
+   room for one panel, not for a panel plus the grid. */
+.cal-card{overflow-x:auto;padding-top:150px;padding-bottom:150px;
+  margin-top:-136px;margin-bottom:-136px}
+.cal{display:inline-block;min-width:100%}
 .cal-months{display:grid;gap:2px;font-size:10.5px;color:var(--muted);margin-left:30px;height:14px}
 .cal-body{display:flex;gap:4px}
 .cal-dows{display:grid;grid-template-rows:repeat(7,13px);gap:2px;width:26px;
@@ -106,10 +112,18 @@ footer code{background:var(--code);padding:1px 5px;border-radius:4px}
    headroom (padding-top) for the panel instead of letting it escape. */
 .cal-grid i .tip{display:none;position:absolute;bottom:calc(100% + 7px);left:50%;
   transform:translateX(-50%);z-index:4;width:max-content;max-width:230px;
+  /* overridden per row below */
   background:var(--panel);border:1px solid var(--line);border-radius:8px;
   padding:8px 10px;box-shadow:0 6px 20px rgba(0,0,0,.13);
   font-size:12px;line-height:1.55;color:var(--fg);text-align:left;font-style:normal}
 .cal-grid i:hover .tip{display:block}
+/* Flip by row. The grid flows column-major over 7 rows, so nth-child(7n+1..4)
+   are the top four weekdays: theirs open downward, the bottom three upward.
+   Without this a top-row cell needed the panel's height PLUS the grid's above
+   it, and the date line was the part that got cut. */
+.cal-grid i:nth-child(7n+1) .tip,.cal-grid i:nth-child(7n+2) .tip,
+.cal-grid i:nth-child(7n+3) .tip,.cal-grid i:nth-child(7n+4) .tip{
+  bottom:auto;top:calc(100% + 7px)}
 .cal-grid i .tip b{display:block;font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--muted);font-weight:600}
 .cal-grid i .tip em{display:block;font-style:normal;font-weight:600;margin-bottom:3px;white-space:nowrap}
 .cal-grid i .tip > span{display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--muted)}

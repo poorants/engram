@@ -9,6 +9,20 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 ## [Unreleased]
 
 
+## [0.10.2] — 2026-09-11
+
+### Fixed — the day tooltip was clipped by the card it opens in
+
+The hover panel always opened upward, and the calendar reserved a fixed 96px of
+headroom for it. A day with all four kinds of call is about 140px tall, so on
+the top rows the date line and the first split row were cut off — the panel had
+nowhere to go, because the card scrolls horizontally and `overflow-x` clips the
+vertical axis too.
+
+The panel now **flips by row**: the top four weekdays open downward, the bottom
+three upward. Each side then needs room for one panel rather than for a panel
+plus the grid above it, and the card reserves that on both edges.
+
 ## [0.10.1] — 2026-09-11
 
 ### Changed — the day cell says what the tokens went on, not just how many
@@ -534,7 +548,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.10.1...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.10.2...HEAD
+[0.10.2]: https://github.com/poorants/engram/compare/v0.10.1...v0.10.2
 [0.10.1]: https://github.com/poorants/engram/compare/v0.10.0...v0.10.1
 [0.10.0]: https://github.com/poorants/engram/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/poorants/engram/compare/v0.9.0...v0.9.1
