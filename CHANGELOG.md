@@ -9,6 +9,32 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 ## [Unreleased]
 
 
+## [0.10.5] — 2026-09-11
+
+### Fixed — a quiet day made its own tooltip transparent
+
+The four shades were `opacity` on the cell. Opacity applies to the element and
+everything inside it, and the tooltip is inside it — so the lightest day
+(`.d1`, `.28`) drew its panel at 28% and the calendar showed straight through
+the text. It also made every cell a stacking context, which floated the month
+labels over the panel.
+
+The shades are now **mixed colours** (`color-mix` toward the card's own
+background): the identical ramp, with the cell fully opaque. Measured after the
+change, the panel's cumulative effective opacity is 1.000 in both themes.
+
+### Changed — weeks and months read as a timeline
+
+- **The bars are gone.** One week of data is one bar at 100%, and with many
+  rows the day grid above already carries the shape. Three unlabelled number
+  columns made it worse — `17s` was a riddle. Each row is now a sentence with
+  its numbers named: *443 calls in 17 sessions · 786,223 tokens*.
+- **The day tooltip ends with a total line**, under a rule. The split says
+  where the day went; the total says how big it was, without the reader adding
+  four rows up.
+
+Verified in light and dark at 1280 and 390px.
+
 ## [0.10.4] — 2026-09-11
 
 ### Fixed — three layout faults, measured with a browser rather than guessed
@@ -595,7 +621,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.10.4...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.10.5...HEAD
+[0.10.5]: https://github.com/poorants/engram/compare/v0.10.4...v0.10.5
 [0.10.4]: https://github.com/poorants/engram/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/poorants/engram/compare/v0.10.2...v0.10.3
 [0.10.2]: https://github.com/poorants/engram/compare/v0.10.1...v0.10.2

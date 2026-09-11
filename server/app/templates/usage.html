@@ -43,10 +43,10 @@
             <span class="tip">
               <b>{{ c.date }}</b>
               {%- if c.calls %}
-              <em>{{ c.calls }} call{{ '' if c.calls == 1 else 's' }} · {{ '{:,}'.format(c.tokens) }} tokens</em>
               {%- for s in c.split %}
               <span><i class="sw {{ s.name }}"></i>{{ s.name }}<u>{{ s.calls }}</u><u>{{ '{:,}'.format(s.tokens) }}</u></span>
               {%- endfor %}
+              <span class="sum">total<u>{{ c.calls }}</u><u>{{ '{:,}'.format(c.tokens) }}</u></span>
               {%- else %}<em>no calls</em>{% endif %}
             </span>
             {%- endif %}
@@ -59,21 +59,26 @@
   </div>
 </div>
 
-{% for series, heading, note in ((a.weekly, 'By week', 'Week beginning.'), (a.monthly, 'By month', 'Month beginning.')) %}
+{# Weeks and months read as a timeline, not a chart.
+   The bars that were here said nothing: one week of data is one bar at 100%,
+   and even with many rows the day grid above already carries the shape. Three
+   unlabelled number columns made it worse — "17s" was a riddle. So each row is
+   a sentence with its numbers named, newest first. #}
+{% for series, heading, unit in ((a.weekly, 'By week', 'week'), (a.monthly, 'By month', 'month')) %}
 {% if series %}
 <h2>{{ heading }}</h2>
 <div class="card">
-  <div class="meta" style="margin-bottom:10px">{{ note }} Bars are calls; the number beside each is tokens.</div>
-  {% set top = series|map(attribute='calls')|max %}
+  <ul class="tl">
   {% for r in series|reverse %}
-  <div class="bar-row">
-    <span class="bar-label meta">{{ r.bucket }}</span>
-    <span class="bar-track"><span class="bar-fill" style="width:{{ (100 * r.calls / top)|round(1) }}%"></span></span>
-    <span class="bar-num">{{ r.calls }}</span>
-    <span class="bar-num meta">{{ '{:,}'.format(r.tokens) }}</span>
-    <span class="bar-num meta">{{ r.sessions }}s</span>
-  </div>
+    <li>
+      <span class="tl-when">{{ r.bucket }}</span>
+      <span class="tl-what">{{ '{:,}'.format(r.calls) }} call{{ '' if r.calls == 1 else 's' }}
+        {%- if r.sessions %} in {{ r.sessions }} session{{ '' if r.sessions == 1 else 's' }}{% endif %}</span>
+      <span class="tl-num meta">{{ '{:,}'.format(r.tokens) }} tokens</span>
+    </li>
   {% endfor %}
+  </ul>
+  <div class="meta" style="margin-top:6px">The {{ unit }} each row begins.</div>
 </div>
 {% endif %}
 {% endfor %}

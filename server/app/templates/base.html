@@ -147,29 +147,49 @@ footer code{background:var(--code);padding:1px 5px;border-radius:4px}
 /* Swatches tie each row of the split to the colour the rest of the page uses
    for that kind of call. */
 .sw{width:7px;height:7px;border-radius:2px;flex:none;background:var(--accent)}
-.sw.read{opacity:.72} .sw.vote{opacity:.48} .sw.write{opacity:1;background:var(--fg)}
+.sw.read{background:color-mix(in srgb, var(--accent) 72%, var(--panel))}
+.sw.vote{background:color-mix(in srgb, var(--accent) 45%, var(--panel))}
+.sw.write{background:var(--fg)}
+/* The totals line, under a rule: the split says where the day went, this says
+   how big the day was. Reading the rows and adding them up is work the panel
+   can do itself. */
+.cal-grid i .tip .sum{display:flex;align-items:center;gap:6px;white-space:nowrap;
+  margin-top:4px;padding-top:4px;border-top:1px solid var(--line);font-weight:600;color:var(--fg)}
+.cal-grid i .tip .sum u{margin-left:auto;text-decoration:none;font-variant-numeric:tabular-nums}
+.cal-grid i .tip .sum u:first-of-type{min-width:26px;text-align:right}
+.cal-grid i .tip .sum u:last-of-type{min-width:58px;text-align:right}
 .cal-key{margin-top:10px;display:flex;align-items:center;gap:3px;font-size:11.5px}
 .cal-key i{width:11px;height:11px;border-radius:2px;display:inline-block}
-.d0{background:var(--line)} .d1{background:var(--accent);opacity:.28}
-.d2{background:var(--accent);opacity:.5} .d3{background:var(--accent);opacity:.75}
+/* The shades are MIXED COLOURS, never opacity.
+   Opacity on the cell applies to the whole element including its children, and
+   the tooltip is one of them — so a quiet day (.d1, .28) rendered its panel at
+   28% and the text behind showed through. It also makes each cell a stacking
+   context, which floated the month labels over the panel. Mixing toward the
+   card's own background gives the identical ramp with the cell fully opaque. */
+.d0{background:var(--line)}
+.d1{background:color-mix(in srgb, var(--accent) 28%, var(--panel))}
+.d2{background:color-mix(in srgb, var(--accent) 52%, var(--panel))}
+.d3{background:color-mix(in srgb, var(--accent) 76%, var(--panel))}
 .d4{background:var(--accent)}
-.fut{opacity:0}
+.fut{background:transparent}
 
-/* Bars for the week and month views, where the question is magnitude and its
-   direction — which a grid cannot show. */
-.bar-row{display:flex;align-items:center;gap:10px;padding:2.5px 0;font-size:13px}
-.bar-label{width:86px;flex:none;font-variant-numeric:tabular-nums}
-.bar-track{flex:1;background:var(--line);border-radius:3px;height:11px;min-width:60px}
-.bar-fill{display:block;background:var(--accent);border-radius:3px;height:11px}
-.bar-num{width:62px;flex:none;text-align:right;font-variant-numeric:tabular-nums}
-/* The fixed widths add up to more than a phone has: 86 + 60 + 3x62 + gaps is
-   372px against about 318px of usable width at 390, and the numbers were
-   pushed out of the wrap. Only the track can give, and it alone is not
-   enough, so the fixed parts shrink too. */
+/* The week and month views: a timeline, not a chart. A rule down the left with
+   a node per row, the way an activity feed reads. Bars were here and earned
+   nothing — one week of data is one bar at 100%, and the day grid above
+   already carries the shape when there are many rows. */
+.tl{list-style:none;margin:0;padding:0 0 0 18px;border-left:1px solid var(--line)}
+.tl li{position:relative;display:flex;align-items:baseline;gap:10px;padding:5px 0;font-size:13.5px}
+.tl li::before{content:"";position:absolute;left:-23px;top:12px;width:7px;height:7px;
+  border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--panel)}
+.tl-when{width:88px;flex:none;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px}
+.tl-what{flex:1;min-width:0}
+.tl-num{flex:none;font-variant-numeric:tabular-nums}
+/* A phone has no room for the date column beside the sentence, so it goes
+   above it and the numbers keep the line they are on. */
 @media (max-width:560px){
-  .bar-label{width:64px}
-  .bar-track{min-width:28px}
-  .bar-num{width:52px}
+  .tl li{flex-wrap:wrap;gap:2px 10px}
+  .tl-when{width:100%}
+  .tl-what{flex:1 1 auto}
 }
 </style>
 </head>
