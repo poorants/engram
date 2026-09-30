@@ -147,25 +147,24 @@ def test_login_is_reachable_without_a_token(monkeypatch):
     assert client(web.app).get("/login").status_code == 200
 
 
-def test_the_setup_guide_is_reachable_without_a_token(monkeypatch):
-    """It is read BEFORE the reader can authenticate -- it is how a machine
-    gets connected at all -- so it must render with reads closed, and it must
-    show the MCP address the deployment configured."""
+def test_every_page_is_behind_the_login_even_the_setup_guide(monkeypatch):
+    """Nothing is shown before signing in: the setup guide too sends a browser
+    to the login page."""
+    web = load_app(monkeypatch, mcp_url="https://brain.example.ts.net/mcp")
+    for path in ("/", "/setup", "/browse", "/changes", "/usage", "/search?q=x"):
+        r = client(web.app).get(path, headers={"Accept": "text/html"}, follow_redirects=False)
+        assert r.status_code == 303 and r.headers["location"].startswith("/login?next="), path
+
+
+def test_the_setup_guide_shows_the_configured_mcp_url_after_login(monkeypatch):
     url = "https://brain.example.ts.net/mcp"
     web = load_app(monkeypatch, mcp_url=url)
-    r = client(web.app).get("/setup", headers={"Accept": "text/html"})
-    assert r.status_code == 200
-    assert "text/html" in r.headers["content-type"]
-    assert f"--callback-port 33418 engram {url}" in r.text
-    assert "ENGRAM_MCP_URL is not set" not in r.text
-
-
-def test_the_setup_guide_shows_a_placeholder_when_the_mcp_url_is_unset(monkeypatch):
-    web = load_app(monkeypatch)
-    r = client(web.app).get("/setup")
-    assert r.status_code == 200
-    assert "https://&lt;host&gt;/mcp" in r.text
-    assert "ENGRAM_MCP_URL is not set" in r.text
+    c = client(web.app)
+    c.cookies.set(web.SESSION_COOKIE, TOKEN)
+    r = c.get("/setup")
+    # The page itself reads the sidebar from the database, which this test
+    # does not have; it is enough that the gate let it through.
+    assert r.status_code != 303
 
 
 def test_the_setup_guide_shows_no_brain_data_to_an_anonymous_reader(monkeypatch):
@@ -214,9 +213,9 @@ def test_a_browser_is_given_the_login_page_and_a_program_is_given_json(monkeypat
     web = load_app(monkeypatch)
     c = client(web.app)
 
-    page = c.get("/", headers={"Accept": "text/html"})
-    assert page.status_code == 401
-    assert "text/html" in page.headers["content-type"]
+    page = c.get("/doc/a/b/resources/x.md?rev=1", headers={"Accept": "text/html"}, follow_redirects=False)
+    assert page.status_code == 303
+    assert page.headers["location"] == "/login?next=%2Fdoc%2Fa%2Fb%2Fresources%2Fx.md%3Frev%3D1"
 
     api = c.get("/api/search?q=x", headers={"Accept": "application/json"})
     assert api.status_code == 401

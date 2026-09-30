@@ -197,11 +197,11 @@ app = FastAPI(title="engram store", docs_url="/api/docs", redoc_url=None, lifesp
 #
 # /login and /logout are how a browser authenticates in the first place.
 #
-# /setup is the guide for connecting a machine. A person reads it BEFORE they
-# can authenticate, so gating it would hide the instructions from exactly the
-# reader they are for. It holds no brain data: the route renders it without
-# the sidebar's repository list unless the caller could read that anyway.
-UNAUTHENTICATED_PATHS = frozenset({"/healthz", "/login", "/logout", "/setup",
+# /auth/google and /auth/callback are the Google sign-in's two legs.
+#
+# Nothing else — not even /setup. Every page, the setup guide included, is
+# behind the login: a person signs in first and sees the brain after.
+UNAUTHENTICATED_PATHS = frozenset({"/healthz", "/login", "/logout",
                                    "/auth/google", "/auth/callback"})
 
 # Stylesheet, script and fonts. The login and setup pages need them before a
@@ -363,9 +363,10 @@ def _unauthenticated_response(request: Request):
     is_api = request.url.path.startswith("/api/")
     wants_html = "text/html" in request.headers.get("accept", "")
     if wants_html and not is_api:
-        return templates.TemplateResponse(
-            request, "login.html",
-            {"error": "", "next": request.url.path}, status_code=401)
+        # To the login page, and back here after it — the address bar then
+        # says where the person is, and the login is one page with one URL.
+        here = request.url.path + (("?" + request.url.query) if request.url.query else "")
+        return RedirectResponse("/login?" + urllib.parse.urlencode({"next": here}), status_code=303)
     return JSONResponse(
         {"detail": "this store requires a token — send it as X-Engram-Token"},
         status_code=401)

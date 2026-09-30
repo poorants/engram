@@ -9,6 +9,17 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 ## [Unreleased]
 
 
+## [0.13.1] — 2026-09-30
+
+### Changed — nothing is shown before signing in
+
+A browser without a session is redirected to `/login?next=<where it was>`
+instead of being handed the login page at the address it asked for, and the
+setup guide is behind the login like every other page. Run the store with
+`ENGRAM_PUBLIC_READS` unset (the default) for the viewer to require a login at
+all.
+
+
 ## [0.13.0] — 2026-09-30
 
 ### Added — sign in to the viewer with Google
@@ -786,7 +797,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.13.0...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.13.1...HEAD
+[0.13.1]: https://github.com/poorants/engram/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/poorants/engram/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/poorants/engram/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/poorants/engram/compare/v0.10.5...v0.11.0
