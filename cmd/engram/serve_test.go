@@ -271,3 +271,28 @@ func TestServeRefusesToStartIncomplete(t *testing.T) {
 		}
 	}
 }
+
+// Behind a proxy that keeps the client's Host (tailscale serve), /mcp must
+// answer to the issuer's name and to nothing else.
+func TestServeMCPAnswersToTheIssuerHostOnly(t *testing.T) {
+	env := map[string]string{
+		"ENGRAM_SERVE_ISSUER":               "https://h.example:8443",
+		"ENGRAM_SERVE_KEY":                  base64.StdEncoding.EncodeToString(bytes.Repeat([]byte{1}, 32)),
+		"ENGRAM_SERVE_GOOGLE_CLIENT_ID":     "id",
+		"ENGRAM_SERVE_GOOGLE_CLIENT_SECRET": "s",
+		"ENGRAM_SERVE_ALLOW":                "a@example.com",
+	}
+	s, err := newServeConfig("http://127.0.0.1:1", func(k string) string { return env[k] })
+	if err != nil {
+		t.Fatal(err)
+	}
+	h := s.handler()
+	for host, want := range map[string]int{"h.example:8443": http.StatusUnauthorized, "evil.example": http.StatusForbidden} {
+		req := httptest.NewRequest(http.MethodPost, "http://"+host+"/mcp", strings.NewReader("{}"))
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, req)
+		if rec.Code != want {
+			t.Errorf("Host %s: got %d, want %d", host, rec.Code, want)
+		}
+	}
+}

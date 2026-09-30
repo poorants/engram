@@ -137,9 +137,25 @@ func (s *serveConfig) handler() http.Handler {
 	gate := auth.RequireBearerToken(s.verify, &auth.RequireBearerTokenOptions{
 		ResourceMetadataURL: s.oauth.issuer + "/.well-known/oauth-protected-resource/mcp",
 	})
-	mux.Handle("/mcp", gate(mcp.NewStreamableHTTPHandler(s.newServer, nil)))
+	// The SDK's own DNS-rebinding guard refuses any Host but loopback on a
+	// loopback listener, and a proxy that cannot rewrite Host (tailscale
+	// serve) then gets 403 on every call. The same guard is kept here, aimed
+	// at the one name this server answers to: the issuer's.
+	mcpHandler := mcp.NewStreamableHTTPHandler(s.newServer, &mcp.StreamableHTTPOptions{DisableLocalhostProtection: true})
+	mux.Handle("/mcp", s.onlyIssuerHost(gate(mcpHandler)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })
 	return mux
+}
+
+func (s *serveConfig) onlyIssuerHost(next http.Handler) http.Handler {
+	u, _ := url.Parse(s.oauth.issuer)
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.EqualFold(r.Host, u.Host) {
+			http.Error(w, fmt.Sprintf("Forbidden: this server answers to %s, not %q", u.Host, r.Host), http.StatusForbidden)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func (s *serveConfig) verify(_ context.Context, token string, _ *http.Request) (*auth.TokenInfo, error) {
