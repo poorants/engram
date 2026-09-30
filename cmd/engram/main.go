@@ -46,6 +46,8 @@ const usage = `engram — a networked PARA knowledge brain for coding agents
 usage: engram <command> [options]
 
   mcp                     run the MCP server over stdio (what a session launches)
+  serve                   run it over HTTP next to the store — the remote MCP
+                          server (engram serve --help)
 
 the store
   search <question>       search the store — pass the question as a sentence
@@ -119,6 +121,8 @@ func run(args []string) int {
 	switch verb {
 	case "mcp":
 		return runMCP(rest)
+	case "serve":
+		return cmdServe(rest)
 	case "hook":
 		return cmdHook(rest)
 	case "search":
