@@ -69,6 +69,7 @@ Set `ENGRAM_MCP_URL` so it prints the right address.
 | `ENGRAM_BIND` | address the port is published on (default `0.0.0.0`, every address). `127.0.0.1` when something in front terminates TLS |
 | `ENGRAM_TZ` | zone revision timestamps display in (default UTC) |
 | `ENGRAM_MCP_URL` | the address of the remote MCP server (`engram serve`), e.g. `https://brain.example.ts.net/mcp` — shown on the viewer's `/setup` page. Unset, the page shows `https://<host>/mcp` and says so |
+| `ENGRAM_VIEWER_KEY` | the serve host's `ENGRAM_SERVE_KEY`. With it and `ENGRAM_MCP_URL`, the viewer offers **Sign in with Google** — `engram serve` runs the login and its allow-list (set `ENGRAM_SERVE_VIEWER_URL` there to this viewer's origin) and hands back a one-minute signed ticket. The header then shows who is signed in and a sign-out. Unset, only the token login exists |
 | `COMPOSE_PROFILES` | `tls` adds the Caddy service — what `--tls` writes |
 | `ENGRAM_DOMAIN` | the name Caddy serves and obtains a certificate for (tls profile only) |
 

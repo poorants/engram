@@ -85,6 +85,7 @@ func newServeFixture(t *testing.T) *serveFixture {
 		"ENGRAM_SERVE_GOOGLE_CLIENT_ID":     "gid",
 		"ENGRAM_SERVE_GOOGLE_CLIENT_SECRET": "gsecret",
 		"ENGRAM_SERVE_ALLOW":                "alice@example.com",
+		"ENGRAM_SERVE_VIEWER_URL":           "https://viewer.example",
 	}
 	s, err := newServeConfig(store.URL, func(k string) string { return env[k] })
 	if err != nil {
@@ -342,5 +343,42 @@ func TestServeServesTheSetupPrompt(t *testing.T) {
 	}
 	if strings.Contains(text, "{{") {
 		t.Errorf("setup prompt has an unfilled placeholder: %q", text)
+	}
+}
+
+// The viewer signs in through the same Google login and allow-list, and gets
+// back a short ticket only on its own origin.
+func TestServeViewerLogin(t *testing.T) {
+	f := newServeFixture(t)
+	for _, ret := range []string{"https://evil.example/auth/callback", "https://viewer.example.evil/x", ""} {
+		res, _ := noFollow.Get(f.ts.URL + "/oauth/viewer?" + url.Values{"return": {ret}}.Encode())
+		if res.StatusCode != http.StatusBadRequest {
+			t.Errorf("return %q: got %d", ret, res.StatusCode)
+		}
+	}
+	const ret = "https://viewer.example/auth/callback?next=%2Fdoc%2Fx"
+	res, err := noFollow.Get(f.ts.URL + "/oauth/viewer?" + url.Values{"return": {ret}}.Encode())
+	if err != nil || res.StatusCode != http.StatusFound {
+		t.Fatalf("viewer login: %v %v", err, res.Status)
+	}
+	g, _ := url.Parse(res.Header.Get("Location"))
+	req, _ := http.NewRequest(http.MethodGet, f.ts.URL+"/oauth/google/callback?"+url.Values{"code": {"gcode"}, "state": {g.Query().Get("state")}}.Encode(), nil)
+	for _, c := range res.Cookies() {
+		req.AddCookie(c)
+	}
+	cb, err := noFollow.Do(req)
+	if err != nil || cb.StatusCode != http.StatusFound {
+		t.Fatalf("callback: %v %v", err, cb.Status)
+	}
+	loc, _ := url.Parse(cb.Header.Get("Location"))
+	if loc.Host != "viewer.example" || loc.Path != "/auth/callback" || loc.Query().Get("next") != "/doc/x" {
+		t.Fatalf("ticket went to %s", loc)
+	}
+	c, err := f.tsOAuth(t).open("viewer", loc.Query().Get("ticket"))
+	if err != nil || c["email"] != "alice@example.com" {
+		t.Fatalf("ticket: %v %v", err, c)
+	}
+	if _, _, _, err := f.tsOAuth(t).verifyAccess(loc.Query().Get("ticket")); err == nil {
+		t.Fatal("a viewer ticket passed as an access token")
 	}
 }

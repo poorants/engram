@@ -8,6 +8,20 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Added — sign in to the viewer with Google
+
+The viewer's login page offers **Sign in with Google**, run by `engram serve`
+with the same Google client and allow-list the MCP clients use — the viewer
+needs no Google client of its own. Serve sends the browser back to the
+viewer's `/auth/callback` with a one-minute ticket signed with
+`ENGRAM_SERVE_KEY`; the viewer (given the same key as `ENGRAM_VIEWER_KEY`)
+keeps the person in a signed, sliding 30-day cookie. The header shows who is
+signed in, with a sign-out, and a **Sign in** button when nobody is. The token
+login stays, folded under the Google button, for whoever operates the store.
+
+To turn it on: `ENGRAM_SERVE_VIEWER_URL=<viewer origin>` on the serve host,
+`ENGRAM_VIEWER_KEY=<ENGRAM_SERVE_KEY>` in the store's `server/.env`.
+
 
 ## [0.12.0] — 2026-09-30
 

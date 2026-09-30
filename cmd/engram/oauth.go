@@ -36,6 +36,7 @@ const (
 	oauthAccessTTL   = time.Hour
 	oauthRefreshTTL  = 90 * 24 * time.Hour // sliding: every refresh issues a new one
 	oauthLoginCookie = "engram_login"
+	viewerTicketTTL  = time.Minute
 )
 
 // Google's endpoints are variables so a test can stand in for them.
@@ -50,6 +51,7 @@ type oauthServer struct {
 	googleID     string
 	googleSecret string
 	allow        []string // emails (matched when verified) or Google subject ids
+	viewer       string   // the store viewer's origin, or "" when it does not sign in here
 	http         *http.Client
 
 	mu   sync.Mutex
@@ -83,6 +85,7 @@ func (o *oauthServer) register(mux *http.ServeMux) {
 	mux.HandleFunc("POST /oauth/register", o.handleRegister)
 	mux.HandleFunc("GET /oauth/authorize", o.handleAuthorize)
 	mux.HandleFunc("GET /oauth/google/callback", o.handleGoogleCallback)
+	mux.HandleFunc("GET /oauth/viewer", o.handleViewerLogin)
 	mux.HandleFunc("POST /oauth/token", o.handleToken)
 }
 
@@ -254,16 +257,37 @@ func (o *oauthServer) handleAuthorize(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// The login is bound to this browser: the cookie's value is inside the
-	// signed state, so a callback that arrives in some other browser (a
-	// login-CSRF) does not match it.
+	o.toGoogle(w, r, map[string]any{
+		"client_id": clientID, "redirect_uri": redirect, "state": q.Get("state"),
+		"challenge": q.Get("code_challenge"),
+	})
+}
+
+// handleViewerLogin signs a person into the store's web viewer with the same
+// Google login and the same allow-list the MCP clients go through, so the
+// viewer needs no Google client of its own. The result is a one-minute
+// ticket, signed with the key the viewer shares, handed to the viewer's
+// /auth/callback — and only there: `return` must be on the configured viewer
+// origin, or this would be an open redirect carrying a login.
+func (o *oauthServer) handleViewerLogin(w http.ResponseWriter, r *http.Request) {
+	ret := r.URL.Query().Get("return")
+	if o.viewer == "" || !strings.HasPrefix(ret, o.viewer+"/") {
+		http.Error(w, "return must be on the viewer this server was configured with", http.StatusBadRequest)
+		return
+	}
+	o.toGoogle(w, r, map[string]any{"viewer_return": ret})
+}
+
+// toGoogle starts a Google login carrying claims through a signed state.
+// The login is bound to this browser: the cookie's value is inside the
+// signed state, so a callback that arrives in some other browser (a
+// login-CSRF) does not match it.
+func (o *oauthServer) toGoogle(w http.ResponseWriter, r *http.Request, claims map[string]any) {
 	nonce := randomString()
 	http.SetCookie(w, &http.Cookie{Name: oauthLoginCookie, Value: nonce, Path: "/oauth/", MaxAge: int(oauthLoginTTL.Seconds()),
 		HttpOnly: true, Secure: strings.HasPrefix(o.issuer, "https://"), SameSite: http.SameSiteLaxMode})
-	state := o.seal("login", map[string]any{
-		"client_id": clientID, "redirect_uri": redirect, "state": q.Get("state"),
-		"challenge": q.Get("code_challenge"), "nonce": nonce, "exp": exp(oauthLoginTTL),
-	})
+	claims["nonce"], claims["exp"] = nonce, exp(oauthLoginTTL)
+	state := o.seal("login", claims)
 	g := url.Values{
 		"client_id":     {o.googleID},
 		"redirect_uri":  {o.issuer + "/oauth/google/callback"},
@@ -288,6 +312,10 @@ func (o *oauthServer) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	http.SetCookie(w, &http.Cookie{Name: oauthLoginCookie, Path: "/oauth/", MaxAge: -1})
+	if ret := str(login, "viewer_return"); ret != "" {
+		o.finishViewerLogin(w, r, ret)
+		return
+	}
 	redirect, clientState := str(login, "redirect_uri"), str(login, "state")
 	if e := q.Get("error"); e != "" {
 		redirectWith(w, r, redirect, url.Values{"error": {"access_denied"}, "error_description": {"google: " + e}, "state": {clientState}})
@@ -307,6 +335,25 @@ func (o *oauthServer) handleGoogleCallback(w http.ResponseWriter, r *http.Reques
 		"sub": sub, "email": email, "jti": randomString(), "exp": exp(oauthCodeTTL),
 	})
 	redirectWith(w, r, redirect, url.Values{"code": {code}, "state": {clientState}})
+}
+
+func (o *oauthServer) finishViewerLogin(w http.ResponseWriter, r *http.Request, ret string) {
+	q := r.URL.Query()
+	if e := q.Get("error"); e != "" {
+		http.Error(w, "google: "+e, http.StatusForbidden)
+		return
+	}
+	sub, email, verified, err := o.googleIdentity(r, q.Get("code"))
+	if err != nil {
+		http.Error(w, "google login failed: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	if !o.allowed(sub, email, verified) {
+		http.Error(w, email+" is not allowed on this store", http.StatusForbidden)
+		return
+	}
+	ticket := o.seal("viewer", map[string]any{"sub": sub, "email": email, "jti": randomString(), "exp": exp(viewerTicketTTL)})
+	redirectWith(w, r, ret, url.Values{"ticket": {ticket}})
 }
 
 // googleIdentity exchanges Google's code for an ID token. The token comes

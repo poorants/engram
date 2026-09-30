@@ -40,9 +40,16 @@
     <a class="icon-btn opt" href="/usage" title="Usage" aria-label="Usage"{% if nav == 'usage' %} aria-current="page"{% endif %}>{{ ui.icon('graph') }}</a>
     {% endif %}
     <a class="icon-btn opt" href="/setup" title="Connect a machine" aria-label="Setup guide"{% if nav == 'setup' %} aria-current="page"{% endif %}>{{ ui.icon('terminal') }}</a>
-    {% if signed_in(request) %}
-    <a class="icon-btn" href="/logout" title="Sign out" aria-label="Sign out">{{ ui.icon('signout') }}</a>
-    {% elif not show_brain %}
+    {%- set who = signed_in_as(request) %}
+    {% if who %}
+    <details class="UserMenu">
+      <summary class="Avatar" title="Signed in as {{ who }}" aria-label="Account menu">{{ who[:1]|upper }}</summary>
+      <div class="UserMenu-body">
+        <div class="UserMenu-who"><span class="muted">Signed in as</span><strong>{{ who }}</strong></div>
+        <a class="UserMenu-item" href="/logout">{{ ui.icon('signout') }}<span>Sign out</span></a>
+      </div>
+    </details>
+    {% else %}
     <a class="btn btn-sm" href="/login?next={{ request.url.path|urlencode }}">Sign in</a>
     {% endif %}
   </div>

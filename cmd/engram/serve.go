@@ -47,6 +47,9 @@ import (
 //	ENGRAM_SERVE_GOOGLE_CLIENT_SECRET  redirect URI is <issuer>/oauth/google/callback
 //	ENGRAM_SERVE_ALLOW                 who may in: emails and/or Google subject ids, comma-separated
 //	ENGRAM_SERVE_AUTHOR                optional: the byline; default the email's local part
+//	ENGRAM_SERVE_VIEWER_URL            optional: the store viewer's origin, which may then sign
+//	                                   people in through this server's Google login (/oauth/viewer).
+//	                                   The viewer verifies the ticket with the same ENGRAM_SERVE_KEY
 
 const serveUsage = `usage: engram serve [--addr 127.0.0.1:8682] [--store http://127.0.0.1:8081]
 
@@ -57,7 +60,7 @@ metadata lives at /.well-known/.
 
 Settings come from the environment: ENGRAM_TOKEN, ENGRAM_SERVE_ISSUER,
 ENGRAM_SERVE_KEY, ENGRAM_SERVE_GOOGLE_CLIENT_ID, ENGRAM_SERVE_GOOGLE_CLIENT_SECRET,
-ENGRAM_SERVE_ALLOW, ENGRAM_SERVE_AUTHOR (optional).
+ENGRAM_SERVE_ALLOW, ENGRAM_SERVE_AUTHOR and ENGRAM_SERVE_VIEWER_URL (optional).
 `
 
 func cmdServe(args []string) int {
@@ -109,6 +112,7 @@ func newServeConfig(store string, env func(string) string) (*serveConfig, error)
 		key:          key,
 		googleID:     get("ENGRAM_SERVE_GOOGLE_CLIENT_ID"),
 		googleSecret: get("ENGRAM_SERVE_GOOGLE_CLIENT_SECRET"),
+		viewer:       strings.TrimRight(get("ENGRAM_SERVE_VIEWER_URL"), "/"),
 		http:         &http.Client{Timeout: 10 * time.Second},
 		used:         map[string]time.Time{},
 	}
