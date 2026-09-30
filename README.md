@@ -22,25 +22,17 @@ different repo, a different machine, a different person — searches it and read
 it back. A file brain is limited by grep; a wiki is too heavy for an agent to
 write to. This sits in between.
 
-```console
-$ engram search "why did we drop the vector channel"
-{
-  "results": [
-    {
-      "path": "acme/shared/resources/search-ranking.md",
-      "heading": "Search ranking > Why lexical only",
-      "chunk": "Measured with and without a vector channel: recall was the same
-                and the failures were the same questions. The production image
-                does not carry the extension, and the deployment stays one
-                compose file."
-    }
-  ]
-}
+```text
+brain_search  { "query": "why did we drop the vector channel" }
+
+acme/shared/resources/search-ranking.md ¶ Search ranking > Why lexical only
+  Measured with and without a vector channel: recall was the same and the
+  failures were the same questions. The production image does not carry the
+  extension, and the deployment stays one compose file.
 ```
 
-The CLI answers in JSON because its caller is usually a subprocess. In a session
-the same query goes through `brain_search` and the model gets the passage with
-its heading path — never a whole file to read end to end.
+The model gets the passage with its heading path — never a whole file to read
+end to end.
 
 ## Why engram
 
@@ -48,13 +40,11 @@ its heading path — never a whole file to read end to end.
 - **A graph, not a folder tree.** Bi-directional links, MOC hubs, and a lint that catches broken links, orphans and weakly-connected notes.
 - **Nothing is lost.** Every document keeps a revision history with who changed it and why. There is no delete — the contract is *move to archives*.
 - **Shared safely.** The store admits a list of owner groups; a document from a repo outside them is refused, so knowledge that should not be there cannot get in by accident.
-- **One static binary.** No toolchain, no runtime. MCP server and CLI in the same file.
+- **Nothing on the machine.** A session reaches the brain through one remote MCP server with its own login; a person's machine holds no address, no token, no settings.
 
 ## Quick start
 
-Two scripts, and they set up two different kinds of machine.
-
-### 1. The store — once, for everyone
+### 1. The store and its server — once, for everyone
 
 One Linux or macOS host with Docker. Postgres, so not Windows.
 
@@ -63,63 +53,47 @@ git clone https://github.com/poorants/engram && cd engram/server
 ./setup.sh --owners <your-github-org>
 ```
 
-It generates both secrets, writes `.env`, brings the compose stack up, waits
-until it actually answers, and finishes by printing the exact client one-liner —
-store address and store token already filled in — for you to hand out. On a
-host with a public IP add `--tls`, and the store is served over HTTPS with a
-Let's Encrypt certificate and no domain to buy.
+It generates both secrets, writes `.env`, brings the compose stack up and waits
+until it actually answers. Beside it runs `engram serve`, the remote MCP server:
+it holds the store's credential and is its own OAuth server, so people log in
+with Google and only the allow-list gets in. Settings and the systemd unit:
+[docs/install.md](docs/install.md#engram-serve).
 
-### 2. The client — every person, every machine
-
-Binary, MCP server, skill and capture hooks, in one command. Paste what
-`setup.sh` printed:
+### 2. A person's machine — every person, every machine
 
 ```bash
-# Linux · macOS
-curl -fsSL https://raw.githubusercontent.com/poorants/engram/main/install.sh \
-  | sh -s -- --store http://<host>:8081 --token <store token>
+claude mcp add --transport http --scope user --callback-port 33418 engram https://<host>/mcp
 ```
 
-```powershell
-# Windows
-$env:ENGRAM_STORE_URL = 'http://<host>:8081'
-$env:ENGRAM_TOKEN     = '<store token>'
-irm https://raw.githubusercontent.com/poorants/engram/main/install.ps1 | iex
+Then in Claude Code: `/mcp` → engram → **Authenticate**, and run
+
+```
+/mcp__engram__setup
 ```
 
-That installs the binary, designates the store, runs `store doctor`, registers
-the `brain_*` MCP tools at user scope, and installs the skill and its hooks. Run
-it with no arguments to install the binary only and wire the rest up later; add
-`--no-claude` to skip the Claude Code half entirely.
+The server hands the session a setup procedure with its own address written
+in: it checks the registration, installs the plugin (the skill and the capture
+hooks) and the `engram` binary the hooks run, and reports what it fixed.
+Restart Claude Code afterwards.
 
-`store doctor` is the check that matters: it proves the store answers **and**
-that this machine can write to it. Those are two different facts, and a check
-that proves only the first lets someone finish a setup read-only and discover it
-at the end of a session, when a save fails.
-
-> **Platforms.** The client — binary, CLI, MCP server, skill — runs on Linux,
-> macOS and Windows. The store is Linux/macOS only; a Windows machine is a
-> client of a store running elsewhere. Details in [docs/install.md](docs/install.md).
+> **Platforms.** A person's machine can be Linux, macOS or Windows. The store is
+> Linux/macOS only. Details, SSH machines and upgrading from 0.11:
+> [docs/install.md](docs/install.md).
 
 ## What it is made of
 
-Three deliverables in one repository. The layers are not collapsed, because each
-one is a different kind of thing.
-
 | | What | Who installs it |
 |---|---|---|
-| **`engram`** | one static binary: MCP server + CLI — the whole client | a person, per machine — [`install.sh`](install.sh) |
 | **[`server/`](server/)** | the store: FastAPI + Postgres 17, one compose file | once, on a machine everyone can reach |
-| **[`skills/engram/`](skills/engram/)** | the Claude Code skill — the judgement and the workflows | the plugin marketplace |
+| **`engram serve`** | the remote MCP server — the `brain_*` tools over HTTP, with its own OAuth | once, beside the store |
+| **[`skills/engram/`](skills/engram/)** + hooks | the Claude Code plugin — the judgement, the workflows, and the capture loop | `/mcp__engram__setup`, per machine |
+| **`engram`** on a person's machine | one static binary that runs the plugin's hooks and nothing else | `/mcp__engram__setup` ([`install.sh`](install.sh) / [`install.ps1`](install.ps1)) |
 
-There is exactly **one** transport client with two surfaces over it: the MCP
-tools for a model in a session, and `engram <verb>` for a subprocess — a hook, a
-scheduled job, the skill, a person at a terminal. Two clients would mean two
-places to put the token, two default authors, and two copies of the path rules to
-drift apart.
-
-**The binary is the only thing to install.** No interpreter, no runtime: the
-skill ships no scripts, and the capture-loop hook is `engram hook`.
+There is exactly **one surface** to the brain: the remote MCP server. No CLI,
+no local MCP server, no local copy — a setting on a person's machine is a
+setting that can be stale, and two surfaces mean two copies of the address rules
+to drift apart. The hook binary decides whether to speak from the git origin
+alone, with no settings file and no network.
 
 ## The tools an agent gets
 
@@ -134,19 +108,18 @@ skill ships no scripts, and the capture-loop hook is `engram hook`.
 | `brain_patch` | change part of one — send the edit, not the document |
 | `brain_move` | rename, reclassify, archive — the old path stays as an alias |
 
-The same over the CLI as `engram search|get|feedback|revisions|integrity|put|patch|move`.
-Full reference: [docs/cli.md](docs/cli.md).
+Every write is stamped with the logged-in person. The full contract is in
+[`skills/engram/references/store.md`](skills/engram/references/store.md).
 
 ## Documentation
 
 | | |
 |---|---|
-| [Installation](docs/install.md) | the two installers, every platform, upgrading, building from source, frozen builds for managed endpoints |
+| [Installation](docs/install.md) | a person's machine, `engram serve`, upgrading from 0.11, building from source |
 | [Concepts](docs/concepts.md) | how a document is addressed, PARA areas, links, the scope boundary |
-| [CLI & MCP reference](docs/cli.md) | every verb, flag, and exit code |
 | [Self-hosting the store](server/README.md) | configuration, seeding, backups |
 | [Design decisions](docs/design.md) | what was chosen and what it cost |
-| [Troubleshooting](docs/troubleshooting.md) | when `store doctor` fails |
+| [Troubleshooting](docs/troubleshooting.md) | when the tools are missing, the login loops, or a write is refused |
 | [Search bench](server/bench/README.md) | how ranking is measured and kept from drifting |
 
 ## Status

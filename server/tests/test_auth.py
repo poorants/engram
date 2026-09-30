@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 TOKEN = "test-token-0123456789abcdef"
 
 
-def load_app(monkeypatch, *, public_reads=False, token=TOKEN):
+def load_app(monkeypatch, *, public_reads=False, token=TOKEN, mcp_url=""):
     """Import web.py under a given configuration.
 
     It is re-imported per test rather than configured at runtime because the
@@ -32,6 +32,10 @@ def load_app(monkeypatch, *, public_reads=False, token=TOKEN):
     monkeypatch.setenv("ENGRAM_TOKEN", token)
     monkeypatch.setenv("ENGRAM_PUBLIC_READS", "true" if public_reads else "false")
     monkeypatch.setenv("ENGRAM_DSN", "postgresql://engram:x@127.0.0.1:1/engram")
+    if mcp_url:
+        monkeypatch.setenv("ENGRAM_MCP_URL", mcp_url)
+    else:
+        monkeypatch.delenv("ENGRAM_MCP_URL", raising=False)
     for name in ("web",):
         sys.modules.pop(name, None)
     return importlib.import_module("web")
@@ -58,6 +62,9 @@ CLOSED_READS = [
     "/",
     "/search?q=anything",
     "/changes",
+    "/browse",
+    "/browse?owner=acme&repo=repo",
+    "/rev/1",
     "/doc/acme/repo/resources/x.md",
 ]
 
@@ -134,6 +141,60 @@ def test_login_is_reachable_without_a_token(monkeypatch):
     is a loop with no way out."""
     web = load_app(monkeypatch)
     assert client(web.app).get("/login").status_code == 200
+
+
+def test_the_setup_guide_is_reachable_without_a_token(monkeypatch):
+    """It is read BEFORE the reader can authenticate -- it is how a machine
+    gets connected at all -- so it must render with reads closed, and it must
+    show the MCP address the deployment configured."""
+    url = "https://brain.example.ts.net/mcp"
+    web = load_app(monkeypatch, mcp_url=url)
+    r = client(web.app).get("/setup", headers={"Accept": "text/html"})
+    assert r.status_code == 200
+    assert "text/html" in r.headers["content-type"]
+    assert f"--callback-port 33418 engram {url}" in r.text
+    assert "ENGRAM_MCP_URL is not set" not in r.text
+
+
+def test_the_setup_guide_shows_a_placeholder_when_the_mcp_url_is_unset(monkeypatch):
+    web = load_app(monkeypatch)
+    r = client(web.app).get("/setup")
+    assert r.status_code == 200
+    assert "https://&lt;host&gt;/mcp" in r.text
+    assert "ENGRAM_MCP_URL is not set" in r.text
+
+
+def test_the_setup_guide_shows_no_brain_data_to_an_anonymous_reader(monkeypatch):
+    """Being open is only safe because it holds nothing from the store: no
+    sidebar of repositories, no document counts, no search box."""
+    web = load_app(monkeypatch)
+    text = client(web.app).get("/setup").text
+    assert 'id="repo-list"' not in text
+    assert 'id="sidebar"' not in text
+    assert 'action="/search"' not in text
+
+
+def test_static_assets_are_reachable_without_a_token(monkeypatch):
+    """The login and setup pages are styled by them before any session exists."""
+    web = load_app(monkeypatch)
+    c = client(web.app)
+    assert c.get("/static/app.css").status_code == 200
+    assert c.get("/static/app.js").status_code == 200
+    font = c.get("/static/fonts/pretendard/PretendardVariable.subset.0.woff2")
+    assert font.status_code == 200
+    assert font.headers["content-type"] == "font/woff2"
+
+
+def test_static_serves_nothing_outside_its_directory(monkeypatch):
+    """The gate waves /static/ through, so the route itself is what must keep
+    that exception from reaching anything else on disk."""
+    web = load_app(monkeypatch)
+    c = client(web.app)
+    for probe in ("/static/../web.py", "/static/%2e%2e/web.py", "/static/..%2fweb.py",
+                  "/static/nope.css"):
+        r = c.get(probe)
+        assert r.status_code in (401, 404), probe
+        assert "TOKEN" not in r.text, probe
 
 
 def test_public_reads_opens_reads(monkeypatch):

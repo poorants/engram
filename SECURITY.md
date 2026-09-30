@@ -60,14 +60,17 @@ this code; the token then travels in the clear, and that is what `--tls` is for.
   single most important property in the system.
 - **Injection** in the store: SQL injection, or crafted markdown that escapes
   chunking, linking or the viewer's rendering.
-- **Path traversal** in a document address, in `bin/import_tree.py`, or in
-  `engram get --out`.
+- **Path traversal** in a document address or in `bin/import_tree.py`.
+- **`engram serve`'s login**: a token accepted for someone not on
+  `ENGRAM_SERVE_ALLOW`, a code or token usable by another client or machine, a
+  redirect to anything but loopback.
 - **The installers**: anything that makes `install.sh` or `install.ps1` execute
   or install something other than the verified release asset — checksum
   verification that can be skipped, or an archive that can write outside the
   install directory.
-- **Token disclosure**: the token appearing in `config.json`, in logs, in
-  process arguments visible to other users, or in a file that is not `0600`.
+- **Token disclosure**: the store token, `ENGRAM_SERVE_KEY` or an issued
+  access/refresh token appearing in logs, in process arguments visible to other
+  users, or in a file that is not `0600`.
   The session cookie failing to be `HttpOnly`, or failing to be `Secure` when
   the request arrived over HTTPS.
 - **Remote code execution** anywhere, including through the skill's hooks.

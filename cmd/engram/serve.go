@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"crypto/rand"
 	"encoding/base64"
+	"encoding/hex"
 	"errors"
 	"flag"
 	"fmt"
@@ -10,6 +12,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -197,6 +200,47 @@ func (s *serveConfig) newServer(r *http.Request) *mcp.Server {
 	bc := s.store
 	bc.Session = newSessionID()
 	mcpserver.Register(server, bc, func(context.Context, string) string { return author })
+	addSetupPrompt(server, s.oauth.issuer)
 	log.Printf("%s: session %s", email, bc.Session)
 	return server
+}
+
+// instructions is the server-level note the client shows the model once. It
+// says the two things that change behaviour and are not obvious from any single
+// tool's description: search before grep, and an unreachable store is an answer
+// rather than a reason to go looking somewhere older.
+const instructions = `engram is a networked PARA knowledge brain shared across repos.
+
+Search it BEFORE grepping the working tree for anything that is knowledge rather
+than code — decisions, conventions, traps, runbooks, past investigations. It
+returns chunks with their heading path, so an answer costs a fraction of what a
+file sweep does.
+
+brain_search answers in tiers. Tier 1 (the default) is a few snippets, one per
+document — enough to recognise the answer at a fraction of the cost. If it is
+not there, call again with the SAME question and the tier the result names
+(2: full chunks, 3: archives and more), before rephrasing. When a document
+answered, call brain_feedback with its path: the next similar question then
+finds it first.
+
+Document addresses are <owner>/<repo>/<area>/<name>.md, where area is one of
+projects|areas|resources|archives; a repo hub MOC is <owner>/<repo>/README.md.
+Take owner and repo from the working repo's git origin — never invent them.
+Knowledge that goes stale when one repo's code changes takes that repo's
+coordinate; knowledge that must outlive any one repo (contracts between repos,
+manuals, conventions) goes to <owner>/shared/.
+
+If the store is unreachable, reads and writes both fail on the spot. There is no
+cache and no queue. Say the store is down rather than answering from something
+older than the question.`
+
+// newSessionID is a random 16-hex-character id with the date in front, so a
+// list of sessions reads in order without a lookup. Random rather than a
+// counter because two editors on one machine start independently.
+func newSessionID() string {
+	var b [8]byte
+	if _, err := rand.Read(b[:]); err != nil {
+		return time.Now().Format("20060102") + "-" + strconv.FormatInt(time.Now().UnixNano(), 36)
+	}
+	return time.Now().Format("20060102") + "-" + hex.EncodeToString(b[:])
 }

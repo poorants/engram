@@ -49,6 +49,13 @@ same ranking an agent gets. It asks for the token once and keeps a session
 cookie that is renewed on every visit, so a browser that comes back within
 thirty days is never asked again. Rotating the token ends every session.
 
+The viewer is laid out like GitHub: a dashboard (`/`), repositories as file
+trees with their hub README underneath (`/browse`), a timeline of every write
+(`/changes`), search, and usage. `/setup` is the guide for connecting a machine
+through the remote MCP server; it is the one page open without the token,
+because it is read before anyone can sign in, and it shows no brain data.
+Set `ENGRAM_MCP_URL` so it prints the right address.
+
 ## Configuration
 
 | Variable | Meaning |
@@ -61,6 +68,7 @@ thirty days is never asked again. Rotating the token ends every session.
 | `ENGRAM_PORT` | published port (default 8081) |
 | `ENGRAM_BIND` | address the port is published on (default `0.0.0.0`, every address). `127.0.0.1` when something in front terminates TLS |
 | `ENGRAM_TZ` | zone revision timestamps display in (default UTC) |
+| `ENGRAM_MCP_URL` | the address of the remote MCP server (`engram serve`), e.g. `https://brain.example.ts.net/mcp` — shown on the viewer's `/setup` page. Unset, the page shows `https://<host>/mcp` and says so |
 | `COMPOSE_PROFILES` | `tls` adds the Caddy service — what `--tls` writes |
 | `ENGRAM_DOMAIN` | the name Caddy serves and obtains a certificate for (tls profile only) |
 
@@ -206,6 +214,8 @@ app/core.py      markdown -> chunks, lexemes, links; the address rules
 app/ingest.py    canonical writes, history, moves, the owner allow-list
 app/search.py    the one ranking: two channels fused with RRF
 app/web.py       the HTTP API and the viewer
+app/templates/   viewer pages (Jinja)
+app/static/      app.css, app.js, the Pretendard font (OFL, see its LICENSE.txt)
 sql/schema.sql   idempotent; applied on every boot
 bin/             seeding
 bench/           the search bench and an example brain

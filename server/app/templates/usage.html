@@ -1,35 +1,42 @@
 {% extends "base.html" %}
-{% block title %}usage — engram{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}Usage — engram{% endblock %}
+{% block context %}<a href="/">engram</a><span class="sep">/</span><span>Usage</span>{% endblock %}
 {% block body %}
+<div class="PageHead"><div>
+  <h1>Usage</h1>
+  <p>Every call the store served. Tokens are an estimate (the bench's formula) — read the ratio, not the absolute.</p>
+</div></div>
 
 {# Two questions, two tabs. "What did this session cost" and "is the brain
    being used, and is that going up" want different shapes; one longer page
-   would make each of them harder to read. The tab is a query parameter
-   because this viewer has no JavaScript at all and gains nothing by starting
-   here — the ?days= links beside it already work this way. #}
-<nav class="tabs">
-  <a href="/usage?tab=activity&days={{ days }}" {% if tab == 'activity' %}aria-current="page"{% endif %}>Activity</a>
-  <a href="/usage?tab=sessions&days={{ days }}" {% if tab == 'sessions' %}aria-current="page"{% endif %}>Sessions</a>
+   would make each of them harder to read. The tab is a query parameter, as
+   the ?days= links beside it already are. #}
+<nav class="UnderlineNav" aria-label="Usage views">
+  <a href="/usage?tab=activity&days={{ days }}"{% if tab == 'activity' %} aria-current="page"{% endif %}>{{ ui.icon('pulse') }} Activity</a>
+  <a href="/usage?tab=sessions&days={{ days }}"{% if tab == 'sessions' %} aria-current="page"{% endif %}>{{ ui.icon('list') }} Sessions</a>
 </nav>
 
 {% if tab == 'activity' %}
 {% set a = act %}
 {% if a.empty %}
-<div class="empty">No calls logged yet. This fills in as sessions use the brain.</div>
+<div class="Box"><div class="blankslate">{{ ui.icon('graph', 24) }}<h3>No calls logged yet</h3><p>This fills in as sessions use the brain.</p></div></div>
 {% else %}
-<p class="meta">Every call the store served, by the day it landed.
-  Tokens are an estimate (the bench's formula) — read the ratio, not the absolute.</p>
-
 {% set t = a.totals %}
-<div class="card">
-  <strong>{{ '{:,}'.format(t.calls) }} calls</strong> · <strong>{{ '{:,}'.format(t.tokens) }} tokens</strong>
-  · {{ t.searches }} searches · {{ t.writes }} writes
-  · active on <strong>{{ t.active_days }}</strong> of {{ a.days }} day{{ '' if a.days == 1 else 's' }} since {{ a.first }}
-  {% if t.busiest %}· busiest {{ t.busiest.bucket }} ({{ t.busiest.calls }} calls){% endif %}
+<div class="Box">
+  <div class="summary">
+    <span><b>{{ '{:,}'.format(t.calls) }}</b> calls</span>
+    <span><b>{{ '{:,}'.format(t.tokens) }}</b> tokens</span>
+    <span><b>{{ t.searches }}</b> searches</span>
+    <span><b>{{ t.writes }}</b> writes</span>
+    <span>active on <b>{{ t.active_days }}</b> of {{ a.days }} day{{ '' if a.days == 1 else 's' }} since {{ a.first }}</span>
+    {% if t.busiest %}<span class="muted">busiest {{ t.busiest.bucket }} ({{ t.busiest.calls }} calls)</span>{% endif %}
+  </div>
 </div>
 
-<h2>By day</h2>
-<div class="card cal-card">
+<h2 class="section-h">By day</h2>
+<div class="Box cal-card">
+  <div class="Box-body">
   <div class="cal">
     <div class="cal-months" style="grid-template-columns:repeat({{ a.weeks|length }},13px)">
       {% for m in a.months %}<span style="grid-column:{{ m.col + 1 }}">{{ m.label }}</span>{% endfor %}
@@ -54,69 +61,73 @@
         {% endfor %}{% endfor %}
       </div>
     </div>
-    <div class="cal-key meta">Less <i class="d0"></i><i class="d1"></i><i class="d2"></i><i class="d3"></i><i class="d4"></i> More
+    <div class="cal-key">Less <i class="d0"></i><i class="d1"></i><i class="d2"></i><i class="d3"></i><i class="d4"></i> More
       <span style="margin-left:8px">· shades cut at quartiles of the days that had calls ({{ a.cuts|join(' · ') }})</span></div>
+  </div>
   </div>
 </div>
 
-{# Weeks and months read as a timeline, not a chart.
-   The bars that were here said nothing: one week of data is one bar at 100%,
-   and even with many rows the day grid above already carries the shape. Three
-   unlabelled number columns made it worse — "17s" was a riddle. So each row is
-   a sentence with its numbers named, newest first. #}
+{# Weeks and months read as a timeline, not a chart: each row is a sentence
+   with its numbers named, newest first. #}
 {% for series, heading, unit in ((a.weekly, 'By week', 'week'), (a.monthly, 'By month', 'month')) %}
 {% if series %}
-<h2>{{ heading }}</h2>
-<div class="card">
+<h2 class="section-h">{{ heading }}</h2>
+<div class="Box">
+  <div class="Box-body">
   <ul class="tl">
   {% for r in series|reverse %}
     <li>
       <span class="tl-when">{{ r.bucket }}</span>
       <span class="tl-what">{{ '{:,}'.format(r.calls) }} call{{ '' if r.calls == 1 else 's' }}
         {%- if r.sessions %} in {{ r.sessions }} session{{ '' if r.sessions == 1 else 's' }}{% endif %}</span>
-      <span class="tl-num meta">{{ '{:,}'.format(r.tokens) }} tokens</span>
+      <span class="tl-num">{{ '{:,}'.format(r.tokens) }} tokens</span>
     </li>
   {% endfor %}
   </ul>
-  <div class="meta" style="margin-top:6px">The {{ unit }} each row begins.</div>
+  </div>
+  <div class="Box-footer">The {{ unit }} each row begins.</div>
 </div>
 {% endif %}
 {% endfor %}
 {% endif %}
 
 {% else %}
-<p class="meta">What sessions cost the brain over the last
-  {% for d in (1, 7, 30, 90) %}{% if d == days %}<strong>{{ d }}</strong>{% else %}<a href="/usage?days={{ d }}">{{ d }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %} days.
-  Tokens are an estimate (the bench's formula); the ratio between sessions is what to read.
-  {% if session %}· showing session <code>{{ session }}</code> — <a href="/usage?days={{ days }}">all</a>{% endif %}</p>
+<p class="muted">What sessions cost the brain over the last
+  {% for d in (1, 7, 30, 90) %}{% if d == days %}<b style="color:var(--fg)">{{ d }}</b>{% else %}<a href="/usage?tab=sessions&days={{ d }}">{{ d }}</a>{% endif %}{% if not loop.last %} · {% endif %}{% endfor %} days.
+  {% if session %}Showing session <code class="inline-code">{{ session }}</code> — <a href="/usage?tab=sessions&days={{ days }}">all</a>.{% endif %}</p>
 
 {% set t = u.totals %}
-<div class="card">
-  <strong>{{ t.sessions }} sessions</strong> · {{ t.calls }} calls · <strong>{{ '{:,}'.format(t.tokens) }} tokens</strong>
-  · {{ t.searches }} searches · {{ t.reads }} reads · {{ t.votes }} votes · {{ t.writes }} writes
-  {% if t.tier1 %}· tier-1 hit rate <strong>{{ '%.0f'|format(t.tier1_hit_rate * 100) }}%</strong>
-    <span class="meta">({{ t.escalated }} of {{ t.tier1 }} tier-1 searches were widened)</span>{% endif %}
-  {% if t.searches and not t.votes %}· <span class="meta" title="Votes are how the ranking learns. None in this window means the nudge is not landing.">no votes at all</span>{% endif %}
+<div class="Box">
+  <div class="summary">
+    <span><b>{{ t.sessions }}</b> sessions</span>
+    <span><b>{{ t.calls }}</b> calls</span>
+    <span><b>{{ '{:,}'.format(t.tokens) }}</b> tokens</span>
+    <span>{{ t.searches }} searches · {{ t.reads }} reads · {{ t.votes }} votes · {{ t.writes }} writes</span>
+    {% if t.tier1 %}<span>tier-1 hit rate <b>{{ '%.0f'|format(t.tier1_hit_rate * 100) }}%</b>
+      <span class="muted">({{ t.escalated }} of {{ t.tier1 }} widened)</span></span>{% endif %}
+    {% if t.searches and not t.votes %}<span class="Label Label--attention" title="Votes are how the ranking learns. None in this window means the nudge is not landing.">no votes at all</span>{% endif %}
+  </div>
 </div>
 
 {% if u.sessions or u.loose %}
-<div class="card" style="overflow-x:auto">
-  <table style="width:100%;border-collapse:collapse;font-size:13.5px">
-    <tr class="meta"><th style="text-align:left;padding:4px 8px">session</th><th style="text-align:left;padding:4px 8px">who</th><th style="text-align:left;padding:4px 8px">from → to</th>
-      <th style="text-align:right;padding:4px 8px">calls</th><th style="text-align:right;padding:4px 8px">tokens</th>
-      <th style="text-align:right;padding:4px 8px">search<br><span class="meta" style="font-weight:400;font-size:10.5px">calls / tokens</span></th><th style="text-align:right;padding:4px 8px">read</th><th style="text-align:right;padding:4px 8px">vote</th><th style="text-align:right;padding:4px 8px">write</th>
-      <th style="text-align:right;padding:4px 8px" title="of the tier-1 searches, the share not widened to a higher tier for the same question">tier-1 hit</th></tr>
+<div class="Box">
+  <div class="tw"><table class="data">
+    <thead><tr><th>Session</th><th>Who</th><th>From → to</th>
+      <th class="num">Calls</th><th class="num">Tokens</th>
+      <th class="num">Search<span class="sub">calls / tokens</span></th><th class="num">Read</th><th class="num">Vote</th><th class="num">Write</th>
+      <th class="num" title="Of the tier-1 searches, the share not widened to a higher tier for the same question">Tier-1 hit</th></tr></thead>
+    <tbody>
   {% for s in u.sessions %}
-    <tr style="border-top:1px solid var(--line)">
-      <td style="padding:5px 8px;white-space:nowrap"><a href="/usage?days={{ days }}&session={{ s.session|urlencode }}"><code>{{ s.session or '(no session)' }}</code></a></td>
-      <td style="padding:5px 8px" class="meta">{{ s.author or '—' }}</td>
-      <td style="padding:5px 8px;white-space:nowrap" class="meta">{{ s.first[5:16]|replace('T', ' ') }} → {{ s.last[11:16] }}</td>
-      <td style="padding:5px 8px;text-align:right">{{ s.calls }}</td>
-      <td style="padding:5px 8px;text-align:right"><strong>{{ '{:,}'.format(s.tokens) }}</strong></td>
+    <tr>
+      <td class="nowrap"><a href="/usage?days={{ days }}&session={{ s.session|urlencode }}"><code>{{ s.session or '(no session)' }}</code></a></td>
+      <td class="muted">{{ s.author or '—' }}</td>
+      <td class="nowrap muted">{{ s.first[5:16]|replace('T', ' ') }} → {{ s.last[11:16] }}</td>
+      <td class="num">{{ s.calls }}</td>
+      <td class="num"><b>{{ '{:,}'.format(s.tokens) }}</b></td>
       {% for k, n in (("search", s.searches), ("read", s.reads), ("vote", s.votes), ("write", s.writes)) %}
-      <td style="padding:5px 8px;text-align:right">{{ n }}<br><span class="meta" style="font-size:11px">{{ "{:,}".format(s.tok[k]) if s.tok[k] else "—" }}</span></td>
+      <td class="num">{{ n }}<span class="sub">{{ "{:,}".format(s.tok[k]) if s.tok[k] else "—" }}</span></td>
       {% endfor %}
-      <td style="padding:5px 8px;text-align:right">{% if s.tier1 %}{{ '%.0f'|format(s.tier1_hit_rate * 100) }}%{% else %}—{% endif %}</td>
+      <td class="num">{% if s.tier1 %}{{ '%.0f'|format(s.tier1_hit_rate * 100) }}%{% else %}—{% endif %}</td>
     </tr>
   {% endfor %}
   {# The sessionless bucket, apart and last. It is not a session — see the
@@ -124,22 +135,23 @@
      biggest one on the page rather than as a catch-all. #}
   {% if u.loose %}
     {% set l = u.loose %}
-    <tr style="border-top:2px solid var(--line)">
-      <td style="padding:5px 8px;white-space:nowrap" title="Calls that carried no X-Engram-Session header. A bare CLI run — a terminal, a script, a hook — has no session, because one invocation is not an editor session. Export ENGRAM_SESSION to group them.">no session <span class="meta">· CLI &amp; hooks</span></td>
-      <td style="padding:5px 8px" class="meta">{{ l.author or '—' }}</td>
-      <td style="padding:5px 8px;white-space:nowrap" class="meta">{{ l.first[:10] }} → {{ l.last[:10] }}</td>
-      <td style="padding:5px 8px;text-align:right">{{ l.calls }}</td>
-      <td style="padding:5px 8px;text-align:right"><strong>{{ '{:,}'.format(l.tokens) }}</strong></td>
+    <tr style="border-top:2px solid var(--border)">
+      <td class="nowrap" title="Calls that carried no X-Engram-Session header. A bare CLI run — a terminal, a script, a hook — has no session, because one invocation is not an editor session. Export ENGRAM_SESSION to group them.">no session <span class="muted">· CLI &amp; hooks</span></td>
+      <td class="muted">{{ l.author or '—' }}</td>
+      <td class="nowrap muted">{{ l.first[:10] }} → {{ l.last[:10] }}</td>
+      <td class="num">{{ l.calls }}</td>
+      <td class="num"><b>{{ '{:,}'.format(l.tokens) }}</b></td>
       {% for k, n in (("search", l.searches), ("read", l.reads), ("vote", l.votes), ("write", l.writes)) %}
-      <td style="padding:5px 8px;text-align:right">{{ n }}<br><span class="meta" style="font-size:11px">{{ "{:,}".format(l.tok[k]) if l.tok[k] else "—" }}</span></td>
+      <td class="num">{{ n }}<span class="sub">{{ "{:,}".format(l.tok[k]) if l.tok[k] else "—" }}</span></td>
       {% endfor %}
-      <td style="padding:5px 8px;text-align:right">{% if l.tier1 %}{{ '%.0f'|format(l.tier1_hit_rate * 100) }}%{% else %}—{% endif %}</td>
+      <td class="num">{% if l.tier1 %}{{ '%.0f'|format(l.tier1_hit_rate * 100) }}%{% else %}—{% endif %}</td>
     </tr>
   {% endif %}
-  </table>
+    </tbody>
+  </table></div>
   {% if u.loose %}
-  <div class="meta" style="margin-top:8px;padding-top:8px;border-top:1px solid var(--line)">
-    <strong>no session</strong> is a bucket, not a session: every call that arrived without an
+  <div class="Box-footer">
+    <b>no session</b> is a bucket, not a session: every call that arrived without an
     <code>X-Engram-Session</code> header lands in it, so it spans the whole window rather than one
     sitting. A bare CLI run has none — one invocation is not an editor session, and minting an id
     per call would make a hundred one-call sessions. A caller that does belong to a session can say
@@ -148,16 +160,20 @@
   {% endif %}
 </div>
 {% else %}
-<div class="empty">Nothing in this window. Calls are logged from the store's side.</div>
+<div class="Box"><div class="blankslate">Nothing in this window. Calls are logged from the store's side.</div></div>
 {% endif %}
 
 {% if u.repeated %}
-<h2>Asked again and again</h2>
-<div class="card">
-  <div class="meta" style="margin-bottom:8px">Questions asked in more than one session. Each is a document nobody wrote yet, or a hub that does not point at it.</div>
-  {% for r in u.repeated %}
-  <div style="padding:4px 0"><a href="/search?q={{ r.q|urlencode }}">{{ r.q }}</a> <span class="meta">· {{ r.sessions }} sessions · {{ r.times }} times</span></div>
-  {% endfor %}
+<h2 class="section-h">Asked again and again</h2>
+<div class="Box">
+  <div class="Box-body" style="padding-bottom:4px">
+    <p class="muted" style="margin:0 0 12px;font-size:12px">Questions asked in more than one session. Each is a document nobody wrote yet, or a hub that does not point at it.</p>
+    <ul class="mini-tl">
+    {% for r in u.repeated %}
+      <li><span class="when">{{ r.sessions }} sessions · {{ r.times }} times</span><a href="/search?q={{ r.q|urlencode }}">{{ r.q }}</a></li>
+    {% endfor %}
+    </ul>
+  </div>
 </div>
 {% endif %}
 {% endif %}
