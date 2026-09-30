@@ -1,16 +1,39 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}Recent changes — engram{% endblock %}
+{% block context %}<a href="/">engram</a><span class="sep">/</span><span>Recent changes</span>{% endblock %}
+{% block narrow %} Main-inner--narrow{% endblock %}
 {% block body %}
-<h1>Recent changes</h1>
-<p class="meta">Document updates and revisions on one timeline. A <strong>revision</strong> row links to the body as it stood just before that change.</p>
-{% for r in rows %}
-<div class="card" style="padding:9px 14px">
-  <span class="meta" style="font-family:ui-monospace,monospace">{{ r.at }}</span>
-  {% if r.kind == 'rev' %}<span class="pill" style="background:#fde68a;color:#92400e">revision</span>{% endif %}
-  <a href="{% if r.kind == 'rev' %}/rev/{{ r.rev_id }}{% else %}/doc/{{ r.path }}{% endif %}"><strong>{{ r.title }}</strong></a>
-  {% if r.note %}<span class="meta"> — {{ r.note }}</span>{% endif %}
-  {% if r.author %}<span class="meta"> · {{ r.author }}</span>{% endif %}
-  <div class="crumb">{{ r.path }}</div>
-</div>
+<div class="PageHead"><div>
+  <h1>Recent changes</h1>
+  <p>Document updates and revisions on one timeline. A <b>revision</b> links to the body as it stood just before that change.</p>
+</div></div>
+
+{% for day, rows in days %}
+<h2 class="day-h">{{ day }}</h2>
+<ol class="Timeline">
+  {% for r in rows %}
+  <li class="TimelineItem">
+    <span class="TimelineItem-badge {{ r.kind }}">{{ ui.icon('commit' if r.kind == 'rev' else 'pencil') }}</span>
+    <div class="TimelineItem-body">
+      {% if r.kind == 'rev' %}
+        <b style="color:var(--fg)">{{ r.author or 'someone' }}</b> revised
+        <a class="title" href="/doc/{{ r.path }}">{{ r.title }}</a>{% if r.note %} — <span class="note">{{ r.note }}</span>{% endif %}
+        · <a href="/rev/{{ r.rev_id }}">previous version</a>
+      {% else %}
+        <a class="title" href="/doc/{{ r.path }}">{{ r.title }}</a> updated
+      {% endif %}
+      · <span title="{{ r.at }}">{{ r.dt|ago }}</span>
+      <span class="path">{{ r.path }}</span>
+    </div>
+  </li>
+  {% endfor %}
+</ol>
+{% else %}
+<div class="Box"><div class="blankslate">{{ ui.icon('history', 24) }}<h3>No changes yet</h3><p>Every write to the store appears here.</p></div></div>
 {% endfor %}
+
+{% if count >= limit and limit < 300 %}
+<p class="muted" style="text-align:center"><a class="btn btn-sm" href="/changes?limit={{ [limit * 2, 300]|min }}">Show more</a></p>
+{% endif %}
 {% endblock %}

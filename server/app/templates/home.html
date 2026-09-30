@@ -1,27 +1,93 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block context %}<a href="/">Dashboard</a>{% endblock %}
 {% block body %}
-<h1>The brain</h1>
-<p class="meta">This page and an agent's <code>brain_search</code> use the same index and the same ranking.</p>
+<div class="PageHead"><div>
+  <h1>Home</h1>
+  <p>This page and an agent's <code>brain_search</code> use the same index and the same ranking.</p>
+</div></div>
 
-<h2>Areas</h2>
-<div class="grid">
-  {% for area, n in areas %}
-  <a class="card" href="/browse?area={{ area }}"><strong>{{ area }}</strong> <span class="meta">· {{ n }}</span></a>
-  {% endfor %}
+{% set broken = meta.get('broken_links', '0') %}
+<div class="stats">
+  <a class="stat" href="/browse"><span class="k">{{ ui.icon('file') }} Documents</span><span class="n">{{ meta.get('docs', '?') }}</span>
+    <span class="s">{% if meta.get('updated_at') %}last write {{ meta.updated_at|ago }}{% else %}&nbsp;{% endif %}</span></a>
+  <div class="stat"><span class="k">{{ ui.icon('list') }} Chunks</span><span class="n">{{ meta.get('chunks', '?') }}</span><span class="s">what a search returns</span></div>
+  <a class="stat" href="/browse"><span class="k">{{ ui.icon('repo') }} Repositories</span><span class="n">{{ repos|length }}</span><span class="s">{{ areas|length }} areas</span></a>
+  <div class="stat"><span class="k">{{ ui.icon('link') }} Broken links</span><span class="n{% if broken != '0' %} warn{% endif %}">{{ broken }}</span>
+    <span class="s">{% if broken != '0' %}[[links]] with no document{% else %}every [[link]] resolves{% endif %}</span></div>
 </div>
 
-<h2>Scopes</h2>
-<div class="grid">
-  {% for owner, repo, n in scopes %}
-  <a class="card" href="/browse?owner={{ owner }}&repo={{ repo }}"><strong>{{ owner }}/{{ repo }}</strong> <span class="meta">· {{ n }}</span></a>
-  {% endfor %}
-</div>
+<div class="dash">
+  <section>
+    <div class="section-h">Feed <a href="/changes">All changes</a></div>
+    <div class="Box">
+      <ul class="rows">
+      {% for r in feed %}
+        <li class="feed-item">
+          <span class="feed-icon {{ r.kind }}">{{ ui.icon('commit' if r.kind == 'rev' else 'pencil') }}</span>
+          <div class="feed-body">
+            <div class="feed-line">
+              {% if r.kind == 'rev' %}
+                <b style="color:var(--fg)">{{ r.author or 'someone' }}</b> revised
+                <a class="title" href="/doc/{{ r.path }}">{{ r.title }}</a>
+              {% else %}
+                <a class="title" href="/doc/{{ r.path }}">{{ r.title }}</a> updated
+              {% endif %}
+              {% if r.repo %}in <a href="/browse?owner={{ r.owner|urlencode }}&repo={{ r.repo|urlencode }}">{{ r.owner }}/{{ r.repo }}</a>{% endif %}
+            </div>
+            {% if r.note %}<div class="feed-note">{{ r.note }}</div>{% endif %}
+            <div class="feed-path">{{ r.path }}{% if r.kind == 'rev' %} · <a href="/rev/{{ r.rev_id }}">previous version</a>{% endif %}</div>
+          </div>
+          <span class="feed-time">{{ ui.when(r.dt) }}</span>
+        </li>
+      {% else %}
+        <li><div class="blankslate">{{ ui.icon('file', 24) }}<h3>No documents yet</h3>
+          <p>Writes from any connected machine show up here. <a href="/setup">Connect a machine</a>.</p></div></li>
+      {% endfor %}
+      </ul>
+    </div>
+  </section>
 
-<h2>Recent changes · <a href="/changes" style="font-weight:400;text-transform:none;letter-spacing:0">see all →</a></h2>
-{% for path, title, area, updated in recent %}
-<a class="card" href="/doc/{{ path }}" style="display:block">
-  <span class="pill">{{ area }}</span><strong>{{ title }}</strong>
-  <div class="crumb">{{ path }}{% if updated %} · {{ updated.strftime('%Y-%m-%d %H:%M') }}{% endif %}</div>
-</a>
-{% endfor %}
+  <aside>
+    <div class="Box">
+      <div class="Box-header"><h2 class="Box-title">Last 7 days</h2><a class="end" href="/usage?tab=sessions&days=7" style="font-size:12px">Sessions</a></div>
+      <div class="Box-body">
+      {% set t = week.totals if week else {} %}
+      {% if t and t.calls %}
+        <dl class="kv">
+          <dt>Sessions</dt><dd>{{ t.sessions }}</dd>
+          <dt>Calls</dt><dd>{{ '{:,}'.format(t.calls) }} <span class="muted">· {{ t.searches }} searches · {{ t.reads }} reads · {{ t.writes }} writes</span></dd>
+          <dt>Tokens</dt><dd>{{ '{:,}'.format(t.tokens) }} <span class="muted">est.</span></dd>
+          {% if t.tier1 %}<dt>Tier-1 hits</dt><dd>{{ '%.0f'|format(t.tier1_hit_rate * 100) }}% <span class="muted">· {{ t.escalated }} of {{ t.tier1 }} widened</span></dd>{% endif %}
+          <dt>Votes</dt><dd{% if t.searches and not t.votes %} class="warn"{% endif %}>{{ t.votes }}{% if t.searches and not t.votes %} — the ranking is not learning{% endif %}</dd>
+        </dl>
+      {% else %}
+        <p class="muted" style="margin:0">No calls in the last 7 days.</p>
+      {% endif %}
+      </div>
+    </div>
+
+    {% if week and week.repeated %}
+    <div class="Box">
+      <div class="Box-header"><h2 class="Box-title">Asked again and again</h2></div>
+      <div class="Box-body">
+        <p class="muted" style="margin:0 0 12px;font-size:12px">Questions from more than one session — a document nobody wrote yet, or a hub that does not point at it.</p>
+        <ul class="mini-tl">
+        {% for q_ in week.repeated[:6] %}
+          <li><span class="when">{{ q_.sessions }} sessions · {{ q_.times }} times</span><a href="/search?q={{ q_.q|urlencode }}">{{ q_.q }}</a></li>
+        {% endfor %}
+        </ul>
+      </div>
+    </div>
+    {% endif %}
+
+    <div class="Box">
+      <div class="Box-header"><h2 class="Box-title">Connect a machine</h2></div>
+      <div class="Box-body">
+        <p style="margin:0 0 12px">Register the remote MCP server, sign in once, and the brain is in every Claude Code session on that machine.</p>
+        <a class="btn btn-block" href="/setup">{{ ui.icon('terminal') }} Setup guide</a>
+      </div>
+    </div>
+  </aside>
+</div>
 {% endblock %}

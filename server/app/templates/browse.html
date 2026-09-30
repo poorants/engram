@@ -1,22 +1,113 @@
 {% extends "base.html" %}
-{% block title %}{{ scope }} — engram{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}{% if repo %}{{ owner ~ '/' if owner }}{{ repo }}{% elif area %}{{ area }}{% else %}Repositories{% endif %} — engram{% endblock %}
+{% block context %}<a href="/">engram</a><span class="sep">/</span>{% if repo %}<span>{{ owner ~ '/' if owner }}{{ repo }}</span>{% elif area %}<span>{{ area }}</span>{% else %}<span>Repositories</span>{% endif %}{% endblock %}
+
+{#- One folder level of the tree, recursively. Top-level folders (the PARA
+    areas) start open; deeper ones start open too when the repository is small
+    enough that folding would only add clicks. -#}
+{% macro tree(node, open_all) %}
+<ul class="tree">
+  {% for d in node.dirs %}
+  <li>
+    <details class="dir"{% if node.depth == 0 or open_all %} open{% endif %}>
+      <summary class="tree-row" style="--depth:{{ node.depth }}">{{ ui.icon('chevron', 12, 'chev') }}{{ ui.icon('dir', 16, 'dir') }}<span class="title">{{ d.name }}</span><span class="Counter" style="margin-left:auto">{{ d.count }}</span></summary>
+      {{ tree(d, open_all) }}
+    </details>
+  </li>
+  {% endfor %}
+  {% for f in node.files %}
+  <li><a class="tree-row" href="/doc/{{ f.path }}" style="--depth:{{ node.depth }}">
+    <span style="width:12px;flex:none"></span>{{ ui.icon('file', 16, 'file') }}
+    <span class="title">{{ f.title }}</span><span class="fname">{{ f.fname }}</span>
+    {% if f.updated %}<time title="{{ f.updated|stamp }}">{{ f.updated|ago }}</time>{% endif %}
+  </a></li>
+  {% endfor %}
+</ul>
+{% endmacro %}
+
 {% block body %}
-<h1>{{ scope }}</h1>
-<p class="meta">{{ total }} documents · by path
-  {% if repo %}· <a href="/search?q={{ repo }}&only_repo={{ repo }}">search inside this scope</a>{% endif %}
-  {% if area and repo %}· <a href="/browse?owner={{ owner }}&repo={{ repo }}">the whole scope</a>{% endif %}</p>
-
-{% for area_name, docs in grouped %}
-<h2>{{ area_name }} · {{ docs|length }}</h2>
-{% for d in docs %}
-<a class="card" href="/doc/{{ d.path }}" style="display:block;padding:9px 14px">
-  <strong>{{ d.title }}</strong>{% if d.updated %} <span class="meta">· {{ d.updated }}</span>{% endif %}
-  <div class="crumb">{{ d.path }}</div>
-</a>
+{% if mode == 'index' %}
+<div class="PageHead"><div>
+  <h1>{% if owner %}{{ owner }}{% else %}Repositories{% endif %}</h1>
+  <p>{{ total }} documents · most recently written first{% if owner %} · <a href="/browse">all owners</a>{% endif %}</p>
+</div></div>
+{% for own, repos in by_owner %}
+<h2 class="owner-h">{{ ui.avatar(own, 'avatar-lg') }} <a href="/browse?owner={{ own|urlencode }}" style="color:var(--fg)">{{ own }}</a> <span class="Counter">{{ repos|length }}</span></h2>
+<div class="Box">
+  {% for r in repos %}
+  <div class="repo-row">
+    <span style="color:var(--fg-muted);margin-top:3px">{{ ui.icon('repo') }}</span>
+    <div style="min-width:0;flex:1">
+      <h3><a href="/browse?owner={{ r.owner|urlencode }}&repo={{ r.repo|urlencode }}">{{ r.repo }}</a> <span class="Label" style="vertical-align:2px">{{ r.docs }} docs</span></h3>
+      <div class="areas">
+        {% for a, n in r.areas %}<a class="Label Label--accent" href="/browse?owner={{ r.owner|urlencode }}&repo={{ r.repo|urlencode }}&area={{ a|urlencode }}">{{ a or 'root' }} {{ n }}</a>{% endfor %}
+      </div>
+      {% if r.updated %}<div class="meta">Updated {{ ui.when(r.updated) }}</div>{% endif %}
+    </div>
+    <a class="btn btn-sm" href="/search?q={{ r.repo|urlencode }}&only_repo={{ r.repo|urlencode }}">{{ ui.icon('search') }} Search</a>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+<div class="Box"><div class="blankslate">{{ ui.icon('repo', 24) }}<h3>No repositories yet</h3><p>A repository appears when its first document is written. <a href="/setup">Connect a machine</a>.</p></div></div>
 {% endfor %}
+
+{% elif mode == 'repo' %}
+<div class="RepoHead">
+  {{ ui.icon('repo') }}
+  {% if owner %}<a href="/browse?owner={{ owner|urlencode }}">{{ owner }}</a><span class="sep">/</span>{% endif %}
+  <strong><a href="/browse?owner={{ owner|urlencode }}&repo={{ repo|urlencode }}">{{ repo }}</a></strong>
+  <span class="Label">{{ tabs|map(attribute=1)|sum }} docs</span>
+  <span style="margin-left:auto"></span>
+  <a class="btn btn-sm" href="/search?q={{ repo|urlencode }}&only_repo={{ repo|urlencode }}">{{ ui.icon('search') }} Search in this repository</a>
+</div>
+
+<nav class="UnderlineNav" aria-label="Areas">
+  <a href="/browse?owner={{ owner|urlencode }}&repo={{ repo|urlencode }}"{% if not area %} aria-current="page"{% endif %}>{{ ui.icon('book') }} All <span class="Counter">{{ tabs|map(attribute=1)|sum }}</span></a>
+  {% for a, n in tabs %}
+  <a href="/browse?owner={{ owner|urlencode }}&repo={{ repo|urlencode }}&area={{ a|urlencode }}"{% if area == a %} aria-current="page"{% endif %}>{{ ui.area_icon(a) }} {{ a or 'root' }} <span class="Counter">{{ n }}</span></a>
+  {% endfor %}
+</nav>
+
+{% for key, node in groups %}
+<div class="Box">
+  <div class="Box-header">
+    {% if latest %}
+    <div class="latest">
+      {{ ui.avatar(latest.author or '?') }}
+      <b>{{ latest.author or 'someone' }}</b>
+      <span class="note"><a href="/doc/{{ latest.path }}" style="color:inherit">{{ latest.note or latest.title }}</a></span>
+    </div>
+    <span class="end muted" style="font-size:12px">{{ ui.icon('history') }} {{ ui.when(latest.at) }}</span>
+    {% else %}
+    <span class="Box-title">{{ total }} document{{ '' if total == 1 else 's' }}</span>
+    {% endif %}
+  </div>
+  {% if node.count %}{{ tree(node, total <= 40) }}{% else %}<div class="blankslate">Nothing here.</div>{% endif %}
+</div>
 {% endfor %}
 
-{% if not grouped %}
-<div class="empty">Nothing here.</div>
+{% if readme_html and not area %}
+<div class="Box">
+  <div class="Box-header"><span class="Box-title">{{ ui.icon('book') }} README.md</span>
+    <a class="end" href="/doc/{{ owner }}/{{ repo }}/README.md" style="font-size:12px">Open</a></div>
+  <article class="markdown-body">{{ readme_html|safe }}</article>
+</div>
+{% endif %}
+
+{% else %}
+<div class="PageHead"><div>
+  <h1>{{ ui.area_icon(area, 20) }} {{ area }}</h1>
+  <p>{{ total }} documents across {{ groups|length }} repositor{{ 'y' if groups|length == 1 else 'ies' }}</p>
+</div></div>
+{% for key, node in groups %}
+<div class="Box">
+  <div class="Box-header">{{ ui.avatar(key[0]) }}<a class="Box-title" href="/browse?owner={{ key[0]|urlencode }}&repo={{ key[1]|urlencode }}">{{ key[0] }}/{{ key[1] }}</a><span class="Counter end">{{ node.count }}</span></div>
+  {{ tree(node, true) }}
+</div>
+{% else %}
+<div class="Box"><div class="blankslate">Nothing in this area.</div></div>
+{% endfor %}
 {% endif %}
 {% endblock %}

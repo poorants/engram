@@ -1,56 +1,110 @@
 {% extends "base.html" %}
+{% import "_ui.html" as ui %}
 {% block title %}{{ doc.title }} — engram{% endblock %}
+{% block context %}{% if doc.repo %}<a href="/browse?owner={{ doc.owner|urlencode }}&repo={{ doc.repo|urlencode }}">{{ doc.owner }}/{{ doc.repo }}</a>{% else %}<a href="/">engram</a>{% endif %}{% endblock %}
 {% block body %}
-<div class="crumb" style="margin-bottom:12px">
-  {% if doc.is_revision %}<span class="pill" style="background:#fde68a;color:#92400e">past revision</span>
-    <a href="/doc/{{ doc.path }}">{{ doc.path }}</a> · {{ doc.updated_at }}
-    {% if doc.author %} · {{ doc.author }}{% endif %}{% if doc.note %} · {{ doc.note }}{% endif %}
-  {% else %}<span class="pill">{{ doc.owner }}/{{ doc.repo }}</span><span class="pill">{{ doc.area }}</span>{{ doc.path }}
-    {% if doc.updated_at %} · {{ doc.updated_at }}{% endif %}{% endif %} · {{ '{:,}'.format(doc.chars) }} chars
-  {% if doc.feedback and (doc.feedback.useful or doc.feedback.noise or doc.feedback.opened) %}
-    · <span title="Votes from searches — useful / noise / opened. utility is the decayed sum the ranking adds as a bonus (half-life 90 days).">👍 {{ doc.feedback.useful }} · 👎 {{ doc.feedback.noise }} · opened {{ doc.feedback.opened }} · utility {{ '%+.2f'|format(doc.feedback.utility) }}</span>
+{#- The path as a breadcrumb, as GitHub shows a file: every folder links to
+    that folder of the repository. #}
+{% set parts = doc.path.split('/') %}
+<nav class="Breadcrumb" aria-label="Path">
+  {% if doc.repo and parts|length > 2 %}
+    <a href="/browse?owner={{ parts[0]|urlencode }}">{{ parts[0] }}</a><span class="sep">/</span>
+    <a href="/browse?owner={{ parts[0]|urlencode }}&repo={{ parts[1]|urlencode }}">{{ parts[1] }}</a><span class="sep">/</span>
+    {% for p in parts[2:-1] %}
+      {% if loop.first %}<a href="/browse?owner={{ parts[0]|urlencode }}&repo={{ parts[1]|urlencode }}&area={{ p|urlencode }}">{{ p }}</a>{% else %}<span>{{ p }}</span>{% endif %}<span class="sep">/</span>
+    {% endfor %}
+    <strong>{{ parts[-1] }}</strong>
+  {% else %}
+    <strong>{{ doc.path }}</strong>
   {% endif %}
-</div>
+  {% if doc.is_revision %}<span class="Label Label--attention" style="margin-left:4px">revision {{ doc.id }}</span>{% endif %}
+</nav>
+
 {% if doc.is_revision %}
-<div class="card" style="border-color:#f59e0b">
-  This is <strong>an earlier body of this document</strong>. The current one is
-  <a href="/doc/{{ doc.path }}">here</a>.
-</div>
-{% endif %}
-<article class="prose">{{ doc.html|safe }}</article>
-
-{% if doc.revisions %}
-<h2>History · {{ doc.revisions|length }}</h2>
-<div class="card">
-  <table style="width:100%;border-collapse:collapse;font-size:13.5px">
-  {% for r in doc.revisions %}
-    <tr style="border-top:1px solid var(--line)">
-      <td style="padding:6px 8px;white-space:nowrap"><a href="/rev/{{ r.id }}">{{ r.at }}</a></td>
-      <td style="padding:6px 8px;white-space:nowrap" class="meta">{{ r.author or '—' }}</td>
-      <td style="padding:6px 8px">{{ r.note or '(no note)' }}</td>
-      <td style="padding:6px 8px;text-align:right;white-space:nowrap" class="meta">{{ '{:,}'.format(r.chars) }}</td>
-    </tr>
-  {% endfor %}
-  </table>
-  <div class="meta" style="margin-top:8px">Each row is <strong>the body as it stood just before that change</strong> — open one to read the document as it was.</div>
-</div>
+<div class="flash flash-warn">{{ ui.icon('history') }}This is <b>an earlier body of this document</b>{% if doc.note %}, as it stood before “{{ doc.note }}”{% endif %}{% if doc.author %} by {{ doc.author }}{% endif %}.
+  The current one is <a href="/doc/{{ doc.path }}">here</a>.</div>
 {% endif %}
 
-<div class="cols">
-{% if doc.backlinks %}
-<div><h2>Linked from · {{ doc.backlinks|length }}</h2>
-  {% for b in doc.backlinks %}<a class="card" href="/doc/{{ b.path }}" style="display:block">
-    <strong>{{ b.title }}</strong><div class="crumb">{{ b.path }}</div></a>{% endfor %}
-</div>
-{% endif %}
-{% if doc.outgoing %}
-<div><h2>Links out · {{ doc.outgoing|length }}</h2>
-  <div class="card">
-  {% for o in doc.outgoing %}
-    {% if o.path %}<a href="/doc/{{ o.path }}">{{ o.name }}</a>{% else %}<span class="broken" title="no such document">{{ o.name }}</span>{% endif %}{% if not loop.last %} · {% endif %}
-  {% endfor %}
+<div class="doc-grid">
+  <div style="min-width:0">
+    <div class="Box">
+      <div class="Box-header file-header">
+        <div class="info">
+          {% if doc.area and not doc.is_revision %}<span class="Label Label--accent">{{ doc.area }}</span>{% endif %}
+          <span>{{ '{:,}'.format(doc.chars) }} chars</span>
+          {% if doc.updated_at %}<span>·</span><span title="{{ doc.updated_at }}">{% if doc.is_revision %}replaced {% else %}updated {% endif %}{{ doc.updated_at|ago }}</span>{% endif %}
+          {% if doc.revisions %}<span>·</span><a href="#history">{{ ui.icon('history') }} {{ doc.revisions|length }} revision{{ '' if doc.revisions|length == 1 else 's' }}</a>{% endif %}
+        </div>
+        <button type="button" class="btn btn-sm" data-copy-path="{{ doc.path }}">{{ ui.icon('link') }} <span>Copy path</span></button>
+      </div>
+      <article class="markdown-body">{{ doc.html|safe }}</article>
+    </div>
+
+    {% if doc.revisions %}
+    <div class="Box" id="history">
+      <div class="Box-header"><h2 class="Box-title">{{ ui.icon('history') }} History</h2><span class="Counter">{{ doc.revisions|length }}</span></div>
+      <div class="tw"><table class="data">
+        <thead><tr><th>When</th><th>Author</th><th>Change</th><th class="num">Size before</th></tr></thead>
+        <tbody>
+        {% for r in doc.revisions %}
+        <tr>
+          <td class="nowrap"><a href="/rev/{{ r.id }}" title="{{ r.at }}">{{ r.at|ago }}</a></td>
+          <td class="nowrap muted">{{ r.author or '—' }}</td>
+          <td>{{ r.note or '(no note)' }}</td>
+          <td class="num muted">{{ '{:,}'.format(r.chars) }}</td>
+        </tr>
+        {% endfor %}
+        </tbody>
+      </table></div>
+      <div class="Box-footer">Each row opens <b>the body as it stood just before that change</b>.</div>
+    </div>
+    {% endif %}
   </div>
-</div>
-{% endif %}
+
+  <aside class="doc-side">
+    <div class="Box">
+      <div class="Box-header"><h2 class="Box-title">About</h2></div>
+      <div class="Box-body">
+        <dl class="kv">
+          {% if doc.repo %}<dt>Repository</dt><dd><a href="/browse?owner={{ doc.owner|urlencode }}&repo={{ doc.repo|urlencode }}">{{ doc.owner }}/{{ doc.repo }}</a></dd>{% endif %}
+          <dt>Path</dt><dd class="mono" style="font-size:12px">{{ doc.path }}</dd>
+          {% if doc.updated_at %}<dt>{% if doc.is_revision %}Replaced{% else %}Updated{% endif %}</dt><dd>{{ doc.updated_at }}</dd>{% endif %}
+          {% if doc.author %}<dt>Author</dt><dd>{{ doc.author }}</dd>{% endif %}
+          {% if doc.feedback and (doc.feedback.useful or doc.feedback.noise or doc.feedback.opened) %}
+          <dt title="Votes from searches. utility is the decayed sum the ranking adds as a bonus (half-life 90 days).">Votes</dt>
+          <dd>{{ doc.feedback.useful }} useful · {{ doc.feedback.noise }} noise · {{ doc.feedback.opened }} opened<br>
+            <span class="muted">utility {{ '%+.2f'|format(doc.feedback.utility) }}</span></dd>
+          {% endif %}
+        </dl>
+      </div>
+    </div>
+
+    {% if doc.toc and doc.toc|length > 1 %}
+    <div class="Box">
+      <div class="Box-header"><h2 class="Box-title">Outline</h2></div>
+      <div class="Box-body"><ul class="toc">
+        {% for h in doc.toc %}<li class="l{{ h.level }}"><a href="#{{ h.id }}">{{ h.text }}</a></li>{% endfor %}
+      </ul></div>
+    </div>
+    {% endif %}
+
+    {% if doc.backlinks %}
+    <div class="Box">
+      <div class="Box-header"><h2 class="Box-title">Linked from</h2><span class="Counter">{{ doc.backlinks|length }}</span></div>
+      <div class="Box-body"><ul class="link-list">
+        {% for b in doc.backlinks %}<li>{{ ui.icon('file') }}<a href="/doc/{{ b.path }}" title="{{ b.path }}">{{ b.title }}</a></li>{% endfor %}
+      </ul></div>
+    </div>
+    {% endif %}
+
+    {% if doc.outgoing %}
+    <div class="Box">
+      <div class="Box-header"><h2 class="Box-title">Links out</h2><span class="Counter">{{ doc.outgoing|length }}</span></div>
+      <div class="Box-body"><ul class="link-list">
+        {% for o in doc.outgoing %}<li>{{ ui.icon('link') }}{% if o.path %}<a href="/doc/{{ o.path }}" title="{{ o.path }}">{{ o.name }}</a>{% else %}<span class="broken" title="no such document">{{ o.name }}</span>{% endif %}</li>{% endfor %}
+      </ul></div>
+    </div>
+    {% endif %}
+  </aside>
 </div>
 {% endblock %}

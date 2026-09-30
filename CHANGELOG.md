@@ -8,6 +8,35 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Changed — the viewer looks like GitHub
+
+The store's web viewer is rebuilt on GitHub's interface and Primer's colour
+tokens, light and dark: a header with the search box (`/` focuses it), a left
+sidebar of repositories with a filter and the PARA areas, and 1px-bordered
+boxes. It works at phone width, where the sidebar becomes a drawer. Nothing
+comes from a CDN — CSS, script and the Pretendard font (OFL) are served by the
+app under `/static/`.
+
+- **Home** is a dashboard: counts, a feed of recent writes, the last seven days
+  of usage and the questions asked again and again.
+- **Browse** shows a repository as a file tree with PARA tabs and its hub
+  README rendered underneath; `/browse` alone lists every repository.
+- **Recent changes** is a timeline grouped by day; a document has an outline,
+  backlinks and history beside it.
+- Rendering: a `[[link]]` inside code stays literal, a broken link is shown
+  marked rather than as escaped HTML, task lists are checkboxes, and headings
+  get anchors.
+
+Every existing page URL and every `/api/*` route is unchanged.
+
+### Added — `/setup`, how a machine connects
+
+A setup checklist for the remote MCP server: register it with
+`claude mcp add … --callback-port 33418`, authenticate once, forward the
+callback over SSH, run `/mcp__engram__setup`, and what to do when it does not
+work. It is open without the token (it is read before anyone can sign in) and
+shows no brain data. The address comes from the new `ENGRAM_MCP_URL`.
+
 
 ## [0.11.0] — 2026-09-30
 

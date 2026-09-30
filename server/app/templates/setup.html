@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% import "_ui.html" as ui %}
+{% block title %}Connect a machine — engram{% endblock %}
+{% block context %}<a href="/">engram</a><span class="sep">/</span><span>Setup</span>{% endblock %}
+{% block narrow %} Main-inner--narrow{% endblock %}
+
+{#- A command with a copy button. `text` is exactly what is copied; the
+    prompt sign is drawn beside it and never copied. -#}
+{% macro cmd(text, prompt='$') -%}
+<div class="cmd" data-copy="{{ text }}">{% if prompt %}<span class="prompt">{{ prompt }} </span>{% endif %}{{ text }}</div>
+{%- endmacro %}
+
+{#- This page is open to anyone who can reach the store (see web.py's gate):
+    it is read before the reader can sign in. It must never show brain data. -#}
+{% block body %}
+<div class="PageHead"><div>
+  <h1>Connect a machine</h1>
+  <p>Claude Code reaches this brain through a remote MCP server. The machine keeps no store address and no token of its own: you sign in once with Google, and Claude Code keeps and refreshes the credential.</p>
+</div></div>
+
+{% if not mcp_url_set %}
+<div class="flash flash-warn">{{ ui.icon('alert') }}<b>ENGRAM_MCP_URL is not set on this store</b>, so the address below is a placeholder.
+  Replace <code>&lt;host&gt;</code> with the name <code>engram serve</code> answers on — or ask whoever runs the store to set
+  <code>ENGRAM_MCP_URL</code> in <code>server/.env</code>.</div>
+{% endif %}
+
+<div class="Box">
+  <div class="Box-header"><h2 class="Box-title">Setup checklist</h2><span class="end muted" style="font-size:12px">Tick a step when it is done — this browser remembers.</span></div>
+  <ol class="steps">
+    <li class="step">
+      <input type="checkbox" id="step-1" data-step="register">
+      <label class="step-n" for="step-1" title="Mark as done"><span class="n">1</span><span class="ok">{{ ui.icon('check') }}</span></label>
+      <div class="step-body">
+        <h2>Register the remote MCP server</h2>
+        <p>In a terminal on the machine:</p>
+        {{ cmd('claude mcp add --transport http --scope user --callback-port 33418 engram ' ~ mcp_url) }}
+        <p class="muted">No header and no token: the server is its own OAuth authorization server.
+          <code>--callback-port</code> pins the port the browser returns to after login, so it can be forwarded over SSH (step 2).</p>
+        <p>If an old stdio <code>engram</code> is registered, remove it first:</p>
+        {{ cmd('claude mcp remove engram -s user') }}
+      </div>
+    </li>
+
+    <li class="step">
+      <input type="checkbox" id="step-2" data-step="auth">
+      <label class="step-n" for="step-2" title="Mark as done"><span class="n">2</span><span class="ok">{{ ui.icon('check') }}</span></label>
+      <div class="step-body">
+        <h2>Authenticate — once per machine</h2>
+        <p>In Claude Code run <code>/mcp</code>, choose <b>engram</b> → <b>Authenticate</b>. A browser opens; sign in with Google using an <b>allowed account</b>.
+          Claude Code stores the token and refreshes it from then on.</p>
+        <h3>{{ ui.icon('terminal') }} Over SSH</h3>
+        <p>When Claude Code runs on a remote box and the browser is on your desktop, the login has to find its way back to port <code>33418</code> on the remote box.</p>
+        <ul>
+          <li><b>VS Code Remote-SSH</b> forwards the callback port automatically — nothing to do.</li>
+          <li><b>Plain ssh</b> needs the port forwarded when you connect:</li>
+        </ul>
+        {{ cmd('ssh -L 33418:localhost:33418 <host>') }}
+      </div>
+    </li>
+
+    <li class="step">
+      <input type="checkbox" id="step-3" data-step="finish">
+      <label class="step-n" for="step-3" title="Mark as done"><span class="n">3</span><span class="ok">{{ ui.icon('check') }}</span></label>
+      <div class="step-body">
+        <h2>Finish the machine</h2>
+        <p>In a Claude Code session run:</p>
+        {{ cmd('/mcp__engram__setup', prompt='') }}
+        <p>It installs the <b>engram plugin</b> — the skill and the capture hooks — and the <code>engram</code> binary the hooks run. Then <b>restart Claude Code</b>.</p>
+        <details class="manual">
+          <summary>Manual equivalent</summary>
+          <div>
+            <p>The plugin:</p>
+            {{ cmd('claude plugin marketplace add https://github.com/poorants/engram') }}
+            {{ cmd('claude plugin install engram@engram --scope user') }}
+            <p>The binary — macOS / Linux:</p>
+            {{ cmd('curl -fsSL https://raw.githubusercontent.com/poorants/engram/main/install.sh | sh') }}
+            <p>Windows (PowerShell):</p>
+            {{ cmd('irm https://raw.githubusercontent.com/poorants/engram/main/install.ps1 | iex', prompt='PS>') }}
+          </div>
+        </details>
+      </div>
+    </li>
+
+    <li class="step">
+      <input type="checkbox" id="step-4" data-step="verify">
+      <label class="step-n" for="step-4" title="Mark as done"><span class="n">4</span><span class="ok">{{ ui.icon('check') }}</span></label>
+      <div class="step-body">
+        <h2>Check it works</h2>
+        <p>After the restart, <code>/mcp</code> lists <b>engram</b> as connected, and asking a session to <i>search the brain</i> answers from this store.</p>
+      </div>
+    </li>
+  </ol>
+</div>
+
+<h2 class="section-h">{{ ui.icon('question') }} Troubleshooting</h2>
+<div class="Box">
+  <div class="Box-body">
+    <dl class="trouble">
+      <dt>The tools say “needs authentication”, even after the server was fixed</dt>
+      <dd>Claude Code remembers a server that once failed. Delete the <code>engram</code> key from
+        <code>~/.claude/mcp-needs-auth-cache.json</code> and restart Claude Code.</dd>
+
+      <dt>Nothing answers at the MCP address</dt>
+      <dd>The server has to be reachable from the machine — it lives on the tailnet, so the machine must be on it too.
+        Any HTTP answer, even a 401, means it is reachable:</dd>
+      <dd>{{ cmd('curl -sI ' ~ mcp_url) }}</dd>
+
+      <dt>The login finishes in the browser but Claude Code never hears of it</dt>
+      <dd>The callback did not reach port <code>33418</code>. Over plain ssh, reconnect with <code>-L 33418:localhost:33418</code> (step 2).</dd>
+
+      <dt>Starting over</dt>
+      <dd><code>claude mcp remove engram -s user</code> also deletes the stored OAuth token. Add the server again (step 1) and authenticate.</dd>
+    </dl>
+  </div>
+</div>
+{% endblock %}
