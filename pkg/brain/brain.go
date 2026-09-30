@@ -19,8 +19,7 @@
 //     MOC (acme/webapp/README.md) is addressed. The store refuses owners outside
 //     its allow-list with 403 (see Refused), so knowledge from a repo the store
 //     does not admit structurally cannot enter; that refusal is routed back to
-//     the caller, who may have a local file brain to use instead (the engram
-//     skill's job, not this package's).
+//     the caller as an answer, not an outage.
 //   - Delete is deliberately NOT exposed. The engram contract is "never delete,
 //     move to archives"; the store's soft delete stays reachable for operators
 //     via curl, not via an agent tool.
@@ -68,7 +67,7 @@ type Config struct {
 	// Session names the session every call belongs to, sent as
 	// X-Engram-Session. The store groups its usage log by it — tokens per
 	// session, the tier-1 hit rate — and nothing else. Empty means the calls
-	// are unattributed, which is correct for a bare CLI invocation.
+	// are unattributed.
 	Session string
 }
 
@@ -88,13 +87,13 @@ const SessionHeader = "X-Engram-Session"
 // ErrNoStore means no store address is configured. It is a setup error, not an
 // outage: reporting it as one sends people to look at the network instead of at
 // their configuration.
-var ErrNoStore = errors.New("no store address configured — run `engram store set <url>` (or set ENGRAM_STORE_URL)")
+var ErrNoStore = errors.New("no store address configured — the engram server's --store flag is empty")
 
-// ErrNoToken means this machine has no token and the call cannot proceed
+// ErrNoToken means the server has no token and the call cannot proceed
 // without one. Like ErrNoStore it is a setup error, reported here rather than
 // as the store's 401 — a rejection from the store reads as a wrong token and
 // sends people to rotate a credential that was never set in the first place.
-var ErrNoToken = errors.New("no store token on this machine — run `engram store set <url> --token <t>` (or set ENGRAM_TOKEN)")
+var ErrNoToken = errors.New("the engram server has no store token (ENGRAM_TOKEN in its environment), so it cannot write — tell the person who runs the server")
 
 // Client is a thin wrapper over the store's REST API.
 type Client struct {
@@ -144,9 +143,9 @@ func (e *APIError) Error() string {
 	base := fmt.Sprintf("[store %s %s] HTTP %d", e.Method, e.Path, e.Status)
 	switch e.Status {
 	case http.StatusUnauthorized:
-		return base + " — the store did not accept this machine's token; check ENGRAM_TOKEN / `engram store set --token`. (" + e.Message + ")"
+		return base + " — the store did not accept the engram server's token (ENGRAM_TOKEN in its environment). (" + e.Message + ")"
 	case http.StatusForbidden:
-		return base + " — the store does not admit this path's owner group; knowledge from this repo belongs in a local file brain. (" + e.Message + ")"
+		return base + " — the store does not admit this path's owner group (the store's ENGRAM_OWNERS); this repo's knowledge cannot be saved to it. (" + e.Message + ")"
 	case http.StatusNotFound:
 		return base + " — no such document. Paths are <owner>/<repo>/<area>/<name>.md; a repo hub is <owner>/<repo>/README.md. (" + e.Message + ")"
 	case http.StatusConflict:
@@ -714,8 +713,7 @@ func (c *Client) StoreScopes(ctx context.Context) (Scopes, error) {
 }
 
 // Refused reports whether an error is the store declining a path's owner group
-// — the signal a caller turns into "write this to the local file brain", as
-// opposed to a failure it should surface. Kept here so no caller has to match
+// — an answer about the path, as opposed to a failure of the store. Kept here so no caller has to match
 // on a status code or, worse, on message text.
 func Refused(err error) bool {
 	var apiErr *APIError

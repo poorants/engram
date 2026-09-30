@@ -9,9 +9,11 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
+	"time"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
@@ -294,5 +296,51 @@ func TestServeMCPAnswersToTheIssuerHostOnly(t *testing.T) {
 		if rec.Code != want {
 			t.Errorf("Host %s: got %d, want %d", host, rec.Code, want)
 		}
+	}
+}
+
+// /mcp__engram__setup is how a new machine is finished, so the prompt has to
+// be served to a logged-in session, with this server's own address in it.
+func TestServeServesTheSetupPrompt(t *testing.T) {
+	f := newServeFixture(t)
+	at := f.tsOAuth(t).seal("at", map[string]any{"sub": "g-1", "email": "alice@example.com", "exp": exp(time.Hour)})
+	cs, err := mcp.NewClient(&mcp.Implementation{Name: "t", Version: "0"}, nil).Connect(context.Background(),
+		&mcp.StreamableClientTransport{Endpoint: f.ts.URL + "/mcp", HTTPClient: &http.Client{Transport: bearerRT{at}}, MaxRetries: -1}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer cs.Close()
+
+	list, err := cs.ListPrompts(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var names []string
+	for _, p := range list.Prompts {
+		names = append(names, p.Name)
+	}
+	if !slices.Contains(names, "setup") {
+		t.Fatalf("prompts = %v, want setup", names)
+	}
+
+	got, err := cs.GetPrompt(context.Background(), &mcp.GetPromptParams{Name: "setup"})
+	if err != nil || len(got.Messages) != 1 {
+		t.Fatalf("get setup: %v %+v", err, got)
+	}
+	text := got.Messages[0].Content.(*mcp.TextContent).Text
+	for _, want := range []string{
+		f.ts.URL + "/mcp",
+		"claude mcp add --transport http --scope user --callback-port 33418 engram " + f.ts.URL + "/mcp",
+		"claude plugin install engram@engram --scope user",
+		"install.sh | sh",
+		"install.ps1 | iex",
+		"restart Claude Code",
+	} {
+		if !strings.Contains(text, want) {
+			t.Errorf("setup prompt is missing %q", want)
+		}
+	}
+	if strings.Contains(text, "{{") {
+		t.Errorf("setup prompt has an unfilled placeholder: %q", text)
 	}
 }

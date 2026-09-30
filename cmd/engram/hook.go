@@ -5,12 +5,13 @@ import (
 	"flag"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"regexp"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
-
-	"github.com/poorants/engram/pkg/workspace"
 )
 
 // The brain-loop hook. Both halves of the loop have a moment, and each gets the
@@ -52,6 +53,9 @@ import (
 //	ENGRAM_CAPTURE_COOLDOWN_MIN=30  minutes between Stop-backstop nudges
 //	ENGRAM_CAPTURE_PHRASES="a,b,c"  override the wrap-up phrases (comma-separated,
 //	                                case-insensitive substring match)
+//	ENGRAM_CAPTURE_OWNERS="a,b"     speak only in repos whose origin owner is one of
+//	                                these (comma-separated, case-insensitive). Unset:
+//	                                speak in every repo that has an origin
 
 // wrapUpPhrases are matched as case-insensitive substrings, so short forms are
 // deliberately avoided — "done" would fire on "I'm done reading that file".
@@ -76,68 +80,74 @@ type hookInput struct {
 	StopHookActive bool   `json:"stop_hook_active"`
 }
 
-// brainInfo is how the instruction names the brain being fed, and whether it is
-// the store (which changes what the model is told to do).
+// brainInfo names the repo a session is in: the coordinate its documents
+// take in the shared brain.
 type brainInfo struct {
-	display string
-	store   bool
-	// scoped says the cwd resolved to a real repo with a real owner/repo pair.
-	// A designated store is reachable from anywhere on the machine, so Resolve
-	// answers SourceStore in a directory that is no repo at all — and then the
-	// owner is unknown and the "repo" is just the folder's name. Saying "this
-	// repo" there is false, and naming a scope like `?/Downloads` invents one.
-	scoped bool
+	owner, repo string
 }
 
-// describeBrain answers what feeds this directory, or nil when nothing does.
+// brainName is how the instructions name the brain. It carries no address:
+// a session reaches the store only through the remote MCP server registered
+// as `engram`, so the address lives in that registration — this binary never
+// knows it.
+const brainName = "the shared brain (engram MCP)"
+
+// captureOwners is ENGRAM_CAPTURE_OWNERS, lower-cased, or nil when unset.
+// engram is open source and has no owner of its own to default to, so unset
+// means every owner: the hooks speak in any repo with an origin, and a store
+// that does not admit an owner says so when a save is tried.
+func captureOwners() []string {
+	var out []string
+	for _, o := range strings.Split(os.Getenv("ENGRAM_CAPTURE_OWNERS"), ",") {
+		if o = strings.ToLower(strings.TrimSpace(o)); o != "" {
+			out = append(out, o)
+		}
+	}
+	return out
+}
+
+// describeBrain answers whether the hooks speak in cwd, and for which
+// coordinate, or nil for silence. It reads only the git origin — no settings
+// file, no network: every session start runs it, and on a machine that cannot
+// reach the store a network call here would be paid as a timeout.
 //
-// **The store is asked first.** Resolve answers SourceStore whenever one is
-// designated, so a not-yet-migrated local para/ cannot hijack an admitted repo
-// into the file-vault instruction — which is exactly how a session ends up
-// hand-editing a hub MOC nobody reads.
+// Outside a repo with an origin it is silent. There is no coordinate to name,
+// and "this repo" would be a claim about something that does not exist.
 func describeBrain(cwd string) *brainInfo {
-	r := workspace.Resolve(cwd)
-	switch r.Source {
-	case workspace.SourceStore:
-		if !r.Admitted() {
-			// Admitted nowhere: this repo's knowledge lives in files.
-			if r.Base != "" {
-				return &brainInfo{display: "local file brain (" + filepath.ToSlash(r.Base) + ")"}
-			}
-			return nil
-		}
-		// A scope is only named when there is one to name. Outside a repo the
-		// store is still reachable and still worth searching, so the brain is
-		// reported — just without a coordinate it does not have.
-		if r.RepoRoot == "" || r.Owner == "" || r.Repo == "" {
-			return &brainInfo{display: "the shared store " + r.Store, store: true}
-		}
-		return &brainInfo{display: "the shared store " + r.Store + " (" + r.Owner + "/" + r.Repo + ")", store: true, scoped: true}
-	case workspace.SourceAbsorb, workspace.SourceShared, workspace.SourceLocal:
-		if r.Base == "" {
-			return nil
-		}
-		return &brainInfo{display: "the file brain at " + filepath.ToSlash(r.Base)}
+	owner, repo := originCoords(cwd)
+	if owner == "" || repo == "" {
+		return nil
 	}
-	return nil
+	if owners := captureOwners(); owners != nil && !slices.Contains(owners, strings.ToLower(owner)) {
+		return nil
+	}
+	return &brainInfo{owner: owner, repo: repo}
 }
 
-// connected is the opening clause both injections share: what brain is in
-// reach, and whether it is this repo's.
-//
-// "This repo is connected to …" is only true where there IS a repo. A store is
-// designated per machine, not per checkout, so a session opened in a home
-// directory or a downloads folder resolves to the store as well — and saying
-// "this repo" there names something that does not exist, next to a scope
-// (`?/Downloads`) invented out of the folder's name. The brain is still worth
-// announcing in such a directory; it is the claim about a repo that has to go.
-func connected(info *brainInfo) string {
-	if info.scoped {
-		return "This repo is connected to an engram brain — " + info.display + "."
+var originRe = regexp.MustCompile(`[:/]([^/:]+)/([^/]+?)(?:\.git)?/*$`)
+
+// originCoords is owner/repo from the origin remote of the repo holding dir,
+// for both the https and the scp-like ssh forms.
+func originCoords(dir string) (owner, repo string) {
+	out, err := exec.Command("git", "-C", dir, "remote", "get-url", "origin").Output()
+	if err != nil {
+		return "", ""
 	}
-	return "An engram brain is in reach from here — " + info.display +
-		". This directory is not a repo the brain has a scope for, so a document's " +
-		"owner and repo have to be given rather than derived."
+	return parseOrigin(strings.TrimSpace(string(out)))
+}
+
+func parseOrigin(url string) (owner, repo string) {
+	m := originRe.FindStringSubmatch(url)
+	if m == nil {
+		return "", ""
+	}
+	return m[1], m[2]
+}
+
+// connected is the opening clause both injections share.
+func connected(info *brainInfo) string {
+	return "This repo is connected to " + brainName + " — documents for it live under " +
+		info.owner + "/" + info.repo + "/ (or " + info.owner + "/shared/ for knowledge that outlives one repo)."
 }
 
 // recallInstruction is the READ half of the loop, injected once at SessionStart.
@@ -160,16 +170,11 @@ func connected(info *brainInfo) string {
 // only thing that can tell a knowledge question from a code one.
 //
 // **Nothing is fetched.** The store is not called, no document is listed, no
-// count is taken. That is the same constraint the update check lives under
-// (pkg/selfupdate/selfupdate.go): the session-start path is walked by every
-// session, so a network call there is paid by every session, and on a machine
-// that cannot reach the store it is paid as a timeout. What the brain holds is
+// count is taken: the session-start path is walked by every session, so a
+// network call there is paid by every session, and on a machine that cannot
+// reach the store it is paid as a timeout. What the brain holds is
 // searched when there is a question; what the hook injects is only the rule.
 func recallInstruction(info *brainInfo) string {
-	where := "`brain_search` (or `engram search`)"
-	if !info.store {
-		where = "`engram lint` and the PARA folders"
-	}
 	return "[engram — brain available] " + connected(info) +
 		" It holds what the code and the git history do not: design " +
 		"decisions and why they went that way, conventions, traps someone already hit, " +
@@ -177,7 +182,7 @@ func recallInstruction(info *brainInfo) string {
 		"So when a question is about knowledge rather than code — what this project is " +
 		"for, where the work got to, what was decided and why, how something is usually " +
 		"done here, whether this trap has been hit before — search the brain with " +
-		where + " BEFORE grepping the working tree. It answers at a fraction of the " +
+		"`brain_search` BEFORE grepping the working tree. It answers at a fraction of the " +
 		"cost of a file sweep, and a repo's tree cannot answer 'why' at all.\n\n" +
 		"This is background, not an instruction to act on now. Nothing needs searching " +
 		"until there is a question that wants it."
@@ -188,27 +193,16 @@ func captureInstruction(info *brainInfo, wrapup bool) string {
 	if wrapup {
 		head = "[engram — session wrap-up detected] "
 	}
-	var record string
-	if info.store {
-		record = "If there is, record it through the engram skill into the right PARA area — " +
-			"**via the store** (the brain_put MCP tool, or `engram put`; a note is required), " +
-			"never by writing a file. Weave links into the prose where the idea comes up, " +
-			"and check brain_integrity afterwards. " +
-			// The read-side half of the loop. A session that found its answer
-			// in the brain and says so makes the next session's first page
-			// right more often; this is the moment it still remembers which
-			// document that was.
-			"Also: if a brain document answered something in this session, say so with " +
-			"brain_feedback (or `engram feedback <path>`) — the ranking learns from it. "
-	} else {
-		// File-brain wording. MOC updating survives here because a file vault
-		// has no index and no search — the folder README is its only discovery
-		// mechanism. In the store, search fills that role, which is why the
-		// branch above has no MOC step. That is design, not an omission.
-		record = "If there is, record it through the engram skill into the right PARA folder, " +
-			"weave links into the prose, update that folder's MOC (README.md), and run `engram lint` " +
-			"to check integrity. "
-	}
+	record := "If there is, record it through the engram skill into the right PARA area — " +
+		"**via the store** (the brain_put MCP tool, or brain_patch for part of an existing " +
+		"document; a note is required), never by writing a file. Weave links into the prose " +
+		"where the idea comes up, and check brain_integrity afterwards. " +
+		// The read-side half of the loop. A session that found its answer
+		// in the brain and says so makes the next session's first page
+		// right more often; this is the moment it still remembers which
+		// document that was.
+		"Also: if a brain document answered something in this session, say so with " +
+		"brain_feedback — the ranking learns from it. "
 	body := connected(info) + " Look back over this " +
 		"session and judge whether anything worth keeping came out of it: a concept that got " +
 		"pinned down, a design decision, a research conclusion, a trap or constraint someone " +

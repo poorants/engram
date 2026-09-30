@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -40,21 +41,36 @@ func runHook(t *testing.T, payload string) (string, int) {
 	return sb.String(), code
 }
 
-// storeSettings designates a store in a scratch config and moves the process
-// into a temp repo, so the developer's own brain never decides a test.
-func storeSettings(t *testing.T) string {
+// repoWithOrigin makes a scratch repo whose origin is github.com/<owner>/widgets
+// and clears every capture knob, so neither the developer's own checkout nor
+// their shell profile decides a test.
+func repoWithOrigin(t *testing.T, owner string) string {
 	t.Helper()
-	dir := t.TempDir()
-	t.Setenv("ENGRAM_CONFIG_DIR", dir)
-	t.Setenv("ENGRAM_STORE_URL", "https://store.example")
-	t.Setenv("ENGRAM_TOKEN", "")
-	t.Setenv("ENGRAM_CAPTURE_DISABLE", "")
-	t.Setenv("ENGRAM_CAPTURE_PHRASES", "")
+	clearKnobs(t)
 	repo := t.TempDir()
-	if err := os.MkdirAll(filepath.Join(repo, "brain"), 0o755); err != nil {
-		t.Fatal(err)
+	for _, args := range [][]string{
+		{"init", "-q"},
+		{"remote", "add", "origin", "https://github.com/" + owner + "/widgets.git"},
+	} {
+		cmd := exec.Command("git", append([]string{"-C", repo}, args...)...)
+		if out, err := cmd.CombinedOutput(); err != nil {
+			t.Fatalf("git %v: %v\n%s", args, err, out)
+		}
 	}
 	return repo
+}
+
+func clearKnobs(t *testing.T) {
+	t.Helper()
+	for _, k := range []string{"DISABLE", "PHRASES", "OWNERS", "COOLDOWN_MIN"} {
+		t.Setenv("ENGRAM_CAPTURE_"+k, "")
+	}
+}
+
+// storeSettings is the ordinary case: a repo with an origin, no owner filter.
+func storeSettings(t *testing.T) string {
+	t.Helper()
+	return repoWithOrigin(t, "acme")
 }
 
 func payload(t *testing.T, v map[string]any) string {
@@ -167,12 +183,9 @@ func TestStopHookActiveNeverRefires(t *testing.T) {
 	}
 }
 
-// A directory with no brain behind it has nothing to be reflected into.
+// A directory that is no repo with an origin has no coordinate to save under.
 func TestNoBrainMeansNoNudge(t *testing.T) {
-	dir := t.TempDir()
-	t.Setenv("ENGRAM_CONFIG_DIR", dir)
-	t.Setenv("ENGRAM_STORE_URL", "")
-	t.Setenv("ENGRAM_CAPTURE_DISABLE", "")
+	clearKnobs(t)
 	stdout, code := runHook(t, payload(t, map[string]any{
 		"hook_event_name": "UserPromptSubmit",
 		"prompt":          "thanks, that's it for today",
@@ -222,26 +235,6 @@ func TestSessionIDCannotEscapeTheTempDirectory(t *testing.T) {
 	}
 }
 
-// status assembles its map in memory from typed fields, so its numbers are Go
-// ints — not the float64s a decoded JSON body carries. A renderer that handles
-// only the JSON case prints "?" for a count that is sitting right there.
-func TestCountsRenderFromBothIntAndFloat(t *testing.T) {
-	for _, tc := range []struct {
-		v    any
-		want string
-	}{
-		{42, "42"},          // status, built in process
-		{float64(42), "42"}, // anything decoded from the store's JSON
-		{int64(42), "42"},
-		{"42", "42"},
-		{nil, "?"},
-	} {
-		if got := nOf(map[string]any{"docs": tc.v}, "docs"); got != tc.want {
-			t.Errorf("nOf(%T %v) = %q, want %q", tc.v, tc.v, got, tc.want)
-		}
-	}
-}
-
 // SessionStart is the read half of the loop. It must fire unconditionally —
 // there is no prompt to match yet, and that is the point — and it must stay
 // offline: the session-start path is walked by every session, so a store call
@@ -283,13 +276,11 @@ func TestSessionStartInjectsTheRecallRule(t *testing.T) {
 	}
 }
 
-// A directory with no brain gets nothing at SessionStart either. The recall
-// rule names a store; injected where none is designated, it would point the
-// model at a tool that answers with an error.
+// Outside a repo SessionStart says nothing either: "this repo is connected"
+// would name a repo that does not exist, next to a scope invented from the
+// folder's name.
 func TestSessionStartIsSilentWithoutABrain(t *testing.T) {
-	t.Setenv("ENGRAM_CONFIG_DIR", t.TempDir())
-	t.Setenv("ENGRAM_STORE_URL", "")
-	t.Setenv("ENGRAM_CAPTURE_DISABLE", "")
+	clearKnobs(t)
 	stdout, code := runHook(t, payload(t, map[string]any{
 		"hook_event_name": "SessionStart",
 		"cwd":             t.TempDir(),
@@ -313,56 +304,58 @@ func TestCaptureDisableAlsoSilencesSessionStart(t *testing.T) {
 	}
 }
 
-// The case the first SessionStart test missed. A store is designated per
-// MACHINE, so it resolves in a directory that is no repo at all — a home
-// folder, a downloads folder — and the earlier test only proved silence when
-// there was no store configured anywhere, which is not how anyone runs this.
-// Left unguarded, every session on the machine opened with "This repo is
-// connected to …(?/Downloads)": a repo that does not exist, and a scope
-// invented from the folder's name.
-func TestUnscopedDirectoryNeitherClaimsARepoNorInventsAScope(t *testing.T) {
-	storeSettings(t) // a store, designated the way a real machine has one
-	outside := t.TempDir()
+// ENGRAM_CAPTURE_OWNERS narrows the hooks to the owners a store admits. A
+// store refuses a save for any other owner, so a reflection there would only
+// produce a refusal.
+func TestOwnerFilterSilencesOtherOwners(t *testing.T) {
+	repo := repoWithOrigin(t, "Acme")
+	t.Setenv("ENGRAM_CAPTURE_OWNERS", "other, someone")
 	stdout, code := runHook(t, payload(t, map[string]any{
-		"hook_event_name": "SessionStart",
-		"cwd":             outside,
+		"hook_event_name": "SessionStart", "cwd": repo,
 	}))
-	if code != exitOK {
-		t.Fatalf("exit = %d — a hook must never fail a session", code)
+	if code != exitOK || stdout != "" {
+		t.Fatalf("an owner outside the filter must be silent; got %q (exit %d)", stdout, code)
 	}
-	var out struct {
-		HookSpecificOutput struct {
-			AdditionalContext string `json:"additionalContext"`
-		} `json:"hookSpecificOutput"`
-	}
-	if err := json.Unmarshal([]byte(stdout), &out); err != nil {
-		t.Fatalf("stdout is not the hook protocol: %v (%q)", err, stdout)
-	}
-	ctx := out.HookSpecificOutput.AdditionalContext
-	if strings.Contains(ctx, "This repo is connected") {
-		t.Errorf("claimed a repo outside one: %q", ctx)
-	}
-	if strings.Contains(ctx, "?/") || strings.Contains(ctx, filepath.Base(outside)) {
-		t.Errorf("invented a scope from the folder name: %q", ctx)
-	}
-	// The brain is still reachable from here, so it is still announced.
-	if !strings.Contains(ctx, "in reach from here") || !strings.Contains(ctx, "brain_search") {
-		t.Errorf("the brain must still be announced outside a repo: %q", ctx)
+
+	// Case-insensitive: the origin says Acme, the filter says acme.
+	t.Setenv("ENGRAM_CAPTURE_OWNERS", "other, acme")
+	stdout, _ = runHook(t, payload(t, map[string]any{
+		"hook_event_name": "SessionStart", "cwd": repo,
+	}))
+	if !strings.Contains(stdout, "Acme/widgets/") {
+		t.Fatalf("an owner on the filter must be told its coordinate; got %q", stdout)
 	}
 }
 
-// The capture half shares the opening clause, so it inherits the same fix.
-func TestCaptureOutsideARepoAlsoClaimsNoRepo(t *testing.T) {
-	storeSettings(t)
-	stdout, code := runHook(t, payload(t, map[string]any{
-		"hook_event_name": "UserPromptSubmit",
-		"prompt":          "오늘 고생했어, 이만 마무리하자",
-		"cwd":             t.TempDir(),
-	}))
-	if code != exitOK {
-		t.Fatalf("exit = %d", code)
+// The coordinate comes from the origin in its common spellings.
+func TestParseOrigin(t *testing.T) {
+	for _, tc := range []struct{ in, owner, repo string }{
+		{"https://github.com/acme/widgets.git", "acme", "widgets"},
+		{"https://github.com/acme/widgets", "acme", "widgets"},
+		{"git@github.com:acme/widgets.git", "acme", "widgets"},
+		{"ssh://git@host:2222/acme/widgets.git/", "acme", "widgets"},
+		{"not a url", "", ""},
+	} {
+		owner, repo := parseOrigin(tc.in)
+		if owner != tc.owner || repo != tc.repo {
+			t.Errorf("parseOrigin(%q) = %q, %q; want %q, %q", tc.in, owner, repo, tc.owner, tc.repo)
+		}
 	}
-	if strings.Contains(stdout, "This repo is connected") || strings.Contains(stdout, "?/") {
-		t.Errorf("capture claimed a repo outside one: %q", stdout)
+}
+
+// The client no longer knows where the store is, so the injection must not
+// pretend to: it names the MCP registration, never an address or a CLI verb.
+func TestInjectionNamesTheMCPServerNotAnAddress(t *testing.T) {
+	repo := storeSettings(t)
+	stdout, _ := runHook(t, payload(t, map[string]any{
+		"hook_event_name": "UserPromptSubmit", "prompt": "wrap up", "cwd": repo,
+	}))
+	if !strings.Contains(stdout, "engram MCP") {
+		t.Errorf("the injection must name the engram MCP server: %q", stdout)
+	}
+	for _, bad := range []string{"http://", "https://", "engram put", "engram search", "engram lint"} {
+		if strings.Contains(stdout, bad) {
+			t.Errorf("the injection mentions %q, which the client no longer has: %q", bad, stdout)
+		}
 	}
 }
