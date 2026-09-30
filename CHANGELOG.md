@@ -8,6 +8,13 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Removed — Intel Mac builds
+
+Releases no longer carry `darwin_amd64`; macOS is Apple Silicon only, and
+`install.sh` says so on an Intel Mac instead of fetching a missing asset. The
+release smoke matrix no longer lists `macos-13`, whose runner GitHub retired —
+that job sat queued forever and held the v0.10.5 and v0.11.0 release runs open.
+
 ### Removed — the client surface
 
 0.11.0 added `engram serve`, the remote MCP server with its own login. It is now

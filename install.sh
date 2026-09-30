@@ -115,7 +115,10 @@ esac
 
 arch=$(uname -m)
 case "$arch" in
-  x86_64|amd64) arch=amd64 ;;
+  # Intel Macs are not built: Apple Silicon is all that is left in use, and
+  # GitHub no longer has a runner to smoke-test an Intel build on.
+  x86_64|amd64) [ "$os" = darwin ] && die "Intel Macs are not supported — releases carry macOS arm64 only"
+                arch=amd64 ;;
   aarch64|arm64) arch=arm64 ;;
   *) die "unsupported architecture: $arch (releases carry amd64 and arm64)" ;;
 esac

@@ -179,7 +179,6 @@ hooks find it there.
 |---|---|---|
 | Linux | x86-64 | `engram_<version>_linux_amd64.tar.gz` |
 | Linux | ARM64 | `engram_<version>_linux_arm64.tar.gz` |
-| macOS | Intel | `engram_<version>_darwin_amd64.tar.gz` |
 | macOS | Apple Silicon | `engram_<version>_darwin_arm64.tar.gz` |
 | Windows | x86-64 | `engram_<version>_windows_amd64.zip` |
 | Windows | ARM64 | `engram_<version>_windows_arm64.zip` |
