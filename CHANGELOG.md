@@ -8,6 +8,9 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+
+## [0.11.0] — 2026-09-30
+
 ### Added — `engram serve`, the remote MCP server with its own OAuth
 
 The `brain_*` tools over streamable HTTP, run next to the store. The server
@@ -659,7 +662,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.10.5...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.11.0...HEAD
+[0.11.0]: https://github.com/poorants/engram/compare/v0.10.5...v0.11.0
 [0.10.5]: https://github.com/poorants/engram/compare/v0.10.4...v0.10.5
 [0.10.4]: https://github.com/poorants/engram/compare/v0.10.3...v0.10.4
 [0.10.3]: https://github.com/poorants/engram/compare/v0.10.2...v0.10.3
