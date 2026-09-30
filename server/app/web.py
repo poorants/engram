@@ -12,6 +12,7 @@ Nothing but the database is read. Document bodies arrive over HTTP and live in
 from __future__ import annotations
 
 import gzip
+import hashlib
 import html
 import json
 import os
@@ -21,10 +22,11 @@ import sys
 import time
 import urllib.parse
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Query, Request
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from markdown_it import MarkdownIt
 from psycopg_pool import ConnectionPool
@@ -95,6 +97,15 @@ SESSION_COOKIE = "engram_session"
 # when the deployment method changes.
 TZ = os.environ.get("ENGRAM_TZ", "UTC")
 HERE = Path(__file__).parent
+STATIC = HERE / "static"
+
+# The address of the remote MCP server (`engram serve`) machines register,
+# shown on /setup. The store does not serve MCP itself and cannot discover
+# where `engram serve` answers — it is usually a different port or a different
+# host name behind a proxy — so the deployment says so. Unset, the setup page
+# shows a placeholder and says what to fill in.
+MCP_URL = os.environ.get("ENGRAM_MCP_URL", "").strip()
+MCP_URL_PLACEHOLDER = "https://<host>/mcp"
 
 
 _tz_warned = False
@@ -135,6 +146,10 @@ def _configure(conn) -> None:
 pool = ConnectionPool(DSN, min_size=1, max_size=8, open=False,
                       check=ConnectionPool.check_connection, configure=_configure)
 templates = Jinja2Templates(directory=str(HERE / "templates"))
+# app.css and app.js are requested with ?v=<content hash>, so they can be
+# cached for a year and a deploy that changes them still reaches every browser.
+templates.env.globals["asset_v"] = hashlib.sha256(
+    (STATIC / "app.css").read_bytes() + (STATIC / "app.js").read_bytes()).hexdigest()[:10]
 md = MarkdownIt("commonmark", {"html": False, "linkify": True}).enable("table").enable("strikethrough")
 
 
@@ -165,7 +180,20 @@ app = FastAPI(title="engram store", docs_url="/api/docs", redoc_url=None, lifesp
 # documents exist, and nothing about what any of them contain.
 #
 # /login and /logout are how a browser authenticates in the first place.
-UNAUTHENTICATED_PATHS = frozenset({"/healthz", "/login", "/logout"})
+#
+# /setup is the guide for connecting a machine. A person reads it BEFORE they
+# can authenticate, so gating it would hide the instructions from exactly the
+# reader they are for. It holds no brain data: the route renders it without
+# the sidebar's repository list unless the caller could read that anyway.
+UNAUTHENTICATED_PATHS = frozenset({"/healthz", "/login", "/logout", "/setup"})
+
+# Stylesheet, script and fonts. The login and setup pages need them before a
+# browser has a session, and none of them says anything about what is stored.
+UNAUTHENTICATED_PREFIXES = ("/static/",)
+
+
+def is_unauthenticated_path(path: str) -> bool:
+    return path in UNAUTHENTICATED_PATHS or path.startswith(UNAUTHENTICATED_PREFIXES)
 
 
 def presented_token(request: Request) -> str:
@@ -243,7 +271,7 @@ async def authentication(request: Request, call_next):
     closed even if this list ever grows an entry it should not have.
     """
     path = request.url.path
-    if path not in UNAUTHENTICATED_PATHS:
+    if not is_unauthenticated_path(path):
         is_write = request.method not in ("GET", "HEAD", "OPTIONS")
         # Reads may be waved through when the deployment says so; writes never.
         needs_auth = is_write or not PUBLIC_READS
@@ -308,6 +336,25 @@ def logout():
     return resp
 
 
+# -- static assets -----------------------------------------------------------
+
+@app.get("/static/{name:path}", include_in_schema=False)
+def static_file(name: str):
+    """app.css, app.js and the Pretendard font files.
+
+    A route rather than a StaticFiles mount so the one thing that matters —
+    nothing outside static/ is ever served — is written out here, where the
+    gate's exception for /static/ can be checked against it."""
+    f = (STATIC / name).resolve()
+    if not f.is_relative_to(STATIC.resolve()) or not f.is_file():
+        raise HTTPException(404)
+    # The slim image's mimetypes does not know woff2 and would say
+    # octet-stream, which some browsers refuse for a font.
+    kind = "font/woff2" if f.suffix == ".woff2" else None
+    return FileResponse(f, media_type=kind,
+                        headers={"Cache-Control": "public, max-age=31536000, immutable"})
+
+
 # -- shared lookups ----------------------------------------------------------
 
 _meta_cache: tuple[float, dict] = (0.0, {})
@@ -342,6 +389,110 @@ def meta(max_age: float = 30.0) -> dict:
     return out
 
 
+PARA_ORDER = ["projects", "areas", "resources", "archives"]
+
+
+def para_rank(area: str) -> tuple[int, str]:
+    """PARA order, then anything else by name. Ordering by count would move
+    every entry around the sidebar as documents arrive."""
+    return (PARA_ORDER.index(area) if area in PARA_ORDER else len(PARA_ORDER), area)
+
+
+_rail_cache: tuple[float, dict] = (0.0, {})
+
+
+def rail(max_age: float = 30.0) -> dict:
+    """What the sidebar lists on every page: the repositories and the PARA
+    areas, with counts. Every page draws it, so it is cached like meta()."""
+    global _rail_cache
+    ts, cached = _rail_cache
+    if cached and time.time() - ts < max_age:
+        return cached
+    try:
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT area, count(*) FROM docs WHERE deleted_at IS NULL"
+                        " GROUP BY area")
+            areas = sorted(cur.fetchall(), key=lambda r: para_rank(r[0]))
+            # Most recently written first, as GitHub orders "Top repositories":
+            # the scope someone is working in is the one they want next.
+            cur.execute("SELECT owner, repo, count(*), max(updated_at) FROM docs"
+                        " WHERE deleted_at IS NULL GROUP BY owner, repo"
+                        " ORDER BY max(updated_at) DESC NULLS LAST, owner, repo")
+            repos = [{"owner": o, "repo": r, "docs": n, "updated": u}
+                     for o, r, n, u in cur.fetchall()]
+    except Exception:
+        return cached or {"areas": [], "repos": []}
+    out = {"areas": areas, "repos": repos}
+    _rail_cache = (time.time(), out)
+    return out
+
+
+def signed_in(request: Request) -> bool:
+    """Whether this browser holds a session — the header shows a sign-out
+    button only then."""
+    return token_ok(request.cookies.get(SESSION_COOKIE, ""))
+
+
+def may_read(request: Request) -> bool:
+    """Whether this caller would be let through the gate for a read. Pages the
+    gate leaves open (/setup) use it to decide whether brain data — the
+    sidebar's repository list, the footer's counts — may appear on them."""
+    return PUBLIC_READS or authenticated(request)
+
+
+def _display_zone():
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(TZ)
+    except Exception:
+        return timezone.utc
+
+
+def ago(value) -> str:
+    """'3 hours ago', the way GitHub labels a time. The exact time goes in the
+    element's title; this is for scanning a list."""
+    if not value:
+        return ""
+    if isinstance(value, str):
+        try:
+            value = datetime.fromisoformat(value)
+        except ValueError:
+            return value
+    if value.tzinfo is None:
+        # A naive value was formatted from the database session, which runs
+        # in ENGRAM_TZ (see _configure).
+        value = value.replace(tzinfo=_display_zone())
+    secs = (datetime.now(timezone.utc) - value).total_seconds()
+    if secs < 45:
+        return "just now"
+    for unit, size in (("year", 31536000), ("month", 2592000), ("day", 86400),
+                       ("hour", 3600), ("minute", 60)):
+        n = int(secs // size)
+        if n >= 1:
+            if unit == "day" and n == 1:
+                return "yesterday"
+            return f"{n} {unit}{'' if n == 1 else 's'} ago"
+    return "just now"
+
+
+def stamp(value) -> str:
+    """The full timestamp, for a title attribute."""
+    if not value:
+        return ""
+    if isinstance(value, str):
+        return value[:16].replace("T", " ")
+    return value.strftime("%Y-%m-%d %H:%M")
+
+
+def hue(name: str) -> int:
+    """A stable colour slot (0-7) for an owner's letter avatar."""
+    return int(hashlib.md5((name or "").encode()).hexdigest()[:4], 16) % 8
+
+
+templates.env.globals.update(rail=rail, signed_in=signed_in, para_rank=para_rank)
+templates.env.filters.update(ago=ago, stamp=stamp, hue=hue)
+
+
 def path_by_stem() -> dict[str, str]:
     """``[[name]]`` -> a real path. The indexer already resolved the edges, but
     rendering a body leaves only the name, so it is needed once more here."""
@@ -357,17 +508,69 @@ def path_by_stem() -> dict[str, str]:
 _WIKI = re.compile(r"\[\[([^\]|#]+)(?:\|([^\]]+))?\]\]")
 
 
+# Code — fenced blocks and inline spans — where a [[name]] is literal text,
+# as it is on GitHub.
+_CODE = re.compile(r"(^```.*?^```[^\n]*$|^~~~.*?^~~~[^\n]*$|`[^`\n]+`)", re.S | re.M)
+_TASK = re.compile(r"<li>(<p>)?\[([ xX])\] ")
+_BROKEN = re.compile("(\\d+)")
+
+
 def render_markdown(body: str, resolve: dict[str, str]) -> str:
+    broken: list[str] = []
+
     def sub(m: re.Match) -> str:
         name, label = m.group(1).strip(), (m.group(2) or "").strip()
         target = resolve.get(name.split("/")[-1]) or resolve.get(name)
         text = label or name
         if not target:
             # A broken link is never quietly turned into plain text. What is
-            # visible is what gets fixed.
-            return f"<span class='broken' title='no such document'>{html.escape(text)}</span>"
+            # visible is what gets fixed. The renderer escapes raw HTML, so the
+            # span goes in as a private-use marker and is swapped in after.
+            broken.append(text)
+            return f"{len(broken) - 1}"
         return f"[{text}](/doc/{target})"
-    return md.render(_WIKI.sub(sub, body))
+
+    parts = _CODE.split(body)
+    body = "".join(p if i % 2 else _WIKI.sub(sub, p) for i, p in enumerate(parts))
+    out = _BROKEN.sub(lambda m: ("<span class='broken' title='no such document'>"
+                                 f"{html.escape(broken[int(m.group(1))])}</span>"),
+                      md.render(body))
+    # Task lists, drawn as GitHub draws them: a disabled checkbox, not "[x]".
+    return _TASK.sub(lambda m: (f"<li class='task'>{m.group(1) or ''}"
+                                f"<input type='checkbox' disabled"
+                                f"{' checked' if m.group(2) != ' ' else ''}> "), out)
+
+
+_HEAD = re.compile(r"<h([1-6])>(.*?)</h\1>", re.S)
+
+
+def slugify(text: str) -> str:
+    """GitHub's heading anchors: lower case, punctuation dropped, spaces to
+    hyphens. Hangul and other letters survive, so a Korean heading keeps a
+    readable anchor."""
+    s = re.sub(r"[^\w\- ]", "", text.strip().lower())
+    return re.sub(r" ", "-", s) or "section"
+
+
+def with_toc(body_html: str) -> tuple[str, list[dict]]:
+    """Give every heading an id and a hover anchor, and return the h2/h3
+    outline for the sidebar. Repeated headings get -1, -2 suffixes, as on
+    GitHub, so each one is still addressable."""
+    toc: list[dict] = []
+    seen: dict[str, int] = {}
+
+    def sub(m: re.Match) -> str:
+        level, inner = int(m.group(1)), m.group(2)
+        text = html.unescape(re.sub(r"<[^>]+>", "", inner))
+        base = slugify(text)
+        n = seen.get(base, 0)
+        seen[base] = n + 1
+        hid = base if n == 0 else f"{base}-{n}"
+        if level in (2, 3):
+            toc.append({"id": hid, "level": level, "text": text})
+        return (f'<h{level} id="{hid}"><a class="anchor" href="#{hid}" aria-hidden="true">'
+                f'#</a>{inner}</h{level}>')
+    return _HEAD.sub(sub, body_html), toc
 
 
 _HL = re.compile(r"[가-힣]{2,}|[A-Za-z][A-Za-z0-9_.\-]{1,}|\d{2,}")
@@ -944,21 +1147,58 @@ def fetch_doc(path: str) -> dict | None:
                 feedback=votes)
 
 
+def recent_changes(limit: int) -> list[dict]:
+    """Every recent write — document updates and revisions on one timeline.
+
+    A revision row is a change: its author and note say who changed the
+    document and why, and its body is the document as it stood just BEFORE
+    that change. A document row is the document's latest state."""
+    with pool.connection() as conn, conn.cursor() as cur:
+        cur.execute("""
+            SELECT at, kind, path, title, note, author, rev_id, owner, repo, area FROM (
+              SELECT d.updated_at AS at, 'doc' AS kind, d.path, d.title,
+                     '' AS note, '' AS author, NULL::bigint AS rev_id,
+                     d.owner, d.repo, d.area
+              FROM docs d WHERE d.deleted_at IS NULL
+              UNION ALL
+              SELECT r.created_at, 'rev', r.path,
+                     COALESCE(d.title, r.path), r.note, r.author, r.id,
+                     COALESCE(d.owner, ''), COALESCE(d.repo, ''), COALESCE(d.area, '')
+              FROM revisions r LEFT JOIN docs d ON d.id = r.doc_id
+            ) x WHERE at IS NOT NULL ORDER BY at DESC LIMIT %s""", (limit,))
+        return [{"dt": r[0], "at": r[0].strftime("%Y-%m-%d %H:%M"),
+                 "day": r[0].strftime("%Y-%m-%d"), "kind": r[1], "path": r[2],
+                 "title": r[3], "note": r[4], "author": r[5], "rev_id": r[6],
+                 "owner": r[7], "repo": r[8], "area": r[9]}
+                for r in cur.fetchall()]
+
+
+def page(request: Request, name: str, ctx: dict, status_code: int = 200):
+    """Render a viewer page. Every page gets the same frame variables, so the
+    header and sidebar never depend on which route happened to render them."""
+    base = {"q": "", "nav": "", "show_brain": True}
+    base.update(ctx)
+    if "meta" not in base:
+        base["meta"] = meta()
+    return templates.TemplateResponse(request, name, base, status_code=status_code)
+
+
 @app.get("/", response_class=HTMLResponse)
 def home(request: Request):
-    with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute("SELECT path, title, area, updated_at FROM docs"
-                    " WHERE deleted_at IS NULL"
-                    " ORDER BY updated_at DESC NULLS LAST, path LIMIT 24")
-        recent = cur.fetchall()
-        cur.execute("SELECT area, count(*) FROM docs WHERE deleted_at IS NULL"
-                    " GROUP BY area ORDER BY count(*) DESC")
-        areas = cur.fetchall()
-        cur.execute("SELECT owner, repo, count(*) FROM docs WHERE deleted_at IS NULL"
-                    " GROUP BY owner, repo ORDER BY count(*) DESC")
-        scopes = cur.fetchall()
-    return templates.TemplateResponse(request, "home.html", {
-        "recent": recent, "areas": areas, "scopes": scopes, "meta": meta(), "q": ""})
+    """The dashboard: how big the brain is, what changed, and whether it is
+    being used — the three questions someone opening it usually has."""
+    feed = recent_changes(15)
+    week = None
+    with pool.connection() as conn:
+        try:
+            week = usage.report(conn, days=7)
+        except Exception as e:           # a side panel; never fail the page for it
+            conn.rollback()
+            print(f"[home] usage report failed: {e}")
+    r = rail()
+    return page(request, "home.html", {
+        "feed": feed, "week": week, "areas": r["areas"], "repos": r["repos"],
+        "nav": "home"})
 
 
 @app.get("/search", response_class=HTMLResponse)
@@ -972,9 +1212,15 @@ def search_page(request: Request, q: str = "", archives: bool = False,
             # Logged like an agent's search, so a person's vote on this page
             # teaches the ranking the same way.
             sid = log_search(conn, q, "viewer", 0, [h.as_dict() for h in hits])
-    return templates.TemplateResponse(request, "search.html", {
+    # The filter pane lists repository NAMES: that is what only_repo filters
+    # on, and two owners' repos of one name are one choice there.
+    names: dict[str, int] = {}
+    for rp in rail()["repos"]:
+        names[rp["repo"]] = names.get(rp["repo"], 0) + rp["docs"]
+    return page(request, "search.html", {
         "q": q, "hits": hits, "archives": archives, "only": only_repo,
-        "search_id": sid, "highlight": highlight, "meta": meta()})
+        "repo_names": sorted(names.items(), key=lambda kv: (-kv[1], kv[0])),
+        "search_id": sid, "highlight": highlight, "nav": "search"})
 
 
 @app.get("/rev/{rev_id}", response_class=HTMLResponse)
@@ -982,81 +1228,154 @@ def rev_page(request: Request, rev_id: int):
     """One revision's body AS IT WAS. Deciding whether to roll back means
     actually reading it."""
     with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute("SELECT id, path, body, created_at, author, note"
-                    " FROM revisions WHERE id = %s", (rev_id,))
+        cur.execute("SELECT r.id, r.path, r.body, r.created_at, r.author, r.note,"
+                    " COALESCE(d.owner, ''), COALESCE(d.repo, ''), COALESCE(d.area, '')"
+                    " FROM revisions r LEFT JOIN docs d ON d.id = r.doc_id"
+                    " WHERE r.id = %s", (rev_id,))
         r = cur.fetchone()
     if not r:
         raise HTTPException(404, f"no such revision: {rev_id}")
     d = {"id": r[0], "path": r[1], "title": f"revision {r[0]}",
-         "area": "revision", "owner": "", "repo": "",
+         "area": r[8], "owner": r[6], "repo": r[7],
          "updated_at": r[3].strftime("%Y-%m-%d %H:%M"), "chars": len(r[2]),
          "body": r[2], "author": r[4], "note": r[5],
          "outgoing": [], "backlinks": [], "revisions": [], "is_revision": True}
-    d["html"] = render_markdown(r[2], path_by_stem())
-    return templates.TemplateResponse(request, "doc.html",
-                                      {"doc": d, "q": "", "meta": meta()})
+    d["html"], d["toc"] = with_toc(render_markdown(r[2], path_by_stem()))
+    return page(request, "doc.html", {"doc": d, "nav": "changes"})
 
 
 @app.get("/changes", response_class=HTMLResponse)
 def changes_page(request: Request, limit: int = Query(80, ge=1, le=300)):
-    """Every recent write in the store — document updates and revisions on one
-    timeline."""
-    with pool.connection() as conn, conn.cursor() as cur:
-        cur.execute("""
-            SELECT at, kind, path, title, note, author, rev_id FROM (
-              SELECT d.updated_at AS at, 'doc' AS kind, d.path, d.title,
-                     '' AS note, '' AS author, NULL::bigint AS rev_id
-              FROM docs d WHERE d.deleted_at IS NULL
-              UNION ALL
-              SELECT r.created_at, 'rev', r.path,
-                     COALESCE(d.title, r.path), r.note, r.author, r.id
-              FROM revisions r LEFT JOIN docs d ON d.id = r.doc_id
-            ) x ORDER BY at DESC LIMIT %s""", (limit,))
-        rows = [{"at": r[0].strftime("%Y-%m-%d %H:%M"), "kind": r[1], "path": r[2],
-                 "title": r[3], "note": r[4], "author": r[5], "rev_id": r[6]}
-                for r in cur.fetchall()]
-    return templates.TemplateResponse(request, "changes.html",
-                                      {"rows": rows, "q": "", "meta": meta()})
+    """Every recent write in the store, as a timeline grouped by day."""
+    rows = recent_changes(limit)
+    days: list[tuple[str, list]] = []
+    for r in rows:
+        if not days or days[-1][0] != r["day"]:
+            days.append((r["day"], []))
+        days[-1][1].append(r)
+    return page(request, "changes.html", {"days": days, "count": len(rows),
+                                          "limit": limit, "nav": "changes"})
+
+
+def build_tree(rows: list[dict], strip: str) -> dict:
+    """Nest documents by the folders in their paths, below `strip` (the
+    ``owner/repo/`` prefix). The address already IS a tree; drawing it as one
+    is what makes a repository's shape visible at a glance."""
+    root = {"name": "", "dirs": {}, "files": [], "count": 0}
+    for d in rows:
+        rel = d["path"][len(strip):] if strip and d["path"].startswith(strip) else d["path"]
+        parts = rel.split("/")
+        node = root
+        node["count"] += 1
+        for part in parts[:-1]:
+            node = node["dirs"].setdefault(
+                part, {"name": part, "dirs": {}, "files": [], "count": 0})
+            node["count"] += 1
+        node["files"].append(dict(d, fname=parts[-1]))
+
+    def finish(node: dict, depth: int) -> dict:
+        dirs = sorted(node["dirs"].values(),
+                      key=lambda n: para_rank(n["name"]) if depth == 0 else (0, n["name"]))
+        return {"name": node["name"], "count": node["count"], "depth": depth,
+                "dirs": [finish(n, depth + 1) for n in dirs],
+                "files": sorted(node["files"], key=lambda f: f["fname"])}
+    return finish(root, 0)
 
 
 @app.get("/browse", response_class=HTMLResponse)
 def browse_page(request: Request, owner: str = Query(""), repo: str = Query(""),
                 area: str = Query("")):
-    """Every document in one scope (or area), by path.
+    """Every document in one scope, by path — no ranking involved.
 
-    The home page's scope cards used to link to `/search?q=<repo>`, which ranks
-    documents by how much they say the word — not the same question as "what is
-    in this repo". The second question does not need a ranking at all: the path
-    is already the answer, and a ranking over it only hides the shape of the
-    scope behind relevance.
+    The question here is "what is in this repo", and the path is already the
+    answer; a ranking over it only hides the shape of the scope. So this does
+    not go through search, and it is not logged as a call — paging through a
+    list is not a question, and counting it as one would blur the numbers
+    /usage exists to show.
 
-    So this does not go through search, and it is not logged as a call. Paging
-    through a list is not a question, and counting it as one would blur the very
-    numbers /usage exists to show — tier-1 hit rate above all.
+    Three shapes, by what is named:
+    - nothing, or only an owner: the repository index;
+    - a repo (optionally an area tab): that repository as a file tree, with
+      its hub README rendered underneath, as GitHub shows a repository;
+    - an area alone: that PARA area across every repository.
     """
+    if repo and not owner:
+        # A repo named without its owner. When the name is unambiguous, go to
+        # the one repository it means, so the page has its full address.
+        owners = {r["owner"] for r in rail()["repos"] if r["repo"] == repo}
+        if len(owners) == 1:
+            qs = urllib.parse.urlencode({"owner": owners.pop(), "repo": repo,
+                                         **({"area": area} if area else {})})
+            return RedirectResponse(f"/browse?{qs}", status_code=307)
+
+    if not repo and not area:
+        repos = [r for r in rail()["repos"] if not owner or r["owner"] == owner]
+        with pool.connection() as conn, conn.cursor() as cur:
+            cur.execute("SELECT owner, repo, area, count(*) FROM docs WHERE deleted_at IS NULL"
+                        " GROUP BY owner, repo, area")
+            split: dict[tuple, list] = {}
+            for o, rp, a, n in cur.fetchall():
+                split.setdefault((o, rp), []).append((a, n))
+        # dict(r, ...) copies: the rows belong to the cached rail.
+        rows = [dict(r, areas=sorted(split.get((r["owner"], r["repo"]), []),
+                                     key=lambda t: para_rank(t[0])))
+                for r in repos]
+        by_owner: dict[str, list] = {}
+        for r in sorted(rows, key=lambda r: r["owner"]):
+            by_owner.setdefault(r["owner"], []).append(r)
+        return page(request, "browse.html", {
+            "mode": "index", "owner": owner, "repo": "", "area": "",
+            "by_owner": list(by_owner.items()),
+            "total": sum(r["docs"] for r in rows), "nav": "browse"})
+
     where, params = ["deleted_at IS NULL"], {}
     for col, val in (("owner", owner), ("repo", repo), ("area", area)):
         if val:
             where.append(f"{col} = %({col})s")
             params[col] = val
+    tabs, readme, latest = [], None, None
     with pool.connection() as conn, conn.cursor() as cur:
         cur.execute("SELECT owner, repo, area, path, title, updated_at FROM docs"
-                    " WHERE " + " AND ".join(where) + " ORDER BY area, path", params)
-        rows = cur.fetchall()
-    # Grouped by area, because PARA is how this brain is organised: what one
-    # wants to see about a scope is "two projects, nineteen resources".
-    groups: dict[str, list] = {}
-    for _owner, _repo, _area, path, title, updated in rows:
-        groups.setdefault(_area or "root", []).append(
-            {"path": path, "title": title or path,
-             "updated": updated.strftime("%Y-%m-%d") if updated else ""})
-    order = ["projects", "areas", "resources", "archives", "root"]
-    grouped = sorted(groups.items(),
-                     key=lambda kv: (order.index(kv[0]) if kv[0] in order else 99, kv[0]))
-    scope = "/".join(x for x in (owner, repo) if x) or area or "everything"
-    return templates.TemplateResponse(request, "browse.html", {
-        "grouped": grouped, "total": len(rows), "scope": scope,
-        "owner": owner, "repo": repo, "area": area, "q": "", "meta": meta()})
+                    " WHERE " + " AND ".join(where) + " ORDER BY path", params)
+        rows = [{"owner": o, "repo": rp, "area": a, "path": p, "title": t or p,
+                 "updated": u}
+                for o, rp, a, p, t, u in cur.fetchall()]
+        if repo:
+            scope = {"owner": owner, "repo": repo}
+            by_owner_sql = " AND d.owner = %(owner)s" if owner else ""
+            # Tab counts are for the whole repository, so choosing one tab
+            # does not make the others' numbers disappear.
+            cur.execute("SELECT d.area, count(*) FROM docs d WHERE d.deleted_at IS NULL"
+                        " AND d.repo = %(repo)s" + by_owner_sql + " GROUP BY d.area", scope)
+            tabs = sorted(cur.fetchall(), key=lambda t: para_rank(t[0] or "root"))
+            if owner:
+                cur.execute("SELECT body FROM docs WHERE path = %s AND deleted_at IS NULL",
+                            (f"{owner}/{repo}/README.md",))
+                hit = cur.fetchone()
+                readme = hit[0] if hit else None
+            # The newest change in the repository — GitHub's latest-commit bar.
+            cur.execute("SELECT r.author, r.note, r.created_at, d.title, d.path"
+                        " FROM revisions r JOIN docs d ON d.id = r.doc_id"
+                        " WHERE d.deleted_at IS NULL AND d.repo = %(repo)s" + by_owner_sql +
+                        " ORDER BY r.created_at DESC LIMIT 1", scope)
+            hit = cur.fetchone()
+            if hit:
+                latest = {"author": hit[0], "note": hit[1], "at": hit[2],
+                          "title": hit[3], "path": hit[4]}
+
+    readme_html = with_toc(render_markdown(readme, path_by_stem()))[0] if readme else None
+    if repo:
+        groups = [((owner, repo), build_tree(rows, f"{owner}/{repo}/" if owner else ""))]
+    else:
+        # An area across repositories: one box per repository.
+        per: dict[tuple, list] = {}
+        for d in rows:
+            per.setdefault((d["owner"], d["repo"]), []).append(d)
+        groups = [(k, build_tree(v, f"{k[0]}/{k[1]}/")) for k, v in per.items()]
+    return page(request, "browse.html", {
+        "mode": "repo" if repo else "area", "owner": owner, "repo": repo, "area": area,
+        "groups": groups, "tabs": tabs, "total": len(rows), "readme_html": readme_html,
+        "latest": latest, "nav": "browse"})
 
 
 @app.get("/usage", response_class=HTMLResponse)
@@ -1076,10 +1395,22 @@ def usage_page(request: Request, days: int = Query(7, ge=1, le=365),
     with pool.connection() as conn:
         rep = usage.report(conn, days=days, session=session or None)
         act = usage.activity(conn) if tab == "activity" else {"empty": True}
-    return templates.TemplateResponse(request, "usage.html",
-                                      {"nav": "usage", "u": rep, "act": act, "tab": tab,
-                                       "days": days, "session": session,
-                                       "q": "", "meta": meta()})
+    return page(request, "usage.html", {"nav": "usage", "u": rep, "act": act, "tab": tab,
+                                        "days": days, "session": session})
+
+
+@app.get("/setup", response_class=HTMLResponse)
+def setup_page(request: Request):
+    """How a machine connects to this brain: remote MCP, OAuth, the plugin.
+
+    Open to everyone (see UNAUTHENTICATED_PATHS) because it is read before the
+    reader can authenticate. It carries no brain data of its own, and the
+    frame's sidebar and counts appear only for a caller who could read them
+    anyway."""
+    show = may_read(request)
+    return page(request, "setup.html", {
+        "nav": "setup", "show_brain": show, "meta": meta() if show else {},
+        "mcp_url": MCP_URL or MCP_URL_PLACEHOLDER, "mcp_url_set": bool(MCP_URL)})
 
 
 @app.get("/doc/{path:path}", response_class=HTMLResponse)
@@ -1087,6 +1418,5 @@ def doc_page(request: Request, path: str):
     d = fetch_doc(path)
     if not d:
         raise HTTPException(404, f"no such document: {path}")
-    d["html"] = render_markdown(d["body"], path_by_stem())
-    return templates.TemplateResponse(request, "doc.html",
-                                      {"doc": d, "q": "", "meta": meta()})
+    d["html"], d["toc"] = with_toc(render_markdown(d["body"], path_by_stem()))
+    return page(request, "doc.html", {"doc": d, "nav": "doc"})

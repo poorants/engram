@@ -1,214 +1,103 @@
+{% import "_ui.html" as ui %}
 <!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light dark">
 <title>{% block title %}engram{% endblock %}</title>
-<!-- The favicon. There is no static route and no asset directory — the icon
-     lives here the same way the CSS does. Two nodes and one link: what a brain
-     sells is not documents but the connections between them. Dark mode is
-     flipped by a media query inside the SVG itself. -->
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cstyle%3E.t%7Bfill:%232f6f4f%7D.m%7Bfill:%23fff;stroke:%23fff;stroke-linecap:round%7D%40media(prefers-color-scheme:dark)%7B.t%7Bfill:%237fc4a0%7D.m%7Bfill:%2312241b;stroke:%2312241b%7D%7D%3C/style%3E%3Crect class=%22t%22 width=%2232%22 height=%2232%22 rx=%227%22/%3E%3Cpath class=%22m%22 stroke-width=%222.6%22 fill=%22none%22 d=%22M12.5 19.5 19.5 12.5%22/%3E%3Cg class=%22m%22%3E%3Ccircle cx=%2210.5%22 cy=%2221.5%22 r=%224%22/%3E%3Ccircle cx=%2221.5%22 cy=%2210.5%22 r=%224%22/%3E%3C/g%3E%3C/svg%3E">
-<style>
-:root{
-  --bg:#fbfbfa; --panel:#fff; --fg:#1f2328; --muted:#6b7280; --line:#e6e6e3;
-  --accent:#2f6f4f; --accent-soft:#e8f2ec; --mark:#fff2a8; --code:#f4f4f2;
-}
-@media (prefers-color-scheme:dark){
-  :root{ --bg:#16181c; --panel:#1c1f24; --fg:#e6e6e3; --muted:#9aa1ab; --line:#2b2f36;
-         --accent:#7fc4a0; --accent-soft:#1e2a24; --mark:#5c5320; --code:#22262c; }
-}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);
-  font:15px/1.7 -apple-system,BlinkMacSystemFont,"Segoe UI","Pretendard",
-  "Apple SD Gothic Neo","Noto Sans KR",sans-serif;}
-a{color:var(--accent);text-decoration:none} a:hover{text-decoration:underline}
-header{border-bottom:1px solid var(--line);background:var(--panel);position:sticky;top:0;z-index:5}
-.wrap{max-width:940px;margin:0 auto;padding:0 20px}
-.bar{display:flex;gap:16px;align-items:center;padding:12px 0}
-.brand{font-weight:700;letter-spacing:-.02em;white-space:nowrap;color:var(--fg)}
-.brand span{color:var(--muted);font-weight:400;font-size:12px;margin-left:6px}
-form.search{flex:1;display:flex;gap:8px}
-input[type=search]{flex:1;padding:9px 13px;border:1px solid var(--line);border-radius:8px;
-  background:var(--bg);color:var(--fg);font-size:15px;font-family:inherit}
-input[type=search]:focus{outline:2px solid var(--accent-soft);border-color:var(--accent)}
-button{padding:9px 16px;border:1px solid var(--accent);border-radius:8px;background:var(--accent);
-  color:#fff;font-size:14px;font-family:inherit;cursor:pointer}
-@media (prefers-color-scheme:dark){button{color:#12241b}}
-main{padding:28px 0 64px}
-h1{font-size:24px;letter-spacing:-.02em;margin:0 0 4px}
-h2{font-size:15px;color:var(--muted);font-weight:600;margin:32px 0 10px;
-   text-transform:uppercase;letter-spacing:.06em}
-.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px 16px;margin-bottom:10px}
-.crumb{font-size:12.5px;color:var(--muted);font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-.pill{display:inline-block;font-size:11px;padding:2px 8px;border-radius:999px;
-  background:var(--accent-soft);color:var(--accent);margin-right:6px;vertical-align:1px}
-.snippet{margin-top:8px;color:var(--fg);white-space:pre-wrap;word-break:break-word;
-  font-size:14px;max-height:8.5em;overflow:hidden}
-mark{background:var(--mark);color:inherit;border-radius:2px;padding:0 1px}
-.meta{color:var(--muted);font-size:12.5px}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:10px}
-.empty{color:var(--muted);padding:40px 0;text-align:center}
-footer{border-top:1px solid var(--line);color:var(--muted);font-size:12px;padding:14px 0;margin-top:40px}
-footer code{background:var(--code);padding:1px 5px;border-radius:4px}
-.broken{color:#c2410c;border-bottom:1px dotted currentColor;cursor:help}
-@media (prefers-color-scheme:dark){.broken{color:#fb923c}}
-.prose{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:24px 28px}
-.prose h1{font-size:26px;margin:0 0 16px} .prose h2{font-size:19px;color:var(--fg);
-  text-transform:none;letter-spacing:-.01em;margin:28px 0 10px;padding-bottom:6px;border-bottom:1px solid var(--line)}
-.prose h3{font-size:16px;margin:22px 0 8px} .prose p{margin:0 0 14px}
-.prose code{background:var(--code);padding:1.5px 5px;border-radius:4px;font-size:13px}
-.prose pre{background:var(--code);padding:14px 16px;border-radius:8px;overflow-x:auto}
-.prose pre code{background:none;padding:0}
-.prose table{border-collapse:collapse;width:100%;margin:0 0 16px;font-size:14px;display:block;overflow-x:auto}
-.prose th,.prose td{border:1px solid var(--line);padding:7px 11px;text-align:left}
-.prose th{background:var(--code)}
-.prose blockquote{margin:0 0 14px;padding:2px 0 2px 14px;border-left:3px solid var(--line);color:var(--muted)}
-.prose li{margin:3px 0}
-.cols{display:grid;grid-template-columns:1fr;gap:10px}
-
-/* Header nav. The only way to /usage was one link at the tail of the footer's
-   statistics line, which is where a page goes to not be found. /changes is
-   deliberately not here: the home page's "Recent changes · see all →" is
-   already that door, and two doors to one room are each read half as often. */
-.nav{display:flex;gap:14px;white-space:nowrap;font-size:13px}
-.nav a{color:var(--muted)}
-.nav a:hover{color:var(--accent)}
-.nav a[aria-current=page]{color:var(--fg);font-weight:600}
-/* One row does not hold brand + search + nav on a phone: at 390px the bar ran
-   to 492px and took the whole page's horizontal scrollbar with it. The search
-   box is the part that wants the width, so it drops to its own line and the
-   two short things share the first. */
-@media (max-width:560px){
-  .bar{flex-wrap:wrap;gap:10px}
-  form.search{order:3;flex-basis:100%}
-}
-
-/* Tabs inside a page. Two questions that want different shapes — see the
-   comment at the top of usage.html. */
-.tabs{display:flex;gap:4px;border-bottom:1px solid var(--line);margin:0 0 16px}
-.tabs a{padding:7px 14px;font-size:13.5px;color:var(--muted);border-bottom:2px solid transparent;margin-bottom:-1px}
-.tabs a:hover{color:var(--accent);text-decoration:none}
-.tabs a[aria-current=page]{color:var(--fg);font-weight:600;border-bottom-color:var(--accent)}
-
-/* The contribution grid. Columns are weeks, rows are weekdays starting
-   Sunday, which is why the day strip labels only Mon/Wed/Fri — the others
-   would crowd 11px rows into noise. The five shades are steps of the accent,
-   so the grid stays the store's colour in either theme rather than borrowing
-   GitHub's green. */
-/* The tooltip escapes the card rather than the card making room for it.
-   Reserving headroom with padding was the wrong trade: it made a 147px
-   calendar sit in a 451px box that started above the card before it and
-   swallowed the heading after it (measured, not guessed).
-   `overflow-x:auto` is what clipped the panel, and it is only needed when the
-   grid is wider than the page — a full year is 53 x 13px = 689px, so on a
-   normal window it never is. It comes back under a narrow viewport, where
-   there is no hover to clip anyway. */
-.cal-card{overflow:visible}
-@media (max-width:820px){ .cal-card{overflow-x:auto} }
-.cal{display:inline-block;min-width:100%}
-.cal-months{display:grid;gap:2px;font-size:10.5px;color:var(--muted);margin-left:30px;height:14px}
-.cal-body{display:flex;gap:4px}
-/* The row pitch has to be the grid's, not a near-enough one. At 13px rows
-   against the grid's 11px the labels drifted 2px per row and sat a whole cell
-   low by Friday — small enough to look like a rendering quirk and wrong every
-   time. Keep these two numbers equal to .cal-grid's. */
-.cal-dows{display:grid;grid-template-rows:repeat(7,11px);gap:2px;width:26px;
-  font-size:9.5px;color:var(--muted);line-height:11px;text-align:right}
-.cal-grid{display:grid;grid-auto-flow:column;grid-template-rows:repeat(7,11px);gap:2px}
-.cal-grid i{width:11px;height:11px;border-radius:2px;display:block;position:relative}
-
-/* The day tooltip. CSS only — this viewer has no JavaScript, and a hover
-   panel does not need any. The native `title` it replaces took about a second
-   to appear and could not show the split, which is the part worth seeing:
-   one number for a day says how much, the split says on WHAT.
-   The scroll container clips its overflow in both axes, so .cal reserves
-   headroom (padding-top) for the panel instead of letting it escape. */
-.cal-grid i .tip{display:none;position:absolute;bottom:calc(100% + 7px);left:50%;
-  transform:translateX(-50%);z-index:4;width:max-content;max-width:230px;
-  /* overridden per row below */
-  background:var(--panel);border:1px solid var(--line);border-radius:8px;
-  padding:8px 10px;box-shadow:0 6px 20px rgba(0,0,0,.13);
-  font-size:12px;line-height:1.55;color:var(--fg);text-align:left;font-style:normal}
-.cal-grid i:hover .tip{display:block}
-/* Flip by row. The grid flows column-major over 7 rows, so nth-child(7n+1..4)
-   are the top four weekdays: theirs open downward, the bottom three upward.
-   Without this a top-row cell needed the panel's height PLUS the grid's above
-   it, and the date line was the part that got cut. */
-.cal-grid i:nth-child(7n+1) .tip,.cal-grid i:nth-child(7n+2) .tip,
-.cal-grid i:nth-child(7n+3) .tip,.cal-grid i:nth-child(7n+4) .tip{
-  bottom:auto;top:calc(100% + 7px)}
-.cal-grid i .tip b{display:block;font-variant-numeric:tabular-nums;font-size:11.5px;color:var(--muted);font-weight:600}
-.cal-grid i .tip em{display:block;font-style:normal;font-weight:600;margin-bottom:3px;white-space:nowrap}
-.cal-grid i .tip > span{display:flex;align-items:center;gap:6px;white-space:nowrap;color:var(--muted)}
-.cal-grid i .tip u{margin-left:auto;text-decoration:none;font-variant-numeric:tabular-nums;color:var(--fg)}
-.cal-grid i .tip u:first-of-type{min-width:26px;text-align:right}
-.cal-grid i .tip u:last-of-type{min-width:58px;text-align:right}
-/* Swatches tie each row of the split to the colour the rest of the page uses
-   for that kind of call. */
-.sw{width:7px;height:7px;border-radius:2px;flex:none;background:var(--accent)}
-.sw.read{background:color-mix(in srgb, var(--accent) 72%, var(--panel))}
-.sw.vote{background:color-mix(in srgb, var(--accent) 45%, var(--panel))}
-.sw.write{background:var(--fg)}
-/* The totals line, under a rule: the split says where the day went, this says
-   how big the day was. Reading the rows and adding them up is work the panel
-   can do itself. */
-.cal-grid i .tip .sum{display:flex;align-items:center;gap:6px;white-space:nowrap;
-  margin-top:4px;padding-top:4px;border-top:1px solid var(--line);font-weight:600;color:var(--fg)}
-.cal-grid i .tip .sum u{margin-left:auto;text-decoration:none;font-variant-numeric:tabular-nums}
-.cal-grid i .tip .sum u:first-of-type{min-width:26px;text-align:right}
-.cal-grid i .tip .sum u:last-of-type{min-width:58px;text-align:right}
-.cal-key{margin-top:10px;display:flex;align-items:center;gap:3px;font-size:11.5px}
-.cal-key i{width:11px;height:11px;border-radius:2px;display:inline-block}
-/* The shades are MIXED COLOURS, never opacity.
-   Opacity on the cell applies to the whole element including its children, and
-   the tooltip is one of them — so a quiet day (.d1, .28) rendered its panel at
-   28% and the text behind showed through. It also makes each cell a stacking
-   context, which floated the month labels over the panel. Mixing toward the
-   card's own background gives the identical ramp with the cell fully opaque. */
-.d0{background:var(--line)}
-.d1{background:color-mix(in srgb, var(--accent) 28%, var(--panel))}
-.d2{background:color-mix(in srgb, var(--accent) 52%, var(--panel))}
-.d3{background:color-mix(in srgb, var(--accent) 76%, var(--panel))}
-.d4{background:var(--accent)}
-.fut{background:transparent}
-
-/* The week and month views: a timeline, not a chart. A rule down the left with
-   a node per row, the way an activity feed reads. Bars were here and earned
-   nothing — one week of data is one bar at 100%, and the day grid above
-   already carries the shape when there are many rows. */
-.tl{list-style:none;margin:0;padding:0 0 0 18px;border-left:1px solid var(--line)}
-.tl li{position:relative;display:flex;align-items:baseline;gap:10px;padding:5px 0;font-size:13.5px}
-.tl li::before{content:"";position:absolute;left:-23px;top:12px;width:7px;height:7px;
-  border-radius:50%;background:var(--accent);box-shadow:0 0 0 3px var(--panel)}
-.tl-when{width:88px;flex:none;color:var(--muted);font-variant-numeric:tabular-nums;font-size:12.5px}
-.tl-what{flex:1;min-width:0}
-.tl-num{flex:none;font-variant-numeric:tabular-nums}
-/* A phone has no room for the date column beside the sentence, so it goes
-   above it and the numbers keep the line they are on. */
-@media (max-width:560px){
-  .tl li{flex-wrap:wrap;gap:2px 10px}
-  .tl-when{width:100%}
-  .tl-what{flex:1 1 auto}
-}
-</style>
+<!-- The favicon is the header's mark on a filled square. Dark mode is flipped
+     by a media query inside the SVG itself. -->
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 32 32%22%3E%3Cstyle%3E.t%7Bfill:%231f2328%7D.m%7Bfill:%23fff;stroke:%23fff;stroke-linecap:round%7D%40media(prefers-color-scheme:dark)%7B.t%7Bfill:%23e6edf3%7D.m%7Bfill:%230d1117;stroke:%230d1117%7D%7D%3C/style%3E%3Crect class=%22t%22 width=%2232%22 height=%2232%22 rx=%227%22/%3E%3Cpath class=%22m%22 stroke-width=%222.6%22 fill=%22none%22 d=%22M12.5 19.5 19.5 12.5%22/%3E%3Cg class=%22m%22%3E%3Ccircle cx=%2210.5%22 cy=%2221.5%22 r=%224%22/%3E%3Ccircle cx=%2221.5%22 cy=%2210.5%22 r=%224%22/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/fonts/pretendard/pretendard-variable.css">
+<link rel="stylesheet" href="/static/app.css?v={{ asset_v }}">
+<script src="/static/app.js?v={{ asset_v }}" defer></script>
 </head>
 <body>
-<header><div class="wrap bar">
-  <a class="brand" href="/">engram<span>knowledge store</span></a>
-  <form class="search" action="/search" method="get">
-    <input type="search" name="q" value="{{ q|default('') }}" placeholder="Search the brain — ask a whole question, not keywords" autofocus>
-    <button type="submit">Search</button>
+{%- set nav = nav|default('') %}
+{%- set show_brain = show_brain|default(true) %}
+{%- set cur_owner = owner|default('') or (doc.owner if doc is defined and doc.owner else '') %}
+{%- set cur_repo = repo|default('') or (doc.repo if doc is defined and doc.repo else '') %}
+<header class="AppHeader">
+  {% if show_brain %}
+  <button type="button" class="icon-btn nav-toggle" aria-label="Open navigation" aria-expanded="false" aria-controls="sidebar">{{ ui.icon('bars') }}</button>
+  {% endif %}
+  <div class="AppHeader-context">
+    <a class="AppHeader-logo" href="/" aria-label="engram home">{{ ui.logo(32) }}</a>
+    <div class="AppHeader-title">{% block context %}<a href="/">engram</a>{% endblock %}</div>
+  </div>
+  <div class="AppHeader-spacer"></div>
+  {% if show_brain %}
+  <form class="hsearch" action="/search" method="get" role="search">
+    {{ ui.icon('search') }}
+    <input id="q" type="search" name="q" value="{{ q|default('') }}" placeholder=" " aria-label="Search the brain" autocomplete="off">
+    <span class="hint" aria-hidden="true">Type <kbd>/</kbd> to search</span>
   </form>
-  <nav class="nav">
-    <a href="/usage" {% if nav|default('') == 'usage' %}aria-current="page"{% endif %}>usage</a>
-  </nav>
-</div></header>
-<main class="wrap">{% block body %}{% endblock %}</main>
-<footer class="wrap">
-  {{ meta.get('docs','?') }} documents · {{ meta.get('chunks','?') }} chunks
-  {% if meta.get('broken_links','0') != '0' %}· {{ meta.broken_links }} broken links{% endif %}
-  {% if meta.get('updated_at') %}· last write {{ meta.updated_at[:16] }}{% endif %}
-  · agents hit the same ranking at <code>/api/search?q=</code>
-</footer>
-</body></html>
+  {% endif %}
+  <div class="AppHeader-actions">
+    {% if show_brain %}
+    <a class="icon-btn opt" href="/changes" title="Recent changes" aria-label="Recent changes"{% if nav == 'changes' %} aria-current="page"{% endif %}>{{ ui.icon('history') }}</a>
+    <a class="icon-btn opt" href="/usage" title="Usage" aria-label="Usage"{% if nav == 'usage' %} aria-current="page"{% endif %}>{{ ui.icon('graph') }}</a>
+    {% endif %}
+    <a class="icon-btn opt" href="/setup" title="Connect a machine" aria-label="Setup guide"{% if nav == 'setup' %} aria-current="page"{% endif %}>{{ ui.icon('terminal') }}</a>
+    {% if signed_in(request) %}
+    <a class="icon-btn" href="/logout" title="Sign out" aria-label="Sign out">{{ ui.icon('signout') }}</a>
+    {% elif not show_brain %}
+    <a class="btn btn-sm" href="/login?next={{ request.url.path|urlencode }}">Sign in</a>
+    {% endif %}
+  </div>
+</header>
+
+<div class="Layout{% if not show_brain %} Layout--solo{% endif %}">
+{% if show_brain %}
+{%- set r = rail() %}
+<aside class="Sidebar" id="sidebar" aria-label="Navigation">
+  <ul class="ActionList">
+    <li><a href="/"{% if nav == 'home' %} aria-current="page"{% endif %}>{{ ui.icon('home') }}<span class="label">Home</span></a></li>
+    <li><a href="/browse"{% if nav == 'browse' and not cur_repo and not area|default('') %} aria-current="page"{% endif %}>{{ ui.icon('repo') }}<span class="label">Repositories</span></a></li>
+    <li><a href="/changes"{% if nav == 'changes' %} aria-current="page"{% endif %}>{{ ui.icon('history') }}<span class="label">Recent changes</span></a></li>
+    <li><a href="/usage"{% if nav == 'usage' %} aria-current="page"{% endif %}>{{ ui.icon('graph') }}<span class="label">Usage</span></a></li>
+    <li><a href="/setup"{% if nav == 'setup' %} aria-current="page"{% endif %}>{{ ui.icon('terminal') }}<span class="label">Connect a machine</span></a></li>
+  </ul>
+
+  <div class="Sidebar-h"><span>Repositories</span><a href="/browse">All {{ r.repos|length }}</a></div>
+  <input id="repo-filter" class="form-control" type="search" placeholder="Find a repository…" aria-label="Find a repository" autocomplete="off">
+  {% set shown = 8 %}
+  <ul class="repo-list" id="repo-list">
+    {% for rp in r.repos %}
+    <li data-name="{{ (rp.owner ~ '/' ~ rp.repo)|lower }}"{% if loop.index > shown %} class="more-hidden"{% endif %}>
+      <a href="/browse?owner={{ rp.owner|urlencode }}&repo={{ rp.repo|urlencode }}"{% if nav in ('browse', 'doc') and cur_repo == rp.repo and (not cur_owner or cur_owner == rp.owner) %} aria-current="page"{% endif %}>
+        {{ ui.avatar(rp.owner) }}<span class="name">{{ rp.owner }}/{{ rp.repo }}</span><span class="Counter">{{ rp.docs }}</span>
+      </a>
+    </li>
+    {% else %}
+    <li class="muted" data-name="">No documents yet.</li>
+    {% endfor %}
+  </ul>
+  {% if r.repos|length > shown %}<button type="button" class="link-btn" id="repo-more">Show more</button>{% endif %}
+
+  <hr>
+  <div class="Sidebar-h"><span>Areas</span></div>
+  <ul class="ActionList">
+    {% for a, n in r.areas %}
+    <li><a href="/browse?area={{ a|urlencode }}"{% if nav == 'browse' and area|default('') == a and not cur_repo %} aria-current="page"{% endif %}>{{ ui.area_icon(a) }}<span class="label">{{ a }}</span><span class="Counter">{{ n }}</span></a></li>
+    {% endfor %}
+  </ul>
+
+  <div class="Sidebar-foot">
+    {{ meta.get('docs','?') }} documents · {{ meta.get('chunks','?') }} chunks
+    {% if meta.get('broken_links','0') != '0' %}· {{ meta.broken_links }} broken links{% endif %}<br>
+    Agents hit the same ranking at <code>/api/search</code>.
+  </div>
+</aside>
+<div class="backdrop" aria-hidden="true"></div>
+{% endif %}
+
+<main class="Main">
+  <div class="Main-inner{% block narrow %}{% endblock %}">
+  {% block body %}{% endblock %}
+  </div>
+</main>
+</div>
+</body>
+</html>

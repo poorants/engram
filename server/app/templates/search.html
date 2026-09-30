@@ -1,53 +1,92 @@
 {% extends "base.html" %}
-{% block title %}{{ q }} — engram{% endblock %}
+{% import "_ui.html" as ui %}
+{% block title %}{{ q or 'Search' }} — engram{% endblock %}
+{% block context %}<a href="/">engram</a><span class="sep">/</span><span>Search</span>{% endblock %}
 {% block body %}
-{% if not q %}
-  <div class="empty">Type a query. <strong>A whole question works better than keywords</strong> — the ranking is tuned on them.</div>
-{% elif not hits %}
-  <div class="empty">
-    <p>No results for <strong>{{ q }}</strong></p>
-    <p class="meta">{% if not archives %}<a href="/search?q={{ q|urlencode }}&archives=true">Search archives too</a>{% endif %}</p>
+<div class="search-grid">
+  {#- The filter pane: the same GET again with a narrower scope. #}
+  <form class="filter-pane" action="/search" method="get">
+    <input type="hidden" name="q" value="{{ q }}">
+    <div class="Box">
+      <div class="Box-header"><h2 class="Box-title">{{ ui.icon('filter') }} Filter by</h2></div>
+      <div class="Box-body">
+        <label class="check"><input type="checkbox" name="archives" value="true"{% if archives %} checked{% endif %}> Include archives</label>
+        <hr style="border:0;border-top:1px solid var(--border-muted);margin:12px 0">
+        <h2>Repositories <span class="muted" style="font-weight:400;font-size:12px">none = all</span></h2>
+        <div class="repos">
+        {% for name, n in repo_names %}
+          <label class="check"><input type="checkbox" name="only_repo" value="{{ name }}"{% if name in only %} checked{% endif %}> <span class="name">{{ name }}</span><span class="Counter">{{ n }}</span></label>
+        {% endfor %}
+        </div>
+        <button class="btn btn-primary btn-block" type="submit">Apply</button>
+      </div>
+    </div>
+  </form>
+
+  <div style="min-width:0">
+  {% if not q %}
+    <div class="Box"><div class="blankslate">{{ ui.icon('search', 24) }}<h3>Search the brain</h3>
+      <p>Type in the box above (press <kbd>/</kbd>). <b>A whole question works better than keywords</b> — the ranking is tuned on them.</p></div></div>
+  {% elif not hits %}
+    <div class="Box"><div class="blankslate">{{ ui.icon('search', 24) }}<h3>No results for “{{ q }}”</h3>
+      {% if not archives %}<p><a href="/search?q={{ q|urlencode }}&archives=true{% for o in only %}&only_repo={{ o|urlencode }}{% endfor %}">Search archives too</a></p>{% endif %}</div></div>
+  {% else %}
+    <div class="Box">
+      <div class="Box-header results-h">
+        <h2 class="Box-title">{{ hits|length }} results</h2>
+        <span class="muted" style="font-size:12px">for <b style="color:var(--fg)">{{ q }}</b>{% if only %} in {{ only|join(', ') }}{% endif %}</span>
+        {% if not archives %}<a class="end" style="font-size:12px" href="/search?q={{ q|urlencode }}&archives=true{% for o in only %}&only_repo={{ o|urlencode }}{% endfor %}">include archives</a>{% endif %}
+      </div>
+      {% for h in hits %}
+      <div class="hit" data-path="{{ h.path }}">
+        <div class="hit-h">
+          <a class="title" href="/doc/{{ h.path }}">{{ h.title }}</a>
+          <span class="Label">{{ h.repo }}</span><span class="Label Label--accent">{{ h.area }}</span>
+        </div>
+        <div class="hit-path">{{ h.path }}{% if h.heading_path %} ¶ {{ highlight(h.heading_path, q)|safe }}{% endif %}</div>
+        <div class="snippet">{{ highlight(h.body[:700], q)|safe }}</div>
+        <div class="hit-f">
+          <span>score {{ '%.4f'|format(h.score) }}</span>
+          <span>body rank {{ h.lex_rank or '—' }}</span>
+          {% if h.mem_rank %}<span>remembered #{{ h.mem_rank }}</span>{% endif %}
+          {% if h.utility %}<span>utility {{ '%+.2f'|format(h.utility) }}</span>{% endif %}
+          <span class="sp"></span>
+          {% if search_id %}
+          <button class="btn btn-sm vote" data-kind="useful" title="This answered the question">{{ ui.icon('check') }} Useful</button>
+          <button class="btn btn-sm vote" data-kind="noise" title="This was in the way">Noise</button>
+          {% endif %}
+        </div>
+      </div>
+      {% endfor %}
+      <div class="Box-footer" title="A vote teaches the ranking: the document rises for this question and ones like it. It is a bonus, never a filter.">Did one of these answer? A vote teaches the ranking for this question and ones like it.</div>
+    </div>
+  {% endif %}
   </div>
-{% else %}
-  <p class="meta">{{ hits|length }} chunks · <strong>{{ q }}</strong>
-    {% if not archives %}· <a href="/search?q={{ q|urlencode }}&archives=true">include archives</a>{% endif %}
-    · <span title="A vote teaches the ranking: the document rises for this question and ones like it. It is a bonus, never a filter.">did one of these answer? vote on it</span></p>
-  {% for h in hits %}
-  <div class="card" data-path="{{ h.path }}">
-    <a href="/doc/{{ h.path }}#c{{ h.ord }}"><span class="pill">{{ h.repo }}</span><span class="pill">{{ h.area }}</span><strong>{{ h.title }}</strong></a>
-    <div class="crumb">{{ h.path }}{% if h.heading_path %} ¶ {{ highlight(h.heading_path, q)|safe }}{% endif %}</div>
-    <div class="snippet">{{ highlight(h.body[:700], q)|safe }}</div>
-    <div class="meta" style="margin-top:8px">score {{ '%.4f'|format(h.score) }}
-      · body rank {{ h.lex_rank or '—' }}{% if h.mem_rank %} · remembered #{{ h.mem_rank }}{% endif %}
-      {% if h.utility %} · utility {{ '%+.2f'|format(h.utility) }}{% endif %}
-      {% if search_id %}· <button class="vote" data-kind="useful" title="this answered">👍 useful</button>
-      <button class="vote" data-kind="noise" title="this was in the way">👎 noise</button>{% endif %}</div>
-  </div>
-  {% endfor %}
-  <script>
-  // A vote is one POST to the same /api/feedback an agent uses, bound to this
-  // page's search so the ranking learns the QUESTION, not only the document.
-  // The cookie carries the credential; nothing here knows the token.
-  (function () {
-    var sid = {{ search_id|tojson }};
-    document.querySelectorAll('button.vote').forEach(function (b) {
-      b.addEventListener('click', function () {
-        var card = b.closest('.card');
-        var body = {kind: b.dataset.kind, path: card.dataset.path, search_id: sid, author: 'viewer'};
-        b.disabled = true;
-        fetch('/api/feedback', {method: 'POST', credentials: 'same-origin',
-              headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
-          .then(function (r) { return r.json(); })
-          .then(function (j) {
-            var r = (j.results || [])[0] || {};
-            b.textContent = r.status === 'already' ? 'already voted today' : 'voted · utility ' + (r.utility >= 0 ? '+' : '') + r.utility;
-          })
-          .catch(function () { b.disabled = false; b.textContent = 'vote failed — retry'; });
-      });
+</div>
+
+{% if search_id %}
+<script>
+// A vote is one POST to the same /api/feedback an agent uses, bound to this
+// page's search so the ranking learns the QUESTION, not only the document.
+// The cookie carries the credential; nothing here knows the token.
+(function () {
+  var sid = {{ search_id|tojson }};
+  document.querySelectorAll('button.vote').forEach(function (b) {
+    b.addEventListener('click', function () {
+      var hit = b.closest('.hit');
+      var body = {kind: b.dataset.kind, path: hit.dataset.path, search_id: sid, author: 'viewer'};
+      b.disabled = true;
+      fetch('/api/feedback', {method: 'POST', credentials: 'same-origin',
+            headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
+        .then(function (r) { return r.json(); })
+        .then(function (j) {
+          var r = (j.results || [])[0] || {};
+          b.textContent = r.status === 'already' ? 'Already voted today' : 'Voted · utility ' + (r.utility >= 0 ? '+' : '') + r.utility;
+        })
+        .catch(function () { b.disabled = false; b.textContent = 'Vote failed — retry'; });
     });
-  })();
-  </script>
-  <style>button.vote{font:inherit;font-size:12px;padding:1px 8px;border:1px solid var(--line);border-radius:999px;background:transparent;cursor:pointer;color:inherit}
-  button.vote:disabled{cursor:default;opacity:.7}</style>
+  });
+})();
+</script>
 {% endif %}
 {% endblock %}
