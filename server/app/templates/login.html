@@ -22,28 +22,41 @@
 
   {% if error %}<div class="flash flash-error">{{ error }}</div>{% endif %}
 
+  {% if google_login %}
+  <div class="Box"><div class="Box-body">
+    <a class="btn btn-primary btn-block" href="/auth/google?next={{ next|urlencode }}">Sign in with Google</a>
+  </div></div>
+  <details class="auth-alt">
+    <summary>Sign in with the store token instead</summary>
+  {% endif %}
   <div class="Box"><div class="Box-body">
     <form method="post" action="/login">
       <label for="token">Store token</label>
       {# type=password so it is not shoulder-read and not kept by autofill as a
-         plain value; autofocus because there is exactly one thing to do here. #}
+         plain value. #}
       <input class="form-control" type="password" id="token" name="token" autocomplete="current-password"
-             autofocus required spellcheck="false">
+             {% if not google_login %}autofocus {% endif %}required spellcheck="false">
       <input type="hidden" name="next" value="{{ next }}">
-      <button class="btn btn-primary btn-block" type="submit">Sign in</button>
+      <button class="btn {% if google_login %}btn-block{% else %}btn-primary btn-block{% endif %}" type="submit">Sign in</button>
     </form>
   </div></div>
+  {% if google_login %}
+    <p class="fine">For whoever operates the store: <code>ENGRAM_TOKEN</code> from the server's <code>server/.env</code>.</p>
+  </details>
+  {% endif %}
 
   <div class="callout">
     Connecting Claude Code? You do not need this.<br>
     <a href="/setup">Read the setup guide →</a>
   </div>
 
+  {% if not google_login %}
   <p class="fine">
     This is the store's <code>ENGRAM_TOKEN</code> from the server's <code>server/.env</code> — only
     whoever operates the store has it. Clients do not hold it: machines reach the brain through the
     remote MCP server and sign in there with Google.
   </p>
+  {% endif %}
 </div>
 </body>
 </html>

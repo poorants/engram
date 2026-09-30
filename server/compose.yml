@@ -91,6 +91,7 @@ services:
       TZ: ${ENGRAM_TZ:-UTC}
       # The remote MCP address the viewer's /setup page shows. Display only.
       ENGRAM_MCP_URL: ${ENGRAM_MCP_URL:-}
+      ENGRAM_VIEWER_KEY: ${ENGRAM_VIEWER_KEY:-}
     logging:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}

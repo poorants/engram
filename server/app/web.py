@@ -11,7 +11,9 @@ Nothing but the database is read. Document bodies arrive over HTTP and live in
 """
 from __future__ import annotations
 
+import base64
 import gzip
+import hmac
 import hashlib
 import html
 import json
@@ -107,6 +109,20 @@ STATIC = HERE / "static"
 MCP_URL = os.environ.get("ENGRAM_MCP_URL", "").strip()
 MCP_URL_PLACEHOLDER = "https://<host>/mcp"
 
+# Google sign-in for the viewer, brokered by `engram serve`: the viewer sends
+# the browser to <serve>/oauth/viewer, which runs the same Google login and
+# allow-list the MCP clients go through and comes back to /auth/callback with
+# a one-minute ticket signed with ENGRAM_VIEWER_KEY — the serve host's
+# ENGRAM_SERVE_KEY. The viewer then keeps the person in a cookie it signs with
+# the same key. Both unset: the viewer only knows the operator's token.
+try:
+    VIEWER_KEY = base64.b64decode(os.environ.get("ENGRAM_VIEWER_KEY", "").strip() or b"")
+except ValueError:
+    VIEWER_KEY = b""
+GOOGLE_LOGIN = bool(MCP_URL) and len(VIEWER_KEY) >= 32
+SERVE_ORIGIN = MCP_URL[: -len("/mcp")] if MCP_URL.endswith("/mcp") else MCP_URL.rstrip("/")
+PERSON_COOKIE = "engram_person"
+
 
 _tz_warned = False
 
@@ -185,7 +201,8 @@ app = FastAPI(title="engram store", docs_url="/api/docs", redoc_url=None, lifesp
 # can authenticate, so gating it would hide the instructions from exactly the
 # reader they are for. It holds no brain data: the route renders it without
 # the sidebar's repository list unless the caller could read that anyway.
-UNAUTHENTICATED_PATHS = frozenset({"/healthz", "/login", "/logout", "/setup"})
+UNAUTHENTICATED_PATHS = frozenset({"/healthz", "/login", "/logout", "/setup",
+                                   "/auth/google", "/auth/callback"})
 
 # Stylesheet, script and fonts. The login and setup pages need them before a
 # browser has a session, and none of them says anything about what is stored.
@@ -215,8 +232,49 @@ def token_ok(supplied: str) -> bool:
     return bool(supplied) and secrets.compare_digest(supplied, TOKEN)
 
 
+# -- signed values shared with engram serve ---------------------------------
+#
+# The same shape serve's oauth.go seals with: base64url(JSON claims) "." base64url
+# (HMAC-SHA256 over the first part), the claims carrying "typ" so a value
+# issued as one kind can never be presented as another.
+
+def _b64(b: bytes) -> str:
+    return base64.urlsafe_b64encode(b).rstrip(b"=").decode()
+
+
+def _unb64(s: str) -> bytes:
+    return base64.urlsafe_b64decode(s + "=" * (-len(s) % 4))
+
+
+def seal(typ: str, claims: dict) -> str:
+    payload = _b64(json.dumps({**claims, "typ": typ}, separators=(",", ":")).encode())
+    sig = hmac.new(VIEWER_KEY, payload.encode(), hashlib.sha256).digest()
+    return payload + "." + _b64(sig)
+
+
+def unseal(typ: str, value: str) -> dict | None:
+    if not VIEWER_KEY or "." not in (value or ""):
+        return None
+    payload, sig = value.split(".", 1)
+    try:
+        good = hmac.compare_digest(_unb64(sig), hmac.new(VIEWER_KEY, payload.encode(), hashlib.sha256).digest())
+        claims = json.loads(_unb64(payload)) if good else None
+    except (ValueError, TypeError):
+        return None
+    if not isinstance(claims, dict) or claims.get("typ") != typ:
+        return None
+    if time.time() > float(claims.get("exp", 0)):
+        return None
+    return claims
+
+
+def person(request: Request) -> dict | None:
+    """The Google-signed-in person this browser holds a session for, if any."""
+    return unseal("vsess", request.cookies.get(PERSON_COOKIE, ""))
+
+
 def authenticated(request: Request) -> bool:
-    return token_ok(presented_token(request))
+    return token_ok(presented_token(request)) or person(request) is not None
 
 
 # How long a browser session lives without being used. It is a SLIDING window:
@@ -243,6 +301,17 @@ def set_session_cookie(resp, request: Request) -> None:
         # scheme). Setting it unconditionally would make the cookie
         # undeliverable on the plain-HTTP LAN deployment, and the login would
         # appear to succeed and then loop.
+        secure=request.url.scheme == "https",
+    )
+
+
+def set_person_cookie(resp, request: Request, who: dict) -> None:
+    """The Google session: who, signed, sliding like the token session."""
+    resp.set_cookie(
+        PERSON_COOKIE,
+        seal("vsess", {"email": who.get("email", ""), "sub": who.get("sub", ""),
+                       "exp": int(time.time()) + SESSION_TTL}),
+        httponly=True, samesite="lax", max_age=SESSION_TTL,
         secure=request.url.scheme == "https",
     )
 
@@ -282,6 +351,8 @@ async def authentication(request: Request, call_next):
     # whole point is to end it.
     if path != "/logout" and _authenticated_by_cookie(request):
         set_session_cookie(response, request)
+    if path not in ("/logout", "/auth/callback") and (who := person(request)):
+        set_person_cookie(response, request, who)
     return response
 
 
@@ -300,9 +371,43 @@ def _unauthenticated_response(request: Request):
         status_code=401)
 
 
+def _local(nxt: str) -> str:
+    """Only ever redirect somewhere on this site — an open redirect on a login
+    page bounces people off a URL they trust."""
+    return nxt if nxt.startswith("/") and not nxt.startswith("//") else "/"
+
+
 @app.get("/login", response_class=HTMLResponse)
 def login_form(request: Request, next: str = "/"):
     return templates.TemplateResponse(request, "login.html", {"error": "", "next": next})
+
+
+@app.get("/auth/google")
+def auth_google(request: Request, next: str = "/"):
+    if not GOOGLE_LOGIN:
+        raise HTTPException(404, "Google sign-in is not configured (ENGRAM_MCP_URL, ENGRAM_VIEWER_KEY)")
+    back = str(request.base_url).rstrip("/") + "/auth/callback?" + urllib.parse.urlencode({"next": _local(next)})
+    return RedirectResponse(SERVE_ORIGIN + "/oauth/viewer?" + urllib.parse.urlencode({"return": back}), status_code=303)
+
+
+# Tickets already exchanged. One minute is their whole life, so the set stays tiny.
+_spent_tickets: dict[str, float] = {}
+
+
+@app.get("/auth/callback")
+def auth_callback(request: Request, ticket: str = "", next: str = "/"):
+    claims = unseal("viewer", ticket)
+    now = time.time()
+    for k in [k for k, t in _spent_tickets.items() if t < now]:
+        del _spent_tickets[k]
+    if not claims or claims.get("jti") in _spent_tickets:
+        return templates.TemplateResponse(request, "login.html", {
+            "error": "That sign-in expired or was already used — try again.", "next": _local(next)},
+            status_code=401)
+    _spent_tickets[claims.get("jti", "")] = float(claims.get("exp", now))
+    resp = RedirectResponse(_local(next), status_code=303)
+    set_person_cookie(resp, request, claims)
+    return resp
 
 
 @app.post("/login")
@@ -333,6 +438,7 @@ async def login(request: Request):
 def logout():
     resp = RedirectResponse("/login", status_code=303)
     resp.delete_cookie(SESSION_COOKIE)
+    resp.delete_cookie(PERSON_COOKIE)
     return resp
 
 
@@ -430,7 +536,16 @@ def rail(max_age: float = 30.0) -> dict:
 def signed_in(request: Request) -> bool:
     """Whether this browser holds a session — the header shows a sign-out
     button only then."""
-    return token_ok(request.cookies.get(SESSION_COOKIE, ""))
+    return token_ok(request.cookies.get(SESSION_COOKIE, "")) or person(request) is not None
+
+
+def signed_in_as(request: Request) -> str:
+    """Who the header says is signed in: the Google email, or "operator" for
+    the token session."""
+    who = person(request)
+    if who:
+        return who.get("email", "")
+    return "operator" if token_ok(request.cookies.get(SESSION_COOKIE, "")) else ""
 
 
 def may_read(request: Request) -> bool:
@@ -489,7 +604,8 @@ def hue(name: str) -> int:
     return int(hashlib.md5((name or "").encode()).hexdigest()[:4], 16) % 8
 
 
-templates.env.globals.update(rail=rail, signed_in=signed_in, para_rank=para_rank)
+templates.env.globals.update(rail=rail, signed_in=signed_in, signed_in_as=signed_in_as,
+                             google_login=GOOGLE_LOGIN, para_rank=para_rank)
 templates.env.filters.update(ago=ago, stamp=stamp, hue=hue)
 
 

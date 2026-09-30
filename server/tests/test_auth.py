@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 TOKEN = "test-token-0123456789abcdef"
 
 
-def load_app(monkeypatch, *, public_reads=False, token=TOKEN, mcp_url=""):
+def load_app(monkeypatch, *, public_reads=False, token=TOKEN, mcp_url="", viewer_key=""):
     """Import web.py under a given configuration.
 
     It is re-imported per test rather than configured at runtime because the
@@ -36,6 +36,10 @@ def load_app(monkeypatch, *, public_reads=False, token=TOKEN, mcp_url=""):
         monkeypatch.setenv("ENGRAM_MCP_URL", mcp_url)
     else:
         monkeypatch.delenv("ENGRAM_MCP_URL", raising=False)
+    if viewer_key:
+        monkeypatch.setenv("ENGRAM_VIEWER_KEY", viewer_key)
+    else:
+        monkeypatch.delenv("ENGRAM_VIEWER_KEY", raising=False)
     for name in ("web",):
         sys.modules.pop(name, None)
     return importlib.import_module("web")
@@ -317,3 +321,60 @@ def test_a_store_with_no_token_refuses_to_start(monkeypatch):
     everything while appearing healthy."""
     with pytest.raises(SystemExit):
         load_app(monkeypatch, token="")
+
+
+# -- Google sign-in, brokered by engram serve ----------------------------------
+
+import base64  # noqa: E402
+
+VIEWER_KEY = base64.b64encode(bytes([7]) * 32).decode()
+MCP = "https://brain.example.ts.net:8443/mcp"
+# Sealed by serve's Go code (oauthServer.seal) with the same key: the two
+# implementations must agree byte for byte, so the vector is fixed here.
+GO_TICKET = ("eyJlbWFpbCI6ImFsaWNlQGV4YW1wbGUuY29tIiwiZXhwIjo0MTAyNDQ0ODAwLCJqdGkiOiJqMSIsInN1YiI6InMxIiwidHlwIjoidmlld2VyIn0"
+             ".0PErHVaynd-3-zTilFeJFOoikWPCiqVANDoHLntH3Qk")
+
+
+def test_a_ticket_sealed_by_serve_opens_here(monkeypatch):
+    web = load_app(monkeypatch, mcp_url=MCP, viewer_key=VIEWER_KEY)
+    assert web.unseal("viewer", GO_TICKET)["email"] == "alice@example.com"
+    assert web.unseal("vsess", GO_TICKET) is None
+    assert web.unseal("viewer", GO_TICKET[:-2] + "xx") is None
+
+
+def test_google_sign_in_goes_through_serve(monkeypatch):
+    web = load_app(monkeypatch, mcp_url=MCP, viewer_key=VIEWER_KEY)
+    r = client(web.app).get("/auth/google?next=/doc/x", follow_redirects=False)
+    assert r.status_code == 303
+    assert r.headers["location"].startswith("https://brain.example.ts.net:8443/oauth/viewer?return=")
+    assert "%2Fauth%2Fcallback" in r.headers["location"]
+
+
+def test_a_ticket_signs_the_browser_in_once(monkeypatch):
+    web = load_app(monkeypatch, mcp_url=MCP, viewer_key=VIEWER_KEY)
+    c = client(web.app)
+    r = c.get("/auth/callback", params={"ticket": GO_TICKET, "next": "//evil.example"}, follow_redirects=False)
+    assert r.status_code == 303 and r.headers["location"] == "/"
+    assert web.PERSON_COOKIE in r.cookies
+    # Past the gate with reads closed, on the person cookie alone.
+    assert c.get("/api/scopes").status_code != 401
+    page = c.get("/login").text
+    assert "Sign in with Google" in page
+    # The same ticket a second time is refused.
+    c2 = client(web.app)
+    r2 = c2.get("/auth/callback", params={"ticket": GO_TICKET}, follow_redirects=False)
+    assert r2.status_code == 401
+
+
+def test_a_forged_person_cookie_is_refused(monkeypatch):
+    web = load_app(monkeypatch, mcp_url=MCP, viewer_key=VIEWER_KEY)
+    c = client(web.app)
+    c.cookies.set(web.PERSON_COOKIE, GO_TICKET)  # a viewer ticket, not a session
+    assert c.get("/api/scopes").status_code == 401
+
+
+def test_without_a_viewer_key_there_is_no_google_sign_in(monkeypatch):
+    web = load_app(monkeypatch, mcp_url=MCP)
+    c = client(web.app)
+    assert c.get("/auth/google", follow_redirects=False).status_code == 404
+    assert "Sign in with Google" not in c.get("/login").text
