@@ -36,6 +36,12 @@ days sliding). On a machine reached over SSH, fix the callback port with
 - **The byline is the logged-in person's** (the email's local part, or
   `ENGRAM_SERVE_AUTHOR`), whatever author a call names.
 - Each MCP session gets its own session id, as with stdio.
+- **`/mcp` answers to the issuer's host only.** The SDK's DNS-rebinding guard
+  refuses any non-loopback Host on a loopback listener, and a proxy that keeps
+  the client's Host (`tailscale serve`) then got 403 on every call. The guard
+  is replaced by one aimed at the issuer's name. If Claude Code met that 403
+  before the fix, it remembers the server as needing auth — delete its entry
+  from `~/.claude/mcp-needs-auth-cache.json`.
 
 A systemd unit is in `server/deploy/engram-serve.service`. The stdio server and
 the CLI are unchanged.
