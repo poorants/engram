@@ -8,6 +8,9 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+
+## [0.13.0] — 2026-09-30
+
 ### Added — sign in to the viewer with Google
 
 The viewer's login page offers **Sign in with Google**, run by `engram serve`
@@ -783,7 +786,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.12.0...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.13.0...HEAD
+[0.13.0]: https://github.com/poorants/engram/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/poorants/engram/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/poorants/engram/compare/v0.10.5...v0.11.0
 [0.10.5]: https://github.com/poorants/engram/compare/v0.10.4...v0.10.5
