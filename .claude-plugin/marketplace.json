@@ -5,13 +5,13 @@
     "url": "https://github.com/poorants/engram"
   },
   "metadata": {
-    "description": "A networked PARA knowledge brain for coding agents — documents managed by PARA and woven into one connected graph, held in a searchable Postgres store with a revision history per document.",
-    "version": "0.4.0"
+    "description": "A networked PARA knowledge brain for coding agents — documents managed by PARA and woven into one connected graph, held in a searchable Postgres store with a revision history per document and reached through its remote MCP server.",
+    "version": "0.5.0"
   },
   "plugins": [
     {
       "name": "engram",
-      "description": "Networked PARA knowledge brain. Manages documents by PARA (Projects, Areas, Resources, Archives) and weaves them into one connected knowledge graph through bi-directional links, MOC hubs and integrity linting. The brain is a shared Postgres-backed store that is searched rather than grepped, with a revision history per document and aliases that keep links alive across moves; a local file brain covers repos the store does not admit. Carries the capture-loop hooks that keep the brain fed. Needs the `engram` binary (v0.4.0 or newer) and nothing else — no interpreter, no runtime. See the repository's install.sh.",
+      "description": "Networked PARA knowledge brain. Manages documents by PARA (Projects, Areas, Resources, Archives) and weaves them into one connected knowledge graph through bi-directional links, MOC hubs and integrity checks. The brain is a shared Postgres-backed store reached only through the remote `engram` MCP server (engram serve) — searched rather than grepped, with a revision history per document and aliases that keep links alive across moves. Carries the capture-loop hooks that keep the brain fed; they run the `engram` binary, which /mcp__engram__setup installs",
       "source": "./",
       "strict": false,
       "skills": ["./skills/engram"],

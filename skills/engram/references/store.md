@@ -1,44 +1,45 @@
 # The store — full contract
 
-The brain is a Postgres-backed service. There is **one client for it**, the
-`engram` binary, and two surfaces over that one client: the `brain_*` MCP tools
-inside a session, and `engram <verb>` for anything that is not the model — a
-hook, a scheduled job, this skill, a person at a terminal. There is no third
-surface and no interpreter: this skill ships no scripts.
+The brain is a Postgres-backed service. A session reaches it through **one
+surface**: the remote MCP server `engram serve`, registered in Claude Code as
+`engram`. There is no CLI, no local MCP server, no local brain and no
+interpreter — this skill ships no scripts.
 
-Keeping it to one client is not tidiness. When there were two, the cost was two
-places to put the token, two default authors, and two copies of the path rules to
-drift apart — and drift there is invisible, because both answers look plausible.
+Keeping it to one surface is not tidiness. When there were several (a Python
+helper, a CLI, a local MCP server, a file-brain fallback), the cost was several
+places to keep a token, several default authors, and several copies of the path
+rules to drift apart — and drift there is invisible, because every answer looks
+plausible.
 
-## Setup
+## Connection
 
-```bash
-engram store set <url> --token <write token>   # designate; caches the admitted groups
-engram store doctor                            # prove it end to end
-engram store show                              # where each setting came from
-engram store unset [--forget-token]            # remove the designation
+```
+claude mcp add --transport http --scope user --callback-port 33418 engram https://<host>/mcp
 ```
 
-Settings live in `<config dir>/engram/config.json`; the write token lives beside
-it at `store.token`, mode 0600, and **never in the JSON** — that file is one
-people open and paste from, and a secret in it eventually gets copied somewhere
-it should not be. `<config dir>` is `$ENGRAM_CONFIG_DIR`, else
-`$CLAUDE_CONFIG_DIR`, else `~/.claude`. Environment beats file for every value:
-`ENGRAM_STORE_URL`, `ENGRAM_TOKEN`, `ENGRAM_AUTHOR`.
+Then `/mcp` → engram → **Authenticate**: the server is its own OAuth
+authorization server, so Claude Code registers, sends the person through a
+Google login once per machine, and keeps and refreshes the token itself. Then
+`/mcp__engram__setup` in a session finishes the machine (the plugin and the
+hook binary). **Register at user scope**: the brain is not a property of one
+checkout, and per-project registration makes the tools vanish the first time
+someone opens a different repo.
 
-The `brains` section of that same file holds the file-brain designation
-(`engram brain set`). Two sections, written by two separate calls, so designating
-one never erases the other.
+The client machine holds **no store address, no store credential and no
+settings file**. The login is the person's; the store's own credential lives
+only in the `engram serve` process next to the store.
 
-**`doctor` checks the write token, not only the connection.** "The store is up"
-and "I can write to it" are different facts, and a check that proves only the
-first lets someone finish a setup read-only. The first thing they notice is a
-save failing at the end of a session, which is the worst possible moment.
+- **The tools are absent** from a session — `claude mcp list`; `engram` must be
+  an HTTP server and connected. A leftover local (stdio) `engram mcp` entry from
+  engram 0.11 or earlier no longer works: remove it
+  (`claude mcp remove engram -s user`) and re-add.
+- **"Needs authentication"** — `/mcp` → engram → Authenticate. A login that
+  succeeds and still shows the state may be Claude Code's cached answer in
+  `~/.claude/mcp-needs-auth-cache.json`.
+- **403 at login** — the person is not on the server's allow-list
+  (`ENGRAM_SERVE_ALLOW`); that is the operator's to change.
 
-There is deliberately **no built-in store address**. A default address is a
-machine that exists on one network and nowhere else; a client silently pointing
-at it fails in a way that looks like an outage rather than a missing setting.
-Unconfigured fails in place, with the remedy.
+Never ask anyone to paste a token into a chat.
 
 ## Addresses
 
@@ -47,7 +48,9 @@ Unconfigured fails in place, with the remedy.
 ```
 
 - `<owner>` and `<repo>` are the document root, and they are **columns in the
-  store, not directory levels**. They are derived from `origin`, never chosen.
+  store, not directory levels**. They come from the working repo's `origin`,
+  never chosen. The MCP server cannot see which checkout a call is about, so the
+  model always sends the **full** path.
 - `<area>` is one of `projects` · `areas` · `resources` · `archives`.
 - A repo hub MOC is the exception with no area: `<owner>/<repo>/README.md`.
 - At most **5 levels below the document root**. The rule is a depth CEILING, not
@@ -55,25 +58,24 @@ Unconfigured fails in place, with the remedy.
   the store indexes and serves happily.
 - Accepted extensions: `.md`, `.dbml`.
 
-`./<area>/<name>.md` given to the CLI is filled in from the current directory's
-`origin`. An explicit full path always passes through untouched, so writing
-deliberately into another repo's scope is never silently redirected.
+## The tools
 
-## Reads need no token, writes do
+| Operation | Tool |
+|---|---|
+| search | `brain_search` (`query`, `tier`, `boostRepo`, `onlyRepos`, `archives`, `limit`) |
+| read one document | `brain_get` (`path`) — body, `sha256`, links, backlinks, recent history |
+| change history | `brain_revisions` (`path`, `limit`) |
+| link-graph health | `brain_integrity` (`limit`) |
+| create / replace | `brain_put` (`path`, `body`, `note`, `dryRun`) |
+| change a part | `brain_patch` (`path`, `edits`, `note`, `baseSha256`, `dryRun`) |
+| move / archive | `brain_move` (`path`, `to`, `dryRun`) |
+| vote a document useful / noise | `brain_feedback` (`paths`, `kind`, `note`, `searchId`) |
 
-| Operation | Tool | Token |
-|---|---|---|
-| search | `brain_search` / `engram search` | no |
-| read one document | `brain_get` / `engram get` | no |
-| change history | `brain_revisions` / `engram revisions` | no |
-| link-graph health | `brain_integrity` / `engram integrity` | no |
-| save | `brain_put` / `engram put` | **yes** |
-| move / archive | `brain_move` / `engram move` | **yes** |
-| vote a document useful / noise | `brain_feedback` / `engram feedback` | **yes** |
-| what sessions cost, tier-1 hit rate | `engram usage` (CLI and viewer only, by design) | no |
+What sessions cost and the tier-1 hit rate are on the web viewer's `/usage`
+page, not a tool.
 
 **Search answers in tiers.** Tier 1 (the default) is up to four documents as
-snippets, one chunk each — a quarter of the old page's tokens with the same
+snippets, one chunk each — a quarter of a full page's tokens with the same
 recall on the bench. If the answer is not on it, call again with the **same
 question** and the tier the result names (`next`): 2 is the full chunks, 3 adds
 archives and drops the repo boost. Raise the tier before rephrasing; a
@@ -87,62 +89,46 @@ opening a hit with `brain_get` is recorded as a weaker vote without any call.
 It is a bonus, never a filter — the document must still match the question.
 
 There is deliberately **no delete tool**. The contract is *never delete, move to
-archives*. The store's soft delete stays reachable for an operator with curl, not
-for an agent.
+archives*. The store's soft delete stays reachable for an operator, not for an
+agent.
 
-`put` is an upsert: create and update are the same call, the previous body goes
-to `revisions`, and an identical body answers `unchanged` instead of writing
-again. A `note` is required — a history of "updated" tells you nothing a
+`brain_put` is an upsert: create and update are the same call, the previous body
+goes to `revisions`, and an identical body answers `unchanged` instead of
+writing again. A `note` is required — a history of "updated" tells you nothing a
 timestamp did not.
 
-`move` keeps the old path as an **alias**, so a `[[old-name]]` written elsewhere
-keeps resolving. Edges point at an immutable document id, so a move breaks
-nothing that had already resolved.
+`brain_patch` edits in place: each edit addresses a `section`, a unique
+`anchor`, or a line range, with `expect` (the text you believe is there) and
+`baseSha256` (from `brain_get`). Edits apply together or not at all, and a
+mismatch is refused rather than guessed — read again and retry.
 
-## Exit codes are a contract
-
-| code | meaning | what to do |
-|---|---|---|
-| 0 | success | — |
-| 1 | error — bad argument, malformed path, missing token | fix the call |
-| 3 | the store REFUSED this path's owner (403) AND no local file brain took it | designate one: `engram brain set <path>` |
-| 4 | the store could not be REACHED | fail loudly; write nothing anywhere |
-
-Never branch on message text. Split that way, a network failure is one day read
-as a scope refusal, the document goes into a local file nobody reads, and
-everyone believes it was recorded.
-
-`engram put` acts on this itself: on a 403 it writes the document into the local
-file brain and reports `local: … → wrote the local file brain: <path>` with exit
-0, because the document DID land. Exit 3 is reserved for a refusal that landed
-nowhere — no file brain is designated — which is the only case a caller has to do
-something about.
+`brain_move` keeps the old path as an **alias**, so a `[[old-name]]` written
+elsewhere keeps resolving. Edges point at an immutable document id, so a move
+breaks nothing that had already resolved.
 
 ## Scope is the confidentiality boundary
 
-The server's `ENGRAM_OWNERS` lists the owner groups it admits; anything else is
-refused with 403. It is a list of GROUPS rather than repos on purpose: enumerate
-repos and the list falls behind the day someone creates one.
+The store's `ENGRAM_OWNERS` lists the owner groups it admits; anything else is
+refused with **403**. It is a list of GROUPS rather than repos on purpose:
+enumerate repos and the list falls behind the day someone creates one. An empty
+`ENGRAM_OWNERS` admits nothing — a deployment that forgot to configure it closes
+rather than opens.
 
-Reads are open, so `owner`/`repo` columns cannot protect confidentiality —
-whatever the column says, a document is readable by anyone who can reach the
-service. What must not be readable is therefore **never let in**, and that is
-enforced at write time rather than by anyone remembering where they are standing.
+Everyone who can log in reads everything in the store, so the `owner`/`repo`
+columns cannot protect confidentiality — what must not be readable is therefore
+**never let in**, and that is enforced at write time rather than by anyone
+remembering where they are standing.
 
-An empty `ENGRAM_OWNERS` admits nothing. A deployment that forgot to configure it
-closes rather than opens.
+A 403 is not an error to retry and not a cue to write somewhere else. The store
+is alive and declined: knowledge from an unadmitted repo does not go into this
+brain, and there is no local brain to take it either. Say so.
 
-## The byline is a claim, not a proof
+## The byline is the login
 
-Every revision records an `author`, and the write token is one shared credential
-— so the author is a claim the client makes. The design goal is to make it
-**honest by default**, not provable; proving it means per-person tokens, which
-means accounts, issuing and revocation.
-
-Resolution order: an explicit argument → `ENGRAM_AUTHOR` (env or config) → `git
-config user.name` → `$USER`/`$LOGNAME` → the literal `engram`. Every step below
-the first is silent: a write must never fail, or even warn, because attribution
-could not be resolved.
+Every revision records an `author`, and the remote server stamps it with the
+logged-in person (the part of their email before `@`, or the server's fixed
+`ENGRAM_SERVE_AUTHOR`). The tools' `author` argument is ignored. Attribution is
+therefore authenticated, not claimed.
 
 ## No fallback, no queue
 
@@ -151,19 +137,17 @@ answer and a spool sitting somewhere both manufacture the belief that it worked,
 and that belief outlives the outage. The honest answer to "the brain is down" is
 to say so.
 
-A **refusal is not an outage** and takes the other path: the store is alive and
-declined, so the document goes to the local file brain, where knowledge from an
-unadmitted repo belonged all along.
-
 ## Running a store
 
-The server is one compose file — see `server/` in the engram repository.
+The server is one compose file — see `server/` in the engram repository — and
+the remote MCP is `engram serve` beside it (`server/deploy/engram-serve.service`,
+its settings in an environment file).
 
 ```bash
 cp .env.example .env      # POSTGRES_PASSWORD, ENGRAM_INGEST_TOKEN, ENGRAM_OWNERS
 docker compose up -d
 ```
 
-Exactly one port is published. Seed an existing tree of notes with
-`bin/import_tree.py`. Back it up with `deploy/backup.sh`: the canonical copy is
-in the database and there is no copy of it anywhere else.
+Seed an existing tree of notes with `bin/import_tree.py`. Back it up with
+`deploy/backup.sh`: the canonical copy is in the database and there is no copy
+of it anywhere else.
