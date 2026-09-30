@@ -8,6 +8,26 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Added — `engram serve`, the remote MCP server
+
+The `brain_*` tools over streamable HTTP, run next to the store. The server
+holds the store's credential; a person's machine holds only a bearer token for
+the server, so there is no store address or `store.token` to keep in step on
+every machine. Callers are admitted by the SHA-256 of their token
+(`ENGRAM_SERVE_TOKEN_SHA256`) — the server never holds a caller's token — and
+every revision is stamped with `ENGRAM_SERVE_AUTHOR`, whatever author a call
+names. Each MCP session gets its own session id, so the usage log keeps them
+apart as it does for stdio. A systemd unit is in
+`server/deploy/engram-serve.service`.
+
+```bash
+claude mcp add --transport http --scope user engram https://<host>/mcp \
+  --header "Authorization: Bearer <token>"
+```
+
+This is the first step toward MCP-standard OAuth; the stdio server and the CLI
+are unchanged.
+
 
 ## [0.10.5] — 2026-09-11
 

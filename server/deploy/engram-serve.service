@@ -1,0 +1,21 @@
+[Unit]
+Description=engram remote MCP server (engram serve)
+After=network-online.target docker.service
+Wants=network-online.target
+
+[Service]
+# Settings live beside the binary, 600 root: ENGRAM_TOKEN (the store's own
+# credential, the same value as server/.env), ENGRAM_SERVE_TOKEN_SHA256 (hashes
+# of the tokens callers present), ENGRAM_SERVE_AUTHOR (the byline).
+EnvironmentFile=/opt/engram-serve/serve.env
+ExecStart=/opt/engram-serve/bin/engram serve --addr 127.0.0.1:8682 --path /mcp --store http://127.0.0.1:8081
+DynamicUser=yes
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+
+[Install]
+WantedBy=multi-user.target
