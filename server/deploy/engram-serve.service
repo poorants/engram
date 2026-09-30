@@ -4,11 +4,14 @@ After=network-online.target docker.service
 Wants=network-online.target
 
 [Service]
-# Settings live beside the binary, 600 root: ENGRAM_TOKEN (the store's own
-# credential, the same value as server/.env), ENGRAM_SERVE_TOKEN_SHA256 (hashes
-# of the tokens callers present), ENGRAM_SERVE_AUTHOR (the byline).
+# Settings live beside the binary, 600 root — the list is in
+# `engram serve --help`: ENGRAM_TOKEN (the store's own credential, the same
+# value as server/.env), ENGRAM_SERVE_ISSUER, ENGRAM_SERVE_KEY, the Google
+# client id and secret, ENGRAM_SERVE_ALLOW, optionally ENGRAM_SERVE_AUTHOR.
+# The proxy in front must hand this server a whole origin: the OAuth metadata
+# is at /.well-known/.
 EnvironmentFile=/opt/engram-serve/serve.env
-ExecStart=/opt/engram-serve/bin/engram serve --addr 127.0.0.1:8682 --path /mcp --store http://127.0.0.1:8081
+ExecStart=/opt/engram-serve/bin/engram serve --addr 127.0.0.1:8682 --store http://127.0.0.1:8081
 DynamicUser=yes
 Restart=on-failure
 RestartSec=3

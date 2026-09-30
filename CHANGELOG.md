@@ -8,25 +8,37 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
-### Added — `engram serve`, the remote MCP server
+### Added — `engram serve`, the remote MCP server with its own OAuth
 
 The `brain_*` tools over streamable HTTP, run next to the store. The server
-holds the store's credential; a person's machine holds only a bearer token for
-the server, so there is no store address or `store.token` to keep in step on
-every machine. Callers are admitted by the SHA-256 of their token
-(`ENGRAM_SERVE_TOKEN_SHA256`) — the server never holds a caller's token — and
-every revision is stamped with `ENGRAM_SERVE_AUTHOR`, whatever author a call
-names. Each MCP session gets its own session id, so the usage log keeps them
-apart as it does for stdio. A systemd unit is in
-`server/deploy/engram-serve.service`.
+holds the store's credential, so a person's machine keeps no store address and
+no `store.token` in step. It is also its own OAuth authorization server, in the
+shape the MCP authorization spec asks for — protected-resource and server
+metadata, dynamic client registration, authorization code with PKCE (S256),
+refresh — so registering it takes no header:
 
 ```bash
-claude mcp add --transport http --scope user engram https://<host>/mcp \
-  --header "Authorization: Bearer <token>"
+claude mcp add --transport http --scope user engram https://<host>/mcp
 ```
 
-This is the first step toward MCP-standard OAuth; the stdio server and the CLI
-are unchanged.
+Claude Code opens a browser once per machine; the person logs in with Google,
+and only emails or Google subject ids in `ENGRAM_SERVE_ALLOW` get in. After
+that Claude Code keeps and refreshes the token itself (access 1 h, refresh 90
+days sliding). On a machine reached over SSH, fix the callback port with
+`--callback-port` and forward it (`ssh -L`).
+
+- **Nothing is stored.** Client ids, codes and tokens are values signed with
+  `ENGRAM_SERVE_KEY`; a restart loses nothing. Signing everyone out is rotating
+  the key; removing a person from the allow-list takes effect on their next
+  call.
+- **Only loopback redirects register.** A code can only land on the machine
+  that asked for it.
+- **The byline is the logged-in person's** (the email's local part, or
+  `ENGRAM_SERVE_AUTHOR`), whatever author a call names.
+- Each MCP session gets its own session id, as with stdio.
+
+A systemd unit is in `server/deploy/engram-serve.service`. The stdio server and
+the CLI are unchanged.
 
 
 ## [0.10.5] — 2026-09-11
