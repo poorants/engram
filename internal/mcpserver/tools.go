@@ -8,16 +8,15 @@ import (
 	"github.com/poorants/engram/pkg/brain"
 )
 
-// The MCP server is spawned once per session and cannot know which checkout a
+// One MCP server is built per session and cannot know which checkout a
 // given call is about, so the document address —
 // <owner>/<repo>/<area>/<name>.md, or <owner>/<repo>/README.md for a repo hub
 // MOC — is the caller's to supply; the schemas spell the form out and pkg/brain
 // refuses malformed ones. The store itself refuses owners outside its
 // allow-list (403), so a document from a repo the store does not admit cannot
-// land here by mistake. The CLI, which runs IN a directory, is the surface that
-// can fill the coordinates in from `origin`.
+// land here by mistake.
 //
-// Being one process per session is also what lets this adapter close the
+// Being one server per session is also what lets this adapter close the
 // feedback loop the store cannot see: it remembers the last search (recent.go)
 // and tells the store when a brain_get opens one of its hits, so a document
 // that was read after being found earns an implicit vote without the model
@@ -29,7 +28,7 @@ import (
 // AuthorFunc resolves the name to stamp on a revision, given whatever the
 // caller passed explicitly (often nothing). A function rather than the resolver
 // type so this adapter keeps knowing only MCP and pkg/brain — the identity
-// rules stay one layer up, where both surfaces share them. A nil AuthorFunc
+// rule (the logged-in person's byline) stays one layer up, in engram serve. A nil AuthorFunc
 // passes the caller's value through untouched.
 type AuthorFunc func(ctx context.Context, explicit string) string
 
@@ -168,7 +167,7 @@ func Register(server *mcp.Server, cfg brain.Config, authorOf AuthorFunc) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "brain_put",
 		Description: "Save a document to the shared brain (create and update are the same call — an upsert). The previous body stays in revisions, so a write is reversible. " +
-			"Needs the store token. A path whose owner group the store does not admit is refused with 403 — that document belongs in engram's local file brain. " +
+			"A path whose owner group the store does not admit is refused with 403 — say so; there is no other place to save it. " +
 			"An unchanged body is reported as 'unchanged' rather than written again.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in putIn) (*mcp.CallToolResult, any, error) {

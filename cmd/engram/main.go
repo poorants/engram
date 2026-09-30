@@ -1,19 +1,17 @@
-// Command engram is the single binary for an engram brain: an MCP server for a
-// model in a session, and a CLI for everything that is not one — hooks,
-// scripts, scheduled jobs, and a person at a terminal.
+// Command engram is the binary on both ends of an engram brain that is reached
+// only over MCP.
 //
-// One binary rather than two is the point, and it is now one binary rather than
-// a binary plus an interpreter. When the transport lived in two programs, the
-// cost was two credential files, two default authors, and two copies of the path
-// rules to drift apart. When the skill's helpers and the capture-loop hooks were
-// Python, the cost was steeper and quieter: on Windows `python3` is not a command
-// even where Python is installed — the App Execution Alias of that name opens the
-// Microsoft Store and exits — so the hooks were silently dead on every Windows
-// machine, and nothing said so.
+// On the host next to the store it is `engram serve`: the remote MCP server,
+// with its own OAuth, and the one process that holds the store credential. On
+// a person's machine it is `engram hook`, the capture-loop hook the plugin
+// registers — and nothing else. That machine has no store address, no token
+// and no settings file: a session reaches the brain through the `engram` MCP
+// registration, and the hook decides whether to speak from the git origin
+// alone.
 //
-// So there are three surfaces over one client and one settings file, and nothing
-// else to install: `engram mcp` for the session, `engram <verb>` for a
-// subprocess, and the plugin's hook command, which is `engram hook`.
+// Until 0.11 there was also a CLI over the store, a stdio MCP server, a local
+// file brain and a self-updater here. Each was a second way to do what the
+// remote MCP server now does once, for everyone, so they were removed.
 package main
 
 import (
@@ -45,69 +43,24 @@ const usage = `engram — a networked PARA knowledge brain for coding agents
 
 usage: engram <command> [options]
 
-  mcp                     run the MCP server over stdio (what a session launches)
-  serve                   run it over HTTP next to the store — the remote MCP
-                          server (engram serve --help)
+  serve     run the remote MCP server next to the store (engram serve --help)
+  hook      the capture-loop hook — reads a Claude Code hook payload on stdin.
+            Registered by the plugin; not something to run by hand.
+  version   print the version
+  help      print this text
 
-the store
-  search <question>       search the store — pass the question as a sentence
-                          --tier 1|2|3 (snippets / full chunks / wide; 0 untiered)
-                          --limit --chars --archives --boost-repo --only-repo --only-owner
-  get <path>              print one document (--from-search <id> records that
-                          the search led here)
-  feedback <path>...      say the document(s) answered — or --noise, got in the
-                          way (--search <id> ties the vote to the question)
-  put <path>              save a document (--file, or stdin; --note required)
-  patch <path>            change PART of one (--section/--anchor/--lines,
-                          --expect-file, --file; --note required). Prefer it
-                          over put for an edit: it sends only the change
-  move <path> <new path>  move a document (the old path stays as an alias)
-  revisions <path>        change history
-  integrity               broken links, orphans, weak nodes
-  usage                   what sessions cost: calls, tokens, tier-1 hit rate,
-                          questions asked again and again (--days --session)
-  status                  connection, scope, and who you write as
-  scope                   owner/repo derived from this directory's git origin
+A session reaches the brain only through the remote MCP server:
 
-  store set <url>         designate the store (--token to enable writing)
-  store show              where the settings come from
-  store doctor            prove the store answers, end to end
-  store unset             remove the designation (--forget-token)
+  claude mcp add --transport http --scope user --callback-port 33418 \
+    engram https://<host>/mcp
 
-a file brain
-  resolve                 which brain feeds this directory, and why
-  brain show              the designations, and how here resolves
-  brain set <path>        designate THE shared file brain (replaces any previous)
-  brain unset             remove the designation (the directory is left alone)
-  init                    create the PARA folders (--output --flat --nested-dir)
-  lint                    broken links, orphans, weak nodes, density (--all --base)
-  weave                   the concrete links that would raise the density (--base)
-  link                    write this repo's CLAUDE.md brain pointer (--remove)
-
-  hook                    the capture-loop hook — reads a Claude Code hook
-                          payload on stdin. Registered by the plugin; not
-                          something to run by hand.
-
-  update                  install the latest release over this binary
-                          (--version vX.Y.Z --check --force); settings untouched
-  version                 print the version
-
-Every command prints for a person and takes --json for a machine.
-
-A document path is <owner>/<repo>/<area>/<name>.md, where area is one of
-projects|areas|resources|archives; a repo hub MOC is <owner>/<repo>/README.md.
-Given as './<area>/<name>.md' the coordinates are filled in from the current
-directory's git origin.
-
-exit codes: 0 ok · 1 error · 3 the store refused this path's owner and no local
-file brain took it · 4 store unreachable
+then /mcp → engram → Authenticate, and run /mcp__engram__setup in Claude Code
+to install the plugin and this binary for the hooks.
 `
 
 const (
-	exitOK       = 0
-	exitError    = 1
-	exitRefused  = 3 // the store declined this owner group AND nothing local caught it
-	exitStoreOut = 4 // the store could not be reached at all
+	exitOK    = 0
+	exitError = 1
 )
 
 func main() { os.Exit(run(os.Args[1:])) }
@@ -119,50 +72,10 @@ func run(args []string) int {
 	}
 	verb, rest := args[0], args[1:]
 	switch verb {
-	case "mcp":
-		return runMCP(rest)
 	case "serve":
 		return cmdServe(rest)
 	case "hook":
 		return cmdHook(rest)
-	case "search":
-		return cmdSearch(rest)
-	case "get":
-		return cmdGet(rest)
-	case "feedback":
-		return cmdFeedback(rest)
-	case "put":
-		return cmdPut(rest)
-	case "patch":
-		return cmdPatch(rest)
-	case "move":
-		return cmdMove(rest)
-	case "revisions":
-		return cmdRevisions(rest)
-	case "usage":
-		return cmdUsage(rest)
-	case "update":
-		return cmdUpdate(rest)
-	case "integrity":
-		return cmdIntegrity(rest)
-	case "status":
-		return cmdStatus(rest)
-	case "scope":
-		return cmdScope(rest)
-	case "store":
-		return runStore(rest)
-	case "resolve":
-		return cmdResolve(rest)
-	case "brain":
-		return runBrain(rest)
-	case "init":
-		return cmdInit(rest)
-	case "lint":
-		return cmdLint(rest)
-	case "weave":
-		return cmdWeave(rest)
-	case "link":
-		return cmdLink(rest)
 	case "version", "--version", "-v":
 		fmt.Printf("engram %s (%s/%s, %s)\n", resolveVersion(), runtime.GOOS, runtime.GOARCH, runtime.Version())
 		return exitOK

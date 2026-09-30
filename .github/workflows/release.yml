@@ -32,34 +32,33 @@ jobs:
             dist/SHA256SUMS
           generate_release_notes: true
           body: |
-            ## Install the client
+            ## Set up a machine
 
-            Binary, MCP server, skill and capture hooks — one command. Paste the
-            store address and token that `server/setup.sh` printed.
+            A session reaches the brain only through the remote MCP server
+            (`engram serve`, next to the store). Register it once per machine:
+
+            ```bash
+            claude mcp add --transport http --scope user --callback-port 33418 engram https://<host>/mcp
+            ```
+
+            Then `/mcp` → engram → Authenticate, and run `/mcp__engram__setup` in
+            Claude Code: it installs the plugin (skill + capture hooks) and the
+            `engram` binary the hooks run. The binary alone:
 
             **Linux · macOS**
             ```bash
-            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh \
-              | sh -s -- --store http://<host>:8081 --token <write token>
+            curl -fsSL https://raw.githubusercontent.com/${{ github.repository }}/main/install.sh | sh
             ```
 
             **Windows**
             ```powershell
-            $env:ENGRAM_STORE_URL = 'http://<host>:8081'
-            $env:ENGRAM_TOKEN     = '<write token>'
             irm https://raw.githubusercontent.com/${{ github.repository }}/main/install.ps1 | iex
             ```
-
-            Run either with no arguments to install the binary alone.
 
             ## No store yet?
 
             The store is Postgres in Docker — Linux or macOS, once, for everyone:
-
-            ```bash
-            git clone https://github.com/${{ github.repository }} && cd engram/server
-            ./setup.sh --owners <your-github-org>
-            ```
+            see [server/README.md](https://github.com/${{ github.repository }}/blob/main/server/README.md).
 
             Checksums for every asset are in `SHA256SUMS`; both installers verify
             against it and refuse to install on a mismatch.
@@ -78,7 +77,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, macos-13, windows-latest]
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -86,18 +85,21 @@ jobs:
       - name: install it the way the README says
         if: runner.os != 'Windows'
         run: |
-          sh install.sh --version "$GITHUB_REF_NAME" --no-claude --dir "$HOME/engram-smoke"
+          sh install.sh --version "$GITHUB_REF_NAME" --dir "$HOME/engram-smoke"
           "$HOME/engram-smoke/engram" version
-          # The installer is allowed to leave the store unconfigured; it is not
-          # allowed to leave a binary that cannot answer.
-          "$HOME/engram-smoke/engram" store show
+          # Installing the same version again is a no-op, not a second download.
+          again=$(sh install.sh --version "$GITHUB_REF_NAME" --dir "$HOME/engram-smoke")
+          case "$again" in *"already installed"*) ;; *) echo "$again"; exit 1 ;; esac
+          # The hook must answer, and answer with exit 0, whatever it is fed.
+          echo '{}' | "$HOME/engram-smoke/engram" hook
 
       - name: install it the way the README says
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $env:ENGRAM_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'engram-smoke'
-          ./install.ps1 -Version $env:GITHUB_REF_NAME -NoClaude
+          ./install.ps1 -Version $env:GITHUB_REF_NAME
           $exe = Join-Path $env:ENGRAM_INSTALL_DIR 'engram.exe'
           & $exe version
-          & $exe store show
+          '{}' | & $exe hook
+          if ($LASTEXITCODE -ne 0) { exit 1 }

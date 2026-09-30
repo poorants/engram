@@ -2,20 +2,25 @@
 
 ## Review Procedure
 
+The store has no listing tool. Enumerate from the hubs — `brain_get
+<owner>/<repo>/README.md` and each area's MOC, following links and backlinks —
+plus `brain_integrity` (orphans are exactly the documents no hub reaches).
+"Last modified" is the newest entry of `brain_revisions <path>`.
+
 ### 1. Projects Review
 
-For each item in `<base>/projects/`:
+For each item in `<owner>/<repo>/projects/`:
 
 - [ ] Is this project still active? (Last modified within 30 days)
 - [ ] Does it have a clear goal or deadline?
 - [ ] Are there any completed deliverables that should be archived?
-- [ ] Is the project README/document up to date?
+- [ ] Is the project's hub document up to date?
 
 **Archive if**: Project is completed, cancelled, or inactive for >30 days.
 
 ### 2. Areas Review
 
-For each item in `<base>/areas/`:
+For each item in `<owner>/<repo>/areas/`:
 
 - [ ] Is this still an ongoing responsibility?
 - [ ] Is the documentation current and accurate?
@@ -26,7 +31,7 @@ For each item in `<base>/areas/`:
 
 ### 3. Resources Review
 
-For each item in `<base>/resources/`:
+For each item in `<owner>/<repo>/resources/`:
 
 - [ ] Is the information still accurate and relevant?
 - [ ] Has this been superseded by newer material?
@@ -55,16 +60,16 @@ An item is an archive candidate when ANY of these conditions are met:
 
 ### Archive Candidates
 Items recommended for archiving (requires user confirmation):
-- [ ] path/to/item — [reason]
-- [ ] path/to/item — [reason]
+- [ ] acme/<repo>/projects/item.md — [reason]
+- [ ] acme/<repo>/projects/item.md — [reason]
 
 ### Needs Update
 Items with potentially outdated content:
-- path/to/item — [what needs updating]
+- acme/<repo>/<area>/item.md — [what needs updating]
 
 ### Recently Archived
 Items archived since last review:
-- path/to/item — archived on YYYY-MM-DD
+- acme/<repo>/archives/item.md — archived on YYYY-MM-DD
 
 ### Summary
 | Category  | Items | Archive Candidates | Needs Update |

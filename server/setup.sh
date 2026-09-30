@@ -4,11 +4,12 @@
 # There are two installers and they set up two different machines:
 #
 #   server/setup.sh            the STORE  — once, on one Linux/macOS host
-#   install.sh / install.ps1   the CLIENT — every person, every machine
+#   install.sh / install.ps1   the hook BINARY — every person, every machine
 #
 # This is the store one. It needs Docker, and it is Linux/macOS only: the store
 # is Postgres and Windows machines are clients of it, not hosts for it. Run it
-# once; it finishes by printing the exact client one-liner to hand out.
+# once; it finishes by saying what comes next — `engram serve` beside it, the
+# remote MCP server every session reaches the brain through.
 #
 # The manual path is four steps (copy .env.example, invent two secrets, decide
 # ENGRAM_OWNERS, compose up) and three of them are places to get it subtly
@@ -258,7 +259,6 @@ fi
 
 # Read back what is actually in the file, so the values printed at the end are
 # the running store's and not the ones this run happened to generate.
-TOKEN=$(sed -n 's/^ENGRAM_TOKEN=//p' .env | head -1)
 PORT=$(sed -n 's/^ENGRAM_PORT=//p' .env | head -1)
 PORT="${PORT:-8081}"
 DOMAIN=$(sed -n 's/^ENGRAM_DOMAIN=//p' .env | head -1)
@@ -331,27 +331,23 @@ network. Substitute an IP or a DNS name if it is not.
 "
 fi
 
-RAW="https://raw.githubusercontent.com/poorants/engram/main"
-
 cat <<NEXT
 
 The store is up: $URL   (open it in a browser for the viewer)
 
-Now set up the people. This is the whole client install — binary, MCP server,
-skill and hooks — on Linux and macOS:
+Next, on this host: run engram serve beside it — the remote MCP server every
+session reaches the brain through. It holds the store's credential
+(ENGRAM_TOKEN from .env, in its own environment file) and logs people in with Google:
+  https://github.com/poorants/engram/blob/main/docs/install.md#engram-serve
 
-  curl -fsSL $RAW/install.sh \\
-    | sh -s -- --store $URL --token $TOKEN
-
-and on Windows, in PowerShell:
-
-  \$env:ENGRAM_STORE_URL = '$URL'
-  \$env:ENGRAM_TOKEN     = '$TOKEN'
-  irm $RAW/install.ps1 | iex
+Then, on each person's machine:
+  claude mcp add --transport http --scope user --callback-port 33418 engram https://<serve host>/mcp
+and in Claude Code: /mcp -> engram -> Authenticate, then /mcp__engram__setup.
 $ADDRESS_NOTE
 The token is the store's one credential: whoever holds it can read and write
-everything. It is in .env, and it is not recoverable from the server if you
-lose that file.
+everything. It belongs in engram serve's environment and nowhere else — never
+on a person's machine. It is in .env, and it is not recoverable from the server
+if you lose that file.
 
   docker compose logs -f app     what it is doing
   docker compose down            stop it (the data in ${DATA:-./data} stays)

@@ -9,7 +9,7 @@ Three deliverables, and a change usually belongs to exactly one:
 
 | Path | What | Language |
 |---|---|---|
-| `cmd/`, `pkg/`, `internal/` | the client — binary, CLI, MCP server | Go 1.25 |
+| `cmd/`, `pkg/`, `internal/` | the binary — `engram serve` (remote MCP server) and `engram hook` | Go 1.25 |
 | `server/` | the store — FastAPI + Postgres 17 | Python 3.12 |
 | `skills/engram/` | the Claude Code skill and its references — prose only, no scripts | Markdown |
 
@@ -115,7 +115,7 @@ by tagging `vX.Y.Z`, which triggers the release workflow; maintainers do that.
 ## Reporting things
 
 - **Bugs and features:** [issues](https://github.com/poorants/engram/issues) —
-  the templates ask for `engram version` and `engram store doctor` output, which
+  the templates ask for `engram version` and `claude mcp list` output, which
   is genuinely what gets asked for first otherwise.
 - **Security:** do not open an issue. See [SECURITY.md](SECURITY.md).
 

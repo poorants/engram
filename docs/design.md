@@ -14,8 +14,8 @@ the right trade: the viewer exists to let a person check what the agent sees.
 
 ## No fallback and no queue
 
-If the store is unreachable, reads and writes both fail on the spot. Exit code
-`4`, nothing retried, nothing spooled.
+If the store is unreachable, reads and writes both fail on the spot. Nothing
+retried, nothing spooled.
 
 A stale cached answer and a spool sitting somewhere both manufacture the belief
 that it worked, and that belief outlives the outage. The session that read a
@@ -23,9 +23,9 @@ cached document proceeds on out-of-date knowledge and has no way to know; the
 session whose write was queued reports success for something that may never
 land. Failing loudly is recoverable. Believing wrongly is not.
 
-A scope refusal is a different thing and takes the other path — the store is
-alive and declined, so the document goes to the local file brain, which is where
-it belonged.
+A scope refusal is a different answer — the store is alive and declined — and
+it is not a cue to write somewhere else either: that repo's knowledge does not
+belong in this brain, and the session says so.
 
 ## One token, and it is not a permission system
 
@@ -41,10 +41,10 @@ gets a second thing to be inconsistent about. The cost is real and worth naming:
 anyone who may read may also write, so "let someone browse the brain" and "let
 someone change the brain" are the same grant.
 
-What separates a machine that may write from one that may not is therefore not
-authorisation at all. It is whether that machine was given the token. A client
-set up without one is read-only because it cannot authenticate for a write, not
-because it holds a lesser credential.
+Since the remote MCP server, that one credential lives in exactly one place —
+the `engram serve` process next to the store. No person's machine holds it, so
+who may use the brain is decided by who may log in to that server
+(`ENGRAM_SERVE_ALLOW`), a list an operator edits, not a secret handed out.
 
 **Reads are closed by default.** The original design left them open, on the
 reasoning that the owner allow-list is the boundary and what must not be
@@ -64,15 +64,20 @@ A browser cannot put a header on a navigation, so the viewer trades the token
 for an HttpOnly, SameSite session cookie at `/login`. The alternative — a token
 in the URL — lands in history, bookmarks, referrers and every log along the way.
 
-## The byline is a claim, not a proof
+## The byline is the login
 
-The write token is one shared credential, so the recorded author is what the
-client says it is: `ENGRAM_AUTHOR`, else `git config user.name`, else `$USER`.
+Until 0.11 the store's token was one shared credential on every machine, so the
+recorded author was what the client said it was: `ENGRAM_AUTHOR`, else `git
+config user.name`, else `$USER` — honest by default, not provable. Proving it
+meant accounts, issuing, rotation and revocation, a different system.
 
-The goal is to make it honest by default, not provable. Proving it means
-accounts, issuing, rotation and revocation — a different system, and one whose
-setup cost would be paid by every team that only needed to know roughly who
-wrote what. If you need attribution you can act on, this is not it.
+The remote MCP server is that system in its smallest form: it is its own OAuth
+server, a person logs in with Google, and only the allow-list gets in. Every
+write arrives through it, and it stamps the revision with the logged-in person
+(the email's local part, or `ENGRAM_SERVE_AUTHOR`). The tools still accept an
+`author` argument and ignore it — on this surface the author is not something
+the caller chooses. The store's own API still takes the author it is given; what
+makes it trustworthy is that only the MCP server holds the credential to call it.
 
 ## Lexical search, not vectors
 
@@ -94,8 +99,8 @@ Text tells the ranking which chunks match a question. It cannot tell it which
 of them answered, and on a brain that keeps growing that is the difference
 between a first page with the answer on it and a first page of things that
 share its words. So the store records the second kind of knowledge: every
-search is logged with its hits, and a vote — `brain_feedback`, `engram
-feedback`, the viewer's button, or opening a hit with `brain_get` — is tied to
+search is logged with its hits, and a vote — `brain_feedback`, the viewer's
+button, or opening a hit with `brain_get` — is tied to
 the search that showed the document.
 
 Two things are done with it, and the distinction is the design:
@@ -126,24 +131,38 @@ vote half the questions, verify the other half did not move.
 ## The three layers are not collapsed
 
 A skill cannot be an MCP server: a skill is instructions a model reads, an MCP
-server is a process. A server cannot be a client: there is one store and as many
-clients as there are people. Collapsing any pair would save a directory and cost
+server is a process. The store cannot be the MCP server: one is the data and its
+ranking, the other is the login and the tool surface in front of it. Collapsing any pair would save a directory and cost
 the ability to upgrade them independently — which matters most for the skill,
 which changes far more often than the wire format.
 
-## Exactly one transport client
+## Exactly one surface
 
-The MCP tools and `engram <verb>` are two surfaces over one client. Two clients
-would mean two places to put the token, two default authors, and two copies of
-the address rules to drift apart — and address rules that differ between the CLI
-and the MCP server produce documents at addresses nothing can find.
+A session reaches the brain through one surface: the remote MCP server. Two
+surfaces mean two places to put the token, two default authors, and two copies
+of the address rules to drift apart — and address rules that differ between
+surfaces produce documents at addresses nothing can find.
 
-There used to be a third surface: a set of Python helpers the skill shelled out
-to. They are gone, and the reason is not tidiness. `python3` is not a command on
-Windows even where Python is installed, so the capture-loop hooks were silently
-dead on every Windows machine. A dependency that is present on the maintainer's
-machine and absent on the user's is worse than one that is absent on both — it
-fails where nobody is looking.
+Up to 0.11 there were two over one client — the MCP tools and `engram <verb>` on
+every machine — plus a local file brain for repos the store refused, and a
+self-updater. They were removed, along with every client-side setting: a setting
+on a person's machine is a setting that can be stale, and the only state a
+person now needs is a login the server can revoke. The binary a person installs
+runs the plugin's hooks and nothing else — it decides whether to speak from the
+git origin alone, with no settings file and no network.
+
+The self-updater went with the rest, and not only because there was less to
+update. An unsigned binary that downloads an executable, renames itself aside
+and runs what it wrote is, step for step, what a dropper does; a managed
+endpoint's behaviour scanner suspended exactly that. Upgrading is now re-running
+an installer, the same way the binary got there.
+
+There used to be a surface even before that: a set of Python helpers the skill
+shelled out to. They are gone, and the reason is not tidiness. `python3` is not
+a command on Windows even where Python is installed, so the capture-loop hooks
+were silently dead on every Windows machine. A dependency that is present on the
+maintainer's machine and absent on the user's is worse than one that is absent
+on both — it fails where nobody is looking.
 
 ## The owner allow-list is a list of groups
 
@@ -154,15 +173,15 @@ to maintain it — a per-repo list would be correct on the day it was written an
 wrong by the third new service.
 
 It is not a substitute for authentication and does not become one. The
-allow-list decides *what* may enter the store; the token decides *who* may talk
-to it at all. Collapsing the two — letting either stand in for the other — is
+allow-list decides *what* may enter the store; the server's login decides
+*who* may talk to it at all. Collapsing the two — letting either stand in for the other — is
 what produces a store that is careful about which repos it admits and then
 serves all of them to the internet.
 
 ## Never delete
 
-There is no `brain_delete`. The contract is *move to archives*, and `move`
-leaves the old path as an alias.
+There is no `brain_delete`. The contract is *move to archives*, and
+`brain_move` leaves the old path as an alias.
 
 A store that can forget is a store whose absences are ambiguous: nobody can tell
 "we decided against this" from "somebody tidied up", and the second reading is

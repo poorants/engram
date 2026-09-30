@@ -1,9 +1,8 @@
 # Networked Knowledge — Linking Rules
 
 The rules for the **logical link layer** engram lays on top of PARA folders
-(physical classification). They grow the vault into a brain-like network of
+(physical classification). They grow the store into a brain-like network of
 connected documents. Apply them whenever creating, moving, or reviewing docs.
-The target is the documents under the resolved PARA base.
 
 ## Core idea: Networked PARA
 
@@ -30,11 +29,11 @@ MOC — links it, ideally across a folder boundary. Multi-path reachability is w
 makes retrieval associative; an inbound link from the node's own folder MOC just
 restates where the file already lives.
 
-`engram lint` quantifies this with `metrics` (run `--json`): `woven_ratio`
-(content docs with ≥1 contextual inbound / total), `cross_folder_link_ratio`, and
-the `weak_nodes` list — documents whose *only* inbound is a MOC (lonely spokes).
-Drive `woven_ratio` and `cross_folder_link_ratio` up; the **Weave Workflow** and
-`engram weave` find the concrete links to add.
+`brain_integrity` quantifies this: the `weak_nodes` list — documents whose
+*only* inbound links are structural, typically from a MOC (lonely spokes) — and
+`counts` (`weak`, and `by_kind`, which splits edges into contextual `wiki` and
+structural `md`). Drive the weak count down and the share of contextual,
+cross-folder links up; the **Weave Workflow** finds the concrete links to add.
 
 ## Linking rules
 
@@ -42,7 +41,7 @@ Drive `woven_ratio` and `cross_folder_link_ratio` up; the **Weave Workflow** and
 
 - The store records **both** forms as edges and tags them: a wikilink is `kind=wiki`
   (contextual), a markdown relative link is `kind=md` (structural — this is what MOC
-  entries produce). `engram integrity` uses the tag to separate orphans from
+  entries produce). `brain_integrity` uses the tag to separate orphans from
   **weak nodes**, so "linked from the MOC" no longer looks the same as "woven into the
   network". Only a wikilink in prose clears a weak node.
 - Use `[[filename]]` (Obsidian wikilink) or `[display text](relative/path.md)`
@@ -50,10 +49,10 @@ Drive `woven_ratio` and `cross_folder_link_ratio` up; the **Weave Workflow** and
   View and backlinks activate.
 - Wikilinks resolve by filename (stem), so moving a folder does not break them.
   They are fragile to filename changes, so keep names stable.
-- **Match the vault's dominant style.** Both forms count as an inbound link to the
-  linter, so when an existing corpus already uses one style consistently (e.g.
+- **Match the dominant style of the documents around it.** Both forms count as an
+  inbound link, so when an existing group already uses one style consistently (e.g.
   markdown relative links throughout), follow it rather than mixing in wikilinks —
-  on an established vault, consistency beats the wikilink preference.
+  but remember only a wikilink in prose counts as *woven*.
 
 ### 2. Prefer contextual links
 
@@ -66,23 +65,22 @@ naturally into the prose.
 
 ### 3. MOC (Map of Content) = hub node
 
-Each folder's `README.md` acts as the default MOC: an entry dashboard that ties
-the folder's individual notes together by logical order/category. When you add a
-document, add a one-line link to it from that folder's README MOC so it is
-reachable from the entry point.
+A repo's hub (`<owner>/<repo>/README.md`) and each group's `README.md` act as
+MOCs: entry dashboards that tie individual notes together by logical
+order/category. When you add a document to a group a MOC curates, add a one-line
+link to it from that MOC so it is reachable from the entry point.
 
 - **MOC entries must be REAL links, not backtick filenames.** A table listing
-  `` `00-overview.md` `` in code spans looks like an index, but the linter strips
+  `` `00-overview.md` `` in code spans looks like an index, but the store strips
   inline code before counting links — so those docs stay orphans. Always write
-  `[00-overview.md](00-overview.md)`. This is the #1 silent reason a folder with a
-  fully populated README still shows every doc as an orphan.
-- **READMEs/index files are orphan-exempt.** `engram lint` never flags
-  `README.md`, `index.md`, `_index.md`, `CLAUDE.md`, or `MEMORY.md` as orphans —
-  they are structural hubs. So a MOC needs no inbound link of its own to be
+  `[00-overview.md](00-overview.md)`. This is the #1 silent reason a group with a
+  fully populated MOC still shows every doc as an orphan.
+- **MOCs are orphan-exempt.** `brain_integrity` never reports a `README.md` as
+  an orphan or a weak node — MOCs are structural hubs. So a MOC needs no inbound link of its own to be
   "connected," though linking it from a parent MOC is still good navigation hygiene.
-- **A per-folder README MOC is the highest-leverage orphan fix.** Orphans cluster
-  by folder; one README that links every doc in its folder clears that whole
-  folder's orphans at once — far faster than hunting one contextual link per
+- **A per-group MOC is the highest-leverage orphan fix.** Orphans cluster
+  by group; one MOC that links every doc in its group clears that whole
+  group's orphans at once — far faster than hunting one contextual link per
   orphan. Build MOCs first, then weave the genuinely cross-cutting contextual links.
 
 ## Knowledge-network management rules
@@ -99,14 +97,14 @@ reachable from the entry point.
    cohesion. Some documents are legitimately one concept even when long: a single
    spec, a meeting log (one event, chronological), a reference table.
 
-   **Migrate opportunistically, never big-bang.** Don't rewrite the whole vault at
+   **Migrate opportunistically, never big-bang.** Don't rewrite the whole brain at
    once (it invites link rot and wasted effort). Apply atomicity to new notes, and
    split an existing bloated doc only when you're already editing it and notice it
    packs several independently-linkable concepts — then split and wire the links.
 
 2. **No orphan nodes**: every newly added document must receive at least one
    inbound link from an existing MOC (`README.md`) or a related document.
-   Unlinked knowledge gets lost. (`engram lint` detects orphans.)
+   Unlinked knowledge gets lost. (`brain_integrity` detects orphans.)
 
 3. **No lonely spokes (earn the second link)**: a MOC link is *necessary but not
    sufficient*. Beyond the structural MOC inbound, a content document should earn
@@ -130,19 +128,20 @@ reachable from the entry point.
 - **Over-structuring**: when maintaining the system becomes the goal and actual
   thinking/output stops. Do not pile on excessive rules, tags, or numbers.
 - **Link rot**: links breaking due to filename changes. Prevent it with stable
-  naming and periodic `engram lint` checks.
+  naming, `brain_move` (which leaves an alias) rather than re-creating a
+  document under a new name, and periodic `brain_integrity` checks.
 - **Star topology (folder-replicated links)**: clearing orphans with MOC links
   alone and stopping there. The orphan count hits zero but every doc is a lonely
   spoke, so the "network" just redraws the folder tree — connected but not woven
-  (see "Connected vs woven"). Watch `woven_ratio`/`weak_nodes`, not just orphans.
+  (see "Connected vs woven"). Watch `weak_nodes`, not just orphans.
 
 ## Order of operations (when working on docs)
 
 1. After creating or moving a document, weave contextual links into the prose —
    reach for at least one link **across a folder boundary**, not only within the
    same folder.
-2. Add a one-line entry to the folder's `README.md` (MOC) to avoid orphans.
-3. Before finishing, run `engram lint` to find and repair broken links and
-   orphans, and to read the density `metrics`/`weak_nodes`.
-4. Periodically (or when `woven_ratio` is low) run the **Weave Workflow** with
-   `engram weave` to dissolve lonely spokes into woven nodes.
+2. Add a one-line entry to the curating MOC to avoid orphans.
+3. Before finishing, run `brain_integrity` to find and repair broken links and
+   orphans, and to read `weak_nodes` and `counts`.
+4. Periodically (or when `counts.weak` is high) run the **Weave Workflow** to
+   dissolve lonely spokes into woven nodes.

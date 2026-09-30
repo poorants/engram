@@ -8,6 +8,81 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Removed — Intel Mac builds
+
+Releases no longer carry `darwin_amd64`; macOS is Apple Silicon only, and
+`install.sh` says so on an Intel Mac instead of fetching a missing asset. The
+release smoke matrix no longer lists `macos-13`, whose runner GitHub retired —
+that job sat queued forever and held the v0.10.5 and v0.11.0 release runs open.
+
+### Removed — the client surface
+
+0.11.0 added `engram serve`, the remote MCP server with its own login. It is now
+the **only** way a session reaches the brain, and everything else on a person's
+machine that talked to the store is gone. The binary has four verbs left:
+`serve`, `hook`, `version`, `help`.
+
+- **`engram mcp`** — the local stdio MCP server. A registration that runs it
+  (`claude mcp add engram -- engram mcp`) no longer starts.
+- **Every store verb** — `search`, `get`, `feedback`, `put`, `patch`, `move`,
+  `revisions`, `usage`, `integrity`, `status`, `scope`, and `store
+  set|show|doctor|unset`. The `brain_*` MCP tools do all of it; usage is on the
+  web viewer's `/usage` page.
+- **The local file brain** — `resolve`, `brain show|set|unset`, `init`, `lint`,
+  `weave`, `link`. A path the store refuses (403) is now simply refused: that
+  knowledge does not belong in this brain, and nothing on the machine takes it.
+- **Self-update** — `engram update`, the update notice in sessions, and the
+  `noupdate` build tag (`make build-frozen`). Upgrading is re-running the
+  installer, and the same version is a no-op. A frozen `+noupdate` build can
+  simply be replaced.
+- **Client settings** — `~/.claude/engram/config.json` and `store.token` are no
+  longer read, and `ENGRAM_STORE_URL`, `ENGRAM_TOKEN` and `ENGRAM_AUTHOR` mean
+  nothing on a person's machine. The byline is the logged-in person.
+- **Installer options** — `--store`, `--token` and `--author` are refused with a
+  pointer to the MCP registration; `--no-claude` is accepted and ignored.
+
+**The hook decides from the git origin alone** — no settings file, no network.
+It speaks in any repo with an `origin` remote, and names "the shared brain
+(engram MCP)" and the repo's `<owner>/<repo>/` coordinate rather than a store
+address. `ENGRAM_CAPTURE_OWNERS` (comma-separated, case-insensitive) narrows it
+to the owners your store admits; unset, it speaks everywhere. Outside a repo it
+is silent.
+
+**Added: `/mcp__engram__setup`.** `engram serve` now serves an MCP prompt that
+finishes a machine: it checks the registration (and says how to replace a stdio
+one), installs the plugin and the hook binary, and reports ok / fixed / needs
+you. The installers are binary-only: download, verify `SHA256SUMS` (a missing
+entry now fails), swap by rename; they point out 0.x leftovers and delete
+nothing.
+
+**Upgrading from 0.11** — on each machine:
+
+```bash
+claude mcp remove engram -s user        # if `claude mcp list` shows it as a local command
+claude mcp add --transport http --scope user --callback-port 33418 engram https://<host>/mcp
+```
+
+then `/mcp` → engram → Authenticate, and run `/mcp__engram__setup` in a session.
+It updates the plugin — **a plugin change is not carried by a binary update**,
+and this release changes the hooks and the skill — and the binary. By hand:
+
+```bash
+claude plugin marketplace update engram
+claude plugin update engram@engram      # applies after a Claude Code restart
+curl -fsSL https://raw.githubusercontent.com/poorants/engram/main/install.sh | sh
+```
+
+Remove `~/.claude/engram/config.json` and `store.token` once nothing else uses
+them. On the serve host, re-run the installer into `/opt/engram-serve/bin` and
+restart `engram-serve` to pick up the setup prompt.
+
+Deleted packages: `pkg/config`, `pkg/identity`, `pkg/workspace`, `pkg/vault`,
+`pkg/selfupdate`. The skill's `workspace.md` and `migration-patterns.md`
+references went with the file brain; `import-patterns.md` covers importing a
+repo's documents into the store. `docs/cli.md` is gone.
+
+The release smoke test no longer waits on `macos-13`, which never gets a runner.
+
 
 ## [0.11.0] — 2026-09-30
 

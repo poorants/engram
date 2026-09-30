@@ -3,30 +3,31 @@ name: engram
 description: >
   Networked PARA knowledge brain — manages documents by PARA (Projects, Areas,
   Resources, Archives) AND weaves them into one connected knowledge graph through
-  bi-directional links, MOC hubs, and integrity linting: a logical link layer over
-  physical folders, so the brain grows like a network instead of a filing cabinet.
-  The brain is normally a shared Postgres-backed STORE that is searched rather than
-  grepped, with a revision history per document; a local file brain is used for repos
-  the store does not admit. Use to manage, organize, search or save documents; save
-  meeting notes; archive or migrate a project; connect notes; find orphans; fix broken
-  links; update MOCs; raise neural density; review what the brain gained this session;
-  read a document's history; or point this machine at a store. Matches intent in any
-  language — e.g. "문서 정리", "회의록 저장", "노트 연결", "링크 점검", "고아 문서",
-  "MOC 업데이트", "브레인 리뷰", "브레인 검색", "저장소에서 찾아줘", "이 문서 이력",
-  "누가 언제 바꿨어", "organize docs", "save this as a note", "connect notes",
-  "find orphans", "search the brain", "document history", "set up the brain store".
+  bi-directional links, MOC hubs, and integrity checks: a logical link layer over
+  physical classification, so the brain grows like a network instead of a filing
+  cabinet. The brain is a shared Postgres-backed STORE reached only through the
+  remote `engram` MCP server's brain_* tools — searched rather than grepped, with a
+  revision history per document. Use to manage, organize, search or save documents;
+  save meeting notes; archive a project; import a repo's scattered docs; connect
+  notes; find orphans; fix broken links; update MOCs; raise neural density; review
+  what the brain gained this session; read a document's history; or check the brain
+  connection. Matches intent in any language — e.g. "문서 정리", "회의록 저장",
+  "노트 연결", "링크 점검", "고아 문서", "MOC 업데이트", "브레인 리뷰", "브레인 검색",
+  "저장소에서 찾아줘", "이 문서 이력", "누가 언제 바꿨어", "브레인 연결 확인",
+  "organize docs", "save this as a note", "connect notes", "find orphans",
+  "search the brain", "document history", "is the brain connected".
 ---
 
 # engram — networked PARA knowledge brain
 
 Manage documents with the PARA method while weaving them into **one connected
 knowledge network** through bi-directional links, MOC hubs, and integrity
-linting. The core idea is *Networked PARA*: a logical link layer on top of
+checks. The core idea is *Networked PARA*: a logical link layer on top of
 physical classification.
 
 Two layers:
 
-- **Management (PARA)** — create, move, archive, migrate, review. Folders own
+- **Management (PARA)** — create, move, archive, import, review. Areas own
   governance.
 - **Connection (network)** — link documents by context, clear orphans, weave
   lonely spokes into a mesh rather than a star, catch broken links. Links own
@@ -37,59 +38,50 @@ Two layers:
 The thing being defended is simple: **a session dies, knowledge should not.** The
 measure of success is not investigating the same question twice.
 
-## The store — resolve this first
+## The store — the only brain
 
-The brain is normally **not a tree of files**. It is a Postgres-backed service,
-and there is **one client for it**: the `engram` binary. Everything below is a
-surface over that one client — the address, the token, the path rules and the
-author byline live there, once.
+The brain is **not a tree of files**. It is a Postgres-backed service, and a
+session reaches it through **one surface: the remote MCP server registered as
+`engram`**. Its tools:
 
-1. **MCP tools (prefer these in a session)** — `brain_search`, `brain_get`,
-   `brain_feedback`, `brain_revisions`, `brain_integrity`, `brain_put`,
-   `brain_patch`, `brain_move`. Same
-   endpoints, same single ranking, no permission churn, and available before this
-   skill even loads. One difference: an MCP server is spawned once per session
-   and cannot see which checkout a call is about, so **you** supply the full
-   `<owner>/<repo>/<area>/<name>.md` path — take owner and repo from `origin`.
-2. **`engram <verb>`** — the same operations for anything that is not the model:
-   hooks, scripts, a person at a terminal. It runs IN a directory, so
-   `./<area>/<name>.md` is filled in from that repo's `origin`. It prints for a
-   person and takes `--json` for a machine, it writes a scope-refused document to
-   the local file brain itself, and its exit codes are a contract (`3` the store
-   refused and nothing local took it, `4` store unreachable).
+| Tool | What it does |
+|---|---|
+| `brain_search` | ranked chunks with their heading path, not whole files; answers in tiers |
+| `brain_get` | one document: body, `sha256`, outgoing links, backlinks, recent history |
+| `brain_feedback` | say a document answered (or was noise) — the ranking learns from it |
+| `brain_revisions` | who changed a document, when, and the note on why |
+| `brain_integrity` | broken links, orphans, weak nodes, and their counts |
+| `brain_put` | create or wholesale-replace a document (upsert; `note` required) |
+| `brain_patch` | change part of a document — by section, anchor or line range |
+| `brain_move` | move, reclassify, archive — the old path stays as an alias |
 
-**This skill ships no scripts and needs no interpreter.** Everything below is
-`engram`, one binary. It used to be a set of Python helpers, and on Windows they
-never ran: `python3` is not a command there even where Python is installed.
-
-```bash
-engram status                                    # store, this repo's scope, your byline
-engram search "why does the copy button copy nothing"   # ranked chunks, not whole files
-engram get   acme/shared/resources/x.md
-engram put   acme/webapp/resources/x.md --file draft.md --note "why this exists"
-engram revisions acme/shared/resources/x.md      # this replaces git log
-engram move  <old> <new>                         # the old path stays as an alias
-engram integrity                                 # broken / orphan / weak nodes
-```
+In a session they appear as `mcp__engram__brain_search` and so on. **There is
+no CLI, no local copy of the brain and no fallback.** This skill ships no
+scripts. If the `brain_*` tools are missing, the machine is not connected — see
+**Connection** below; do not improvise another route to the brain.
 
 **Search the store before Grep. Always.** It returns chunks with their heading
 path instead of whole documents, so an answer costs a fraction of what a file
 sweep does.
 
-**You never choose scope — the git remote does.** The CLI derives `owner/repo`
-from `origin`, so a repo whose owner group the store admits writes to it and one
-it does not cannot. That is the confidentiality boundary, and it is enforced by
-the service (403), not by anyone remembering.
+**Scope is derived, not chosen.** Every path is
+`<owner>/<repo>/<area>/<name>.md`, and **you** supply it in full — take owner and
+repo from the working repo's `git remote get-url origin`, never invent them. The
+store admits only its configured owner groups; any other owner is refused with
+**403**. That is the confidentiality boundary, enforced by the service rather
+than by anyone remembering. A 403 means this repo's knowledge does not belong in
+this brain — and there is nowhere else for this skill to put it. Say so, rather
+than writing it under an owner it does not belong to.
+
+**Your byline is your login.** Every revision is stamped with the person the
+session logged in as; the `author` argument is ignored. There is nothing to
+configure.
 
 **If the store is unreachable, reading and writing both fail on the spot.** There
-is no fallback and no queue: a stale answer and a spool sitting somewhere both
+is no cache and no queue: a stale answer and a spool sitting somewhere both
 manufacture the belief that it worked, and that belief outlives the outage. No
 store means no brain — say so, rather than answering from something older than
 the question.
-
-A refusal is a different thing. **Scope refused (403) → write the local file
-brain.** The store is alive and *declined*; knowledge from an unadmitted repo
-belongs there anyway.
 
 **The `<repo>` coordinate is a routing decision — this repo, or `shared`.** The
 test: *which code does this knowledge age with?* Knowledge that goes stale when
@@ -102,131 +94,58 @@ Contracts are *always* shared: two copies in two repos have already diverged.
 When genuinely unsure, prefer the repo coordinate and promote later with a move —
 the alias keeps links alive, so promotion is cheap and copies are expensive.
 
-Full contract and setup: [references/store.md](references/store.md).
+Full contract: [references/store.md](references/store.md).
 
-## Setting up a store
+## Connection
 
-Setup is a **deterministic act**, so it is three commands rather than a
-procedure you improvise. Your job is to call them in order and translate a
-failure into plain language — never to reimplement what they do.
+Connecting a machine is a **deterministic act**, not something to improvise:
 
-```bash
-engram store set <url> --token <write token>   # designate it
-engram store doctor                            # prove it end to end
-engram store show                              # where the settings came from
-```
+1. `claude mcp add --transport http --scope user --callback-port 33418 engram https://<host>/mcp`
+2. `/mcp` → engram → **Authenticate** (a browser login, once per machine).
+3. `/mcp__engram__setup` in a session — it checks the registration, installs
+   the plugin and the `engram` binary the capture hooks run, and reports what
+   it fixed.
 
-`doctor` checks the write token, not only the connection: "the store is up" and
-"I can write to it" are different facts, and a check that proves only the first
-lets someone finish read-only and discover it when a save fails at the end of a
-session.
-
-If there is no store yet, one is brought up with Docker on any machine —
-`server/` in the engram repo holds a single compose file. If the user has no
-store and does not want to run one, the file-brain path below works on its own.
-
-## Path resolution
-
-Run the resolver first — `engram resolve --json` →
-`{base, source, store, owner, repo, in_scope, warning}` — then route on `source`:
-
-1. **`store`** (the normal case) — **the store is the brain and resolution stops
-   here.** `store` is the URL, `owner`/`repo` are the coordinates derived from
-   `origin`, `in_scope` says whether the store admits this owner. There is no
-   second base to route between: shared and repo-only knowledge are the same
-   table, told apart by the `repo` coordinate and decided **per write**. `base`
-   here is the **fallback vault only** — where a document goes when the store
-   answers 403. A local `brain/` in an admitted repo is a leftover mid-migration;
-   `warning` says so, and it is not a second brain.
-2. **`absorb`** — you are working inside the designated file brain itself; the
-   base is its PARA base.
-3. **`shared`** — a file brain is designated and you are elsewhere; use it.
-4. **`local`** — no designation: `brain/` if present, else legacy `para/`, else
-   PARA folders at the root (flat mode — consider the Upgrade Workflow).
-5. **`none`** — nothing yet. Ask the user to point at a store
-   (`engram store set <url>`) or designate a file brain
-   (`engram brain set <path>`). **Never invent a path.**
-
-An explicit `CLAUDE.md` convention wins over all of the above. Once determined,
-stay consistent within that project. Full semantics — the settings file, its two
-owners, and how a brain is designated:
-[references/workspace.md](references/workspace.md).
-
-Throughout, `<base>/` means the resolved base — `brain/` when nested, an empty
-prefix in flat mode. The linter auto-detects it the same way (force with
-`--base`).
-
-> **Legacy base (`para/`, or PARA folders at the root)?** A first-class case:
-> engram *is* the upgrade path. "Complete the migration to brain" migrates both
-> the **layout** (rename to `brain/`) and the **connection layer** (links, MOCs,
-> lint) → **Upgrade Workflow**, a guarded refactor, because a base name can be
-> load-bearing in code and CI.
-
-`engram link` writes a small portable pointer block into the repo's
-`CLAUDE.md` so that even a session without this skill knows a brain exists and
-where to look. It is optional — engram always resolves positionally — and
-`link --remove` strips it.
+To check a connection: `claude mcp list` shows `engram` as an HTTP server and
+connected; a `brain_search` answers. A registration that is a local command
+(`engram mcp`) is the pre-remote client and no longer works — re-add it as
+above. **Never ask the user to paste a token into the chat.** Details:
+`docs/troubleshooting.md` in the engram repository.
 
 ## Quick reference
 
 | Category | Path | Purpose | Lifespan |
 |---|---|---|---|
-| **Projects** | `<base>/projects/` | active work with a goal and a deadline | temporary — archive on completion |
-| **Areas** | `<base>/areas/` | ongoing responsibility, no end date | persistent — review periodically |
-| **Resources** | `<base>/resources/` | reference material and collected knowledge | persistent — update as it changes |
-| **Archives** | `<base>/archives/` | anything above that is finished | permanent, read-only in practice |
+| **Projects** | `<owner>/<repo>/projects/` | active work with a goal and a deadline | temporary — archive on completion |
+| **Areas** | `<owner>/<repo>/areas/` | ongoing responsibility, no end date | persistent — review periodically |
+| **Resources** | `<owner>/<repo>/resources/` | reference material and collected knowledge | persistent — update as it changes |
+| **Archives** | `<owner>/<repo>/archives/` | anything above that is finished | permanent, read-only in practice |
 
-PARA folders own one axis (actionability). The repo axis is a folder **only** in
-`projects/<repo>/` — `resources/` and `areas/` mix across repos by design, and
-domain knowledge stays shallow under a MOC rather than in deep folders. Retiring
-a repo archives only its `projects/<repo>/`; its reusable knowledge stays.
+PARA areas own one axis (actionability); the `<repo>` coordinate owns the other.
+Domain knowledge stays shallow under a MOC rather than in deep folders.
+`<owner>/shared/` plays "belongs to no single repo". Retiring a repo archives
+only its `projects/`; its reusable knowledge stays.
 
-## Migration: three operations, one word
-
-"Migrate" names **three independent operations**. Keep them distinct — a request
-can want one, two, or all three, and routing to the wrong one is the most common
-failure here.
-
-| Operation | What it changes | Workflow |
-|---|---|---|
-| **Classify & Import** | scattered, *unclassified* docs → PARA folders | Classify & Import |
-| **Base migration** | the base *layout/name* → `brain/` | Upgrade, Phase A |
-| **Connection-layer upgrade** | folders-only vault → *networked brain* | Link & Connect (= Upgrade, Phase B) |
-
-Route by the *current state of the vault*, not by the user's word: docs unfiled →
-**Classify & Import**; filed but the base is `para/` or flat and they want
-`brain/` → **Upgrade** (A+B); filed and based, only links missing → **Link &
-Connect** (Phase B alone).
-
-## Brain boundary — what stays in, what separates
+## Brain boundary — what goes in, what stays out
 
 The brain holds **thinking and knowledge** — everything you link to and revisit.
 Under PARA that includes active **planning, spec and strategy documents**: they
 are Projects, and the highest-value nodes, where knowledge gets applied. Keep
-them in; do not pull them out for looking "output-like".
+them in; do not leave them out for looking "output-like".
 
-Separate a set of documents into a **root sibling folder** (next to `<base>/`,
-e.g. `blog/`) only when it has its own **external delivery lifecycle** — a
-workflow, repo or timeline outside your thinking network. The test: *is this
-linked and re-read as part of thinking (→ brain), or an output with its own
-external lifecycle (→ sibling)?*
+Keep a set of documents **out of the brain** (in its repo, next to the code)
+only when it has its own **external delivery lifecycle** — a workflow, repo or
+timeline outside your thinking network: a published manual's source, generated
+reports, a blog. The test: *is this linked and re-read as part of thinking
+(→ brain), or an output with its own external lifecycle (→ its repo)?*
 
-- **Default to keeping documents in the brain.** Separation severs the
+- **Default to putting documents in the brain.** Leaving them out severs the
   project↔knowledge links that make Networked PARA worth anything, so it has to
   earn its place.
-- A separated sibling sits **outside the link network and the lint base**. It may
-  reference brain docs one way; the brain must not depend on it.
-- **Separation is the one move you do NOT decide alone.** Make every other call
-  autonomously; externalize a document set only on explicit request.
-
-## Init Workflow
-
-**When**: the first PARA interaction, or the category folders are missing.
-**Auto-execute without asking** — it is idempotent.
-
-Resolve the base first, run `engram init` (`--output .` for nested under
-`brain/`, add `--flat` for categories at the root), and report what was created. In store mode there is nothing to initialize — the store already
-exists.
+- A document outside the brain sits **outside the link network and the integrity
+  check**. The brain may mention it by repo path; it must not depend on it.
+- **Separation is the one call you do NOT make alone.** Make every other call
+  autonomously; keep a document set out only on explicit request.
 
 ## Create Workflow
 
@@ -234,104 +153,83 @@ exists.
 
 1. **Category** — Projects (deadline/goal), Areas (ongoing), or Resources
    (reference). Unsure? Load `references/para-categories.md`.
-2. **Structure** — a single `.md` for one topic, or a `kebab-case/` directory for
-   multi-deliverable work.
-3. **Filename** — `kebab-case.md`; date-prefix time-sensitive items
-   (`YYYY-MM-DD-topic.md`).
+2. **Structure** — a single document for one topic, or a `kebab-case/` group of
+   documents for multi-deliverable work.
+3. **Path** — `<owner>/<repo>/<area>/<name>.md`, `kebab-case`; date-prefix
+   time-sensitive items (`YYYY-MM-DD-topic.md`). First `brain_search` for the
+   topic — updating the document that already exists beats writing a second one.
 4. **Write** — plain markdown, starting with an H1. No frontmatter, no `---`
    rules. Title and headings in the words someone would actually ask; the
-   conclusion first in each section; identifiers verbatim. Write it **through the
-   store**: the `brain_put` MCP tool (body plus `note`), or `engram put
-   <owner>/<repo>/<area>/<name>.md --file <draft> --note "<why this exists>"`.
-   `brain_put` is for a NEW document or a wholesale replacement; changing part of
-   one that already exists is `brain_patch` (see below).
-   The note lands in the revision history, which is what replaces `git log` now
-   that there are no files. If the store refuses the owner (403), `engram put`
-   writes the local file brain itself and says where it landed; the MCP tool
-   reports the refusal instead, so retry that one through `engram put`.
+   conclusion first in each section; identifiers verbatim. Save with `brain_put`
+   (body plus `note`; `dryRun: true` first for a new document or a large
+   replacement). `brain_put` is for a NEW document or a wholesale replacement;
+   changing part of one that already exists is `brain_patch`.
+   The note lands in the revision history, which is what replaces `git log` for
+   the brain. A **403** means the owner is not admitted — tell the user rather
+   than rerouting it.
 5. **Connect** — secure at least one inbound link, weave contextual
-   `[[wikilinks]]` into the prose, update the MOC, and ground a `resources/` doc
-   to an `areas/` or `projects/` one. Follow
+   `[[wikilinks]]` into the prose, add it to the curating MOC where one exists,
+   and ground a `resources/` doc to an `areas/` or `projects/` one. Follow
    [references/linking-rules.md](references/linking-rules.md).
-6. **Report** — path, PARA category, a brief summary, and what now links to it.
+6. **Report** — full path, PARA category, a brief summary, and what now links to it.
 
 Templates and full per-step detail:
 [references/create-workflow.md](references/create-workflow.md).
 
+## Editing an existing document
+
+`brain_get` first — it returns the body and its `sha256`. Then `brain_patch`
+with the smallest address that fits (`section`, a unique `anchor`, or a line
+range), `expect` copied from what you read, and `baseSha256` from the read. One
+link is a one-line change; re-sending the whole document with `brain_put` costs
+the document's size, not the edit's, and races anyone else editing it. A refused
+patch (`expect` mismatch, stale `baseSha256`) means the document moved under
+you — read it again, never force it.
+
 ## Move Workflow
 
-**When**: relocating a document between PARA categories.
+**When**: relocating a document between PARA categories or repo coordinates.
 
 Common moves: `projects/`→`archives/` (completed), `areas/`→`archives/` (ended),
-`resources/`→`archives/` (outdated), `archives/`→`projects/` (reactivated).
+`resources/`→`archives/` (outdated), `archives/`→`projects/` (reactivated),
+`<owner>/<repo>/`→`<owner>/shared/` (promotion).
 
-**Do not `mv` a file for a store document.** There is no file to move.
+`brain_move` with the current path and the destination (`dryRun: true` to
+preview). The store records the old path as an **alias**, so `[[old-name]]`
+written elsewhere keeps resolving, and edges point at an immutable document id.
 
-```bash
-engram move <owner>/<repo>/<area>/<name>.md <owner>/<repo>/archives/<name>.md
-```
+Steps: find the source (`brain_search` or `brain_get`) → determine the target
+category (ask or infer) → move → report `source → destination` and the alias →
+close with the Integrity Check.
 
-(or the `brain_move` MCP tool with the same two paths.)
-
-The store records the old path as an **alias**, so `[[old-name]]` written
-elsewhere keeps resolving. On a file brain that was impossible — you either
-edited every referring document or left the links broken.
-
-Steps: find the source (`search` or `get`) → determine the target category (ask
-or infer) → move → report `source → destination` and the alias → close with the
-Integrity Lint.
-
-**Never delete documents. Move them to archives.** In the store `delete` is soft
-(the body stays in revisions and `restore` brings it back), but archiving is
-still the right operation: deletion removes a document from search, archiving
-reclassifies it.
+**Never delete documents. Move them to archives.** There is no delete tool:
+deletion removes a document from search; archiving reclassifies it.
 
 ## Classify & Import Workflow
 
-**When**: bulk-reclassifying documents **scattered outside** the PARA structure.
+**When**: a repo the store admits holds scattered, *unclassified* knowledge
+documents (`docs/notes/`, design memos, meeting logs) that belong in the brain.
 
-> **First check: are they already PARA-classified?** If they already live in
-> `projects/`·`areas/`·`resources/`·`archives/`, there is nothing to classify —
-> do NOT run scan→classify→move. What is missing is one of the other two
-> migrations: the `brain/` layout → **Upgrade Workflow**; links and MOCs only →
-> **Link & Connect**.
+Six steps: **Scan** (Glob `**/*.md`, `**/*.txt` in the repo, excluding code
+docs, `.git/`, `node_modules/`, root metadata) → **Classify** (read each doc,
+assign an area and a `<repo>` coordinate via `references/para-categories.md` and
+the routing test above, flag the unclear) → **Present a plan** (a
+Classified/Manual/Skipped table with target store paths; name the collisions
+with documents the store already has — `brain_search` each title) → **Confirm**
+(execute only after approval) → **Execute** (`brain_put` each, with a `note`
+naming the source file) → **Report**, then Link & Connect and the Integrity Check.
 
-Six steps: **Scan** (Glob `**/*.md`, `**/*.txt`, excluding existing PARA folders,
-`.git/`, `node_modules/`, root metadata) → **Classify** (read each doc, assign a
-category via `references/para-categories.md`, flag the unclear) → **Present a
-plan** (a Classified/Manual/Skipped table; name the collisions) → **Confirm**
-(execute only after approval) → **Execute** → **Report**, then close with the
-Integrity Lint.
+Whether the repo copies are then removed is the user's call, never yours — a
+repo doc may be load-bearing (linked from code, CI, a README).
 
 Full detail, plan and report templates, exclusion and classification heuristics:
-[references/migration-patterns.md](references/migration-patterns.md).
+[references/import-patterns.md](references/import-patterns.md).
 
-## Upgrade Workflow — legacy vault → engram brain
+## Search Workflow
 
-**When**: a repo is a legacy vault (a `para/` base, or flat PARA folders at the
-root) and the user wants the engram brain model. Two independent phases; "full
-migration" runs both, "just connect it" runs only B.
-
-**Decide scope first** (ask if unstated): full (A+B) vs connection-only (B).
-Default a legacy base to full unless the user opts out — but never auto-execute
-Phase A, which touches code.
-
-- **Phase A — base migration**: a **guarded refactor, not a bare `git mv`**. The
-  base name can be load-bearing in import paths and CI. Grep the whole repo for
-  the old name, `git mv` to preserve history, update every non-doc reference, fix
-  links, then scope → approve → execute.
-- **Phase B — connection layer**: the real value. Run **Link & Connect**
-  (per-folder README MOCs first, then contextual links, then re-lint).
-- **Verify and report** both phases.
-
-Phase A detail (grep targets, the code-import-path smell, `git mv` recipes, the
-approval gate): [references/migration-patterns.md](references/migration-patterns.md).
-
-## List & Search Workflow
-
-- **Search** — the `brain_search` MCP tool or `engram search`, with **the
-  user's question, verbatim**. Ask it as a question, not as keywords: the ranking
-  is tuned on natural questions. Report the returned chunks as
+- **Search** — `brain_search` with **the user's question, verbatim**. Ask it as a
+  question, not as keywords: the ranking is tuned on natural questions. Pass the
+  working repo as `boostRepo`. Report the returned chunks as
   `path ¶ heading_path`.
   - **Tiers.** The default page (tier 1) is up to four documents as snippets,
     one chunk each — a quarter of the tokens of a full page, same recall. If
@@ -340,32 +238,29 @@ approval gate): [references/migration-patterns.md](references/migration-patterns
     Raise the tier before rephrasing; a new phrasing is a new search, and it
     breaks the attribution a vote needs.
   - **Vote when a document answered.** `brain_feedback` with the path (the
-    session's last search is attached by itself), or `engram feedback <path>
-    --search <id>`. The ranking learns from it: the document comes first for
-    that question and ones like it. `noise` is the other button. Opening a hit
-    with `brain_get` is a weaker vote recorded without any call. A vote is a
-    bonus, never a filter.
+    session's last search is attached by itself). The ranking learns from it:
+    the document comes first for that question and ones like it. `noise` is the
+    other button. Opening a hit with `brain_get` is a weaker vote recorded
+    without any call. A vote is a bonus, never a filter.
   - **Do not fall back to Grep when the store is down.** There is nothing local
     to grep, and grepping a repo's own source to answer a brain question yields a
     confident wrong answer. Say the store is down.
-  - `--only-repo <name>` isolates one repo. Do not reach for it by default — the
-    default already boosts this repo without hiding what other repos solved.
-- **List (dashboard)** — **file brains only** (Glob to discover, `git log` for
-  dates): a markdown table per non-empty category, rows grouped under
-  `### <Category> (N items)`, columns `Name | Type | Last Modified`. The store has
-  no listing tool by design; its dashboard is the web viewer, and per-repo counts
-  come from `engram status`.
-- **List (filename patterns)** — still Glob, over file brains only. The store is
-  addressed by path, not globbed.
+  - `onlyRepos` isolates repos. Do not reach for it by default — `boostRepo`
+    already lifts this repo without hiding what other repos solved.
+- **Browse** — the store has no listing tool by design. Navigate from the hubs:
+  `brain_get <owner>/<repo>/README.md` (the repo hub MOC) and each area's MOC,
+  following their links and backlinks. A person browses the same store in the
+  web viewer.
 
 ## Review Workflow
 
 **When**: a documentation review or periodic checkup. Load
 `references/review-checklist.md` for the procedure and report format.
 
-Generate the dashboard, flag archival candidates (projects completed or stale
->30 days; areas and resources outdated), present the findings, and **suggest**
-archives — **never auto-archive**. Execute moves only after confirmation.
+Walk the hub MOCs, read each document's age from `brain_revisions`, flag
+archival candidates (projects completed or stale >30 days; areas and resources
+outdated), present the findings, and **suggest** archives — **never
+auto-archive**. Execute moves only after confirmation.
 
 ## Link & Connect Workflow
 
@@ -374,17 +269,15 @@ update MOCs.
 
 First load [references/linking-rules.md](references/linking-rules.md).
 
-1. **Assess** — run the Integrity Lint for orphans and broken links.
-2. **Connect orphans** — read each orphan, find semantically related documents
-   (`brain_search`/`engram search` for store documents; Grep/Glob only on a
-   file brain) and either **weave a contextual wikilink into that document's
-   prose** or add a line in the folder's `README.md` MOC. Store edits go through
-   `brain_patch` — one link is a one-line change, and re-sending the whole
-   document to add it costs the document's size, not the edit's. Never Edit a
-   store document as if it were a file.
-3. **Tidy MOCs** — check each folder's `README.md` actually ties its documents
-   together, and fill in what is missing.
-4. **Re-check** — lint again, confirm the numbers moved, and report.
+1. **Assess** — `brain_integrity` for orphans and broken links.
+2. **Connect orphans** — `brain_get` each orphan, find semantically related
+   documents with `brain_search` (its title and its central claim, as
+   questions), and either **weave a contextual wikilink into that document's
+   prose** or add a line in the curating MOC. Every edit is `brain_patch` —
+   see "Editing an existing document".
+3. **Tidy MOCs** — check each hub MOC actually ties its documents together, and
+   fill in what is missing.
+4. **Re-check** — `brain_integrity` again, confirm the counts moved, and report.
 
 **Do not force connections.** Linking unrelated documents is over-structuring and
 muddies the signal. If there is no related note, leave the orphan and say so.
@@ -393,82 +286,69 @@ MOC), the next move is the Weave Workflow, not more MOCs.
 
 ## Weave Workflow — raise neural density
 
-**When**: orphans are handled but the brain is a star, not a mesh (low
-`woven_ratio`, many `weak_nodes`). Link & Connect removes orphans (≥1 inbound);
-this removes *lonely spokes* (earns a contextual, cross-folder inbound).
+**When**: orphans are handled but the brain is a star, not a mesh (many
+`weak_nodes`). Link & Connect removes orphans (≥1 inbound); this removes *lonely
+spokes* (earns a contextual, cross-folder inbound).
 
-**File brains only** — `engram weave` walks a filesystem and cannot see the
-store. For store documents, work from `brain_integrity`'s weak-node list, use
-`brain_search` to find candidates, and weave with get → `brain_patch`.
-
-`engram weave --json` gives two advisory lists — **missing_links**
-(a document already names another note but does not link it; the cheapest
-spoke-dissolver, spokes ranked first) and **concept_candidates** (a term
-recurring across folders with no note of its own). Judge which are *real*, weave
-them where the mention already sits, then re-run `engram lint --json` to
-confirm the metrics moved. Full procedure:
+Work from `brain_integrity`'s `weak_nodes` list: for each spoke, `brain_search`
+its title and core idea to find documents that already **mention** it without
+linking it (the cheapest spoke-dissolver), and look across results for a
+**concept** that recurs in several areas with no note of its own. Judge which
+are *real*, weave them with `brain_patch` where the mention already sits, then
+re-run `brain_integrity` to confirm `counts.weak` fell. Full procedure:
 [references/weave-workflow.md](references/weave-workflow.md).
 
-## Integrity Lint Workflow
+## Integrity Check Workflow
 
 **When**: checking link integrity or hunting orphans and broken links. Also the
-closing check of Create, Move, Classify & Import, Upgrade and Review.
+closing check of Create, Move, Classify & Import and Review.
 
-**For store documents — the normal case:**
-
-```bash
-engram integrity
-```
-
-It reports broken links, orphans, and **weak nodes** separately, because the
+`brain_integrity` (optionally `limit`) reports `broken_links`, `orphans` and
+**`weak_nodes`** separately, with `counts` (including `by_kind`), because the
 store keeps a `kind` on every edge: `wiki` is a contextual link woven into prose,
-`md` is a structural link from a folder MOC. That distinction is what makes
+`md` is a structural link from a MOC. That distinction is what makes
 `references/linking-rules.md` machine-checkable — *the orphan check is the floor,
-not the goal*, and a document reachable only from its own folder MOC is a lonely
-spoke even though it passes. Clear it by weaving a contextual wikilink into
-related prose; another MOC line does not.
-
-`engram lint` applies to **file brains only**:
-
-```bash
-engram lint --json
-```
-
-In store mode it says so and does nothing — the link graph is a table there, and
-`engram integrity` is the check that reads it.
+not the goal*, and a document reachable only from a MOC is a lonely spoke even
+though it passes. Clear it by weaving a contextual wikilink into related prose;
+another MOC line does not.
 
 Handling results:
 
-- **broken_md_links** — a path that does not exist. Fix the path, create the
+- **broken_links** — a link whose target does not exist. Fix the path, create the
   target, or fix the typo. If the target is **permanently gone**, **de-link it**:
   turn `[text](dead/path.md)` into a plain code span `` `text` `` so the
   reference survives without a broken link. Do not turn it into a `[[wikilink]]`,
-  which falsely implies an intended future note.
+  which falsely implies an intended future note. An unresolved wikilink may be an
+  intended future note — fix typos, leave intentions alone, and you may ask
+  whether to create them.
 - **orphans** — connect inbound links (Link & Connect). The fastest fix is
-  structural: orphans cluster by folder, so one per-folder README MOC clears a
-  whole folder at once. Build MOCs before hunting individual links. **Gotcha:** a
-  README full of `` `filename.md` `` in backticks explains why its folder is
-  still all orphans — code spans are not links. Rewrite them as
-  `[filename.md](filename.md)`.
-- **weak_nodes** and **metrics** (`woven_ratio`, `cross_folder_link_ratio`) —
-  advisory, never blocking. Weak nodes are lonely spokes. Do not fix them with
-  more MOC links, which deepens the star; route to the Weave Workflow.
-- **dangling_wikilinks** — warnings only. Fix typos; leave intended future notes
-  alone. You may ask whether to create them.
+  structural: orphans cluster by area, so one hub MOC clears a whole group at
+  once. Build MOCs before hunting individual links. **Gotcha:** a MOC full of
+  `` `filename.md` `` in backticks explains why its group is still all orphans —
+  code spans are not links. Rewrite them as real links.
+- **weak_nodes** — advisory, never blocking. They are lonely spokes. Do not fix
+  them with more MOC links, which deepens the star; route to the Weave Workflow.
 
-The exit code is always 0, so it never blocks work — report and fix together.
+It never blocks work — report and fix together. `truncated: true` means a list
+was cut at `limit`; raise it or work in passes.
 
 ## Capture loop — keep the brain fed
 
 Durable thinking that stays in the chat and never lands in the brain is lost.
 The bundled hooks are triggers and backstops, **not** the engine — judging what
-is worth keeping is the model's job. Three triggers:
+is worth keeping (and what a question really wants) is the model's job.
+
+0. **Recall** (`SessionStart` hook) — a rule injected once when a session
+   opens: a knowledge question searches the brain before it greps the working
+   tree. It performs no search — the time to search is when there is a question.
+
+Three write-side triggers:
 
 1. **Capture-as-you-go (primary)** — record a durable concept, decision or trap
    *when it crystallizes*, via the Create Workflow. Do not wait for the end of
    the session. Stay selective.
-2. **Wrap-up** (`UserPromptSubmit` hook) — a sign-off injects a
-   reflect-and-save instruction; act on it before replying.
+2. **Wrap-up** (`UserPromptSubmit` hook) — a sign-off ("wrap up", "수고했어", …)
+   injects a reflect-and-save instruction; act on it before replying.
 3. **Backstop** (`Stop` hook) — a throttled nudge (default 30 min) for long
    sessions with no sign-off. If nothing is worth keeping, say so in one line —
    no filler.
@@ -478,8 +358,9 @@ session, say so with `brain_feedback` before it ends. That is what makes the
 next session's first page right more often — the write side keeps the brain
 fed, the vote keeps its search honest.
 
-Hooks ship with the plugin and never block. Tune with
-`ENGRAM_CAPTURE_COOLDOWN_MIN` and `ENGRAM_CAPTURE_PHRASES`; disable with
+The hooks run `engram hook`, speak in any repo with a git origin (narrow it with
+`ENGRAM_CAPTURE_OWNERS`) and are silent everywhere else. They never block. Tune
+with `ENGRAM_CAPTURE_COOLDOWN_MIN` and `ENGRAM_CAPTURE_PHRASES`; disable with
 `ENGRAM_CAPTURE_DISABLE=1`. Details:
 [references/capture-loop.md](references/capture-loop.md).
 
@@ -490,32 +371,31 @@ not a hook — the read-back counterpart to the capture loop.
 
 Load [references/session-review.md](references/session-review.md). In short:
 reconcile your **session memory** (notes, links, MOCs touched) with a
-**cross-check** (`engram revisions` on what you wrote, or `git status --short`
-on a file brain), run the Integrity Lint as the closing check, and present the
-report. If nothing landed, say so in one line.
+**cross-check** (`brain_revisions` on each path you wrote), run the Integrity
+Check as the closing check, and present the report. If nothing landed, say so in
+one line.
 
 ## Roadmap — designed, not yet built
 
 A **Publish / Export** workflow: extract a curated, portable subset of the brain
-(opt-in by tag or MOC) into a separate artifact — a directory, a single file, or
-a static site — resolving wikilinks and stripping unpublished notes, with the
-source brain left visible and untouched. The design is fixed even though the code
-is not written: [references/roadmap.md](references/roadmap.md). If the user asks
-to "publish", "export the brain", or "build a doc bundle", follow that design
-rather than improvising one.
+(opt-in by MOC or path list) into a separate artifact — a directory, a single
+file, or a static site — resolving wikilinks and stripping unpublished notes,
+with the store left untouched. The design is fixed even though the code is not
+written: [references/roadmap.md](references/roadmap.md). If the user asks to
+"publish", "export the brain", or "build a doc bundle", follow that design rather
+than improvising one.
 
 ## Rules
 
-1. **Auto-init**: if the category folders do not exist when a PARA operation is
-   requested, create them without asking. Idempotent and safe.
-2. **Never delete**: documents are never deleted. In the store, delete is
-   **soft** — the body survives in revisions and `restore` brings it back, which
-   is why this rule still holds there. Inactive items move to `archives/`. If the
-   user explicitly asks to delete, warn them and suggest archiving; proceed only
-   after they confirm twice.
-3. **Hybrid structure**: an item is either a single file (`topic.md`) or a
-   directory (`topic/*.md`). Choose by expected deliverables.
-4. **Naming**: `kebab-case` for files and directories. Date prefixes
+1. **Store only**: the brain is the store, reached through the `brain_*` MCP
+   tools. There is no local brain and no CLI. Never write brain content as files
+   in a repo "for now".
+2. **Never delete**: documents are never deleted — there is no delete tool.
+   Inactive items move to `archives/`. If the user explicitly asks to delete,
+   explain that archiving is the contract and archive after they confirm.
+3. **Hybrid structure**: an item is either a single document (`topic.md`) or a
+   group (`topic/*.md`). Choose by expected deliverables.
+4. **Naming**: `kebab-case` for documents and groups. Date prefixes
    (`YYYY-MM-DD-`) for time-sensitive documents. No spaces, no uppercase.
 5. **Plain markdown**: no frontmatter, no special syntax. Start with an H1.
    **Never use horizontal rules (`---`)** — a parser may read one as a
@@ -523,27 +403,26 @@ rather than improvising one.
 6. **Archive confirmation**: moving to archives always requires explicit
    confirmation. Present candidates and wait.
 7. **User language**: respond in the user's language, and write documents in
-   their preference. PARA directory names are always English.
+   their preference. PARA area names are always English.
 8. **Paths are the store's three coordinates**: `<owner>/<repo>/<area>/<name>.md`
    — e.g. `acme/shared/resources/foo.md` (crosses repos) or
-   `acme/webapp/resources/foo.md` (repo-specific). Report them in full: owner and
-   repo are not decoration, they say whose knowledge it is and who may read it.
-   Both are **derived from the git remote, never chosen by hand.** File brains
-   keep the relative form (`brain/projects/my-doc.md`).
-9. **Migration safety**: any operation that moves files or renames the base
-   (Classify & Import, Upgrade Phase A) — show the full plan first and execute
-   only after approval. Never auto-migrate. A base rename also touches **non-doc
-   references** (import paths, CI scripts); include those in the plan.
+   `acme/webapp/resources/foo.md` (repo-specific). Report them in full: owner
+   and repo are not decoration, they say whose knowledge it is and who may read
+   it. Both are **derived from the git remote, never chosen by hand.**
+9. **Bulk safety**: any operation that writes or moves many documents (Classify &
+   Import, a batch of archives) — show the full plan first and execute only
+   after approval. Never auto-migrate.
 10. **No orphans**: every newly created document must receive at least one
     inbound link. Unlinked knowledge gets lost.
 11. **Contextual links**: weave links into the prose. Do not dump a "related
     links" list at the bottom, and do not force connections.
-12. **MOC as hub**: each folder's `README.md` is that folder's entry point. When
-    you add or move a document, update the relevant MOC.
-13. **Store first**: any read of brain content goes through the store before
-    Grep/Read. If a fallback to local files happened, **say so in your answer** —
-    the user needs to know the answer may be stale and that store-only documents
-    were not searched. Never present a degraded answer as a normal one.
-14. **Lint scope**: `engram lint` auto-detects the base and is non-blocking.
-    Unresolved wikilinks are warnings, not errors — they may be intended future
-    notes.
+12. **MOC as hub**: a hub MOC (`<owner>/<repo>/README.md`, an area's `README.md`)
+    is its group's entry point. When you add or move a document a MOC curates,
+    update that MOC — and remember a MOC line is structural: it clears an
+    orphan, never a weak node.
+13. **Store first, and no silent substitute**: any read of brain content goes
+    through `brain_search`/`brain_get` before Grep/Read. If the store is down or
+    the tools are missing, **say so in your answer** — never present an answer
+    from the working tree as if the brain had given it.
+14. **Integrity is advisory**: `brain_integrity` never blocks work. Unresolved
+    wikilinks may be intended future notes.
