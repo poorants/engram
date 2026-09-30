@@ -144,7 +144,7 @@ the remote MCP is `engram serve` beside it (`server/deploy/engram-serve.service`
 its settings in an environment file).
 
 ```bash
-cp .env.example .env      # POSTGRES_PASSWORD, ENGRAM_INGEST_TOKEN, ENGRAM_OWNERS
+cp .env.example .env      # POSTGRES_PASSWORD, ENGRAM_TOKEN, ENGRAM_OWNERS
 docker compose up -d
 ```
 

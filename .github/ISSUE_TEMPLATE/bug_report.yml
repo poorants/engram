@@ -16,8 +16,8 @@ body:
     attributes:
       label: Which part
       options:
-        - client (the engram binary / CLI)
-        - MCP server (the brain_* tools in a session)
+        - hooks binary (engram hook on a person's machine)
+        - MCP server (engram serve, the brain_* tools, the login)
         - store (server/, Postgres, the viewer)
         - skill (skills/engram, its hooks)
         - installer (install.sh, install.ps1, server/setup.sh)
@@ -50,7 +50,7 @@ body:
     attributes:
       label: Steps to reproduce
       placeholder: |
-        1. engram put ./resources/x.md --note "..."
+        1. brain_put acme/webapp/resources/x.md (note: "...")
         2. ...
     validations:
       required: true
@@ -60,10 +60,10 @@ body:
     attributes:
       label: Diagnostics
       description: |
-        Output of `engram version` and `engram store doctor`. If a command
-        failed, its **exit code** — 3 (the store refused this path's owner
-        group) and 4 (the store was unreachable) mean quite different things.
-        Redact the token if it appears anywhere.
+        Output of `engram version` and `claude mcp list`. If a tool call
+        failed, its error — a 403 (the store refused this path's owner group)
+        and an unreachable store mean quite different things. Redact any token
+        if one appears anywhere.
       render: shell
     validations:
       required: true
