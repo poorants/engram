@@ -9,6 +9,16 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 ## [Unreleased]
 
 
+## [0.13.2] — 2026-09-30
+
+### Removed — the viewer's vote buttons
+
+The ranking learns from agents: `brain_feedback`, and the implicit vote a
+`brain_get` of a search hit casts. A person clicking Useful/Noise in the
+viewer was a third source nobody used; the buttons and their script are gone.
+`/api/feedback` is unchanged.
+
+
 ## [0.13.1] — 2026-09-30
 
 ### Changed — nothing is shown before signing in
@@ -797,7 +807,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.13.1...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.13.2...HEAD
+[0.13.2]: https://github.com/poorants/engram/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/poorants/engram/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/poorants/engram/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/poorants/engram/compare/v0.11.0...v0.12.0

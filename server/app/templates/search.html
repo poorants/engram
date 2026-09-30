@@ -50,43 +50,12 @@
           <span>body rank {{ h.lex_rank or '—' }}</span>
           {% if h.mem_rank %}<span>remembered #{{ h.mem_rank }}</span>{% endif %}
           {% if h.utility %}<span>utility {{ '%+.2f'|format(h.utility) }}</span>{% endif %}
-          <span class="sp"></span>
-          {% if search_id %}
-          <button class="btn btn-sm vote" data-kind="useful" title="This answered the question">{{ ui.icon('check') }} Useful</button>
-          <button class="btn btn-sm vote" data-kind="noise" title="This was in the way">Noise</button>
-          {% endif %}
         </div>
       </div>
       {% endfor %}
-      <div class="Box-footer" title="A vote teaches the ranking: the document rises for this question and ones like it. It is a bonus, never a filter.">Did one of these answer? A vote teaches the ranking for this question and ones like it.</div>
     </div>
   {% endif %}
   </div>
 </div>
 
-{% if search_id %}
-<script>
-// A vote is one POST to the same /api/feedback an agent uses, bound to this
-// page's search so the ranking learns the QUESTION, not only the document.
-// The cookie carries the credential; nothing here knows the token.
-(function () {
-  var sid = {{ search_id|tojson }};
-  document.querySelectorAll('button.vote').forEach(function (b) {
-    b.addEventListener('click', function () {
-      var hit = b.closest('.hit');
-      var body = {kind: b.dataset.kind, path: hit.dataset.path, search_id: sid, author: 'viewer'};
-      b.disabled = true;
-      fetch('/api/feedback', {method: 'POST', credentials: 'same-origin',
-            headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body)})
-        .then(function (r) { return r.json(); })
-        .then(function (j) {
-          var r = (j.results || [])[0] || {};
-          b.textContent = r.status === 'already' ? 'Already voted today' : 'Voted · utility ' + (r.utility >= 0 ? '+' : '') + r.utility;
-        })
-        .catch(function () { b.disabled = false; b.textContent = 'Vote failed — retry'; });
-    });
-  });
-})();
-</script>
-{% endif %}
 {% endblock %}

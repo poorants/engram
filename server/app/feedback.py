@@ -9,7 +9,7 @@ one number per document, ``utility``, that search.py folds into its ranking.
 
 Three kinds of vote, each weighted:
 
-    useful   +1.0   explicit — brain_feedback, `engram feedback`, the viewer's button
+    useful   +1.0   explicit — brain_feedback (an agent)
     noise    -1.0   explicit — the same surfaces, the other button
     opened   +0.3   implicit — the document was fetched right after a search
                     returned it. The model forgets to vote; it does not forget
