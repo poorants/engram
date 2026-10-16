@@ -161,17 +161,21 @@ is the login page. Add the header at the proxy (nginx:
 
 ## The capture hooks do not fire
 
-The hook is `engram hook`, so the first question is whether the binary on `PATH`
-is current:
+The hooks run `engram hook` through the plugin's `bin/engram-launch`, which
+keeps the binary in the plugin's data directory
+(`~/.claude/plugins/data/engram-engram/bin/`) at the release pinned in
+`engram.version`. So the first question is whether that binary is there and
+current:
 
 ```bash
-engram version          # the latest release; re-run the installer if not
-engram hook </dev/null  # must print nothing and exit 0
+cat ~/.claude/plugins/data/engram-engram/bin/installed-version   # = the pin
+~/.claude/plugins/data/engram-engram/bin/engram hook </dev/null   # prints nothing, exits 0
 ```
 
-An older binary may speak from the old local settings, and one older than
-v0.4.0 prints `unknown command "hook"` on every prompt — re-run `install.sh` /
-`install.ps1`. If the version is fine: the hooks speak only in a repo with a
+No binary there means the session-start download failed — it says why on
+stderr (`claude --debug`); git and curl must be on `PATH`. Until it succeeds the
+launcher runs an `engram` on `PATH` if there is one, and an old one of those may
+speak from the old local settings. If the version is fine: the hooks speak only in a repo with a
 git `origin` (and, when `ENGRAM_CAPTURE_OWNERS` is set, only for those owners),
 and `ENGRAM_CAPTURE_DISABLE=1` silences them.
 

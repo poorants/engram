@@ -333,8 +333,8 @@ func TestServeServesTheSetupPrompt(t *testing.T) {
 		f.ts.URL + "/mcp",
 		"claude mcp add --transport http --scope user --callback-port 33418 engram " + f.ts.URL + "/mcp",
 		"claude plugin install engram@engram --scope user",
-		"install.sh | sh",
-		"install.ps1 | iex",
+		"bin/engram-launch",
+		"engram.version",
 		"restart Claude Code",
 	} {
 		if !strings.Contains(text, want) {
