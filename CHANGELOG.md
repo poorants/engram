@@ -8,6 +8,32 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Added — a write names the broken links it just made
+
+`PUT` and `PATCH /api/doc/…` (and so `brain_put` / `brain_patch`) now answer
+with `broken_links` — the links in the written body that resolve to no
+document — and a `warning` saying to fix them. Broken links are born at write
+time; this tells the writer while they still know what they meant, instead of
+leaving it to a later `brain_integrity` sweep that reaches someone who does
+not. A clean write carries neither field.
+
+### Changed — broken links are defects, whoever wrote them
+
+`/api/integrity` adds a `next` line when anything is broken: fix every link
+listed, retarget or unlink. The `brain_integrity` tool description and the
+capture-loop reflection (`engram hook`) say the same — the reflection used to
+say only "check brain_integrity", and a session read the list and moved on
+because the link was in "someone else's" document.
+
+The reflection text ships in the `engram hook` binary: it reaches a machine
+when the installer (or `/mcp__engram__setup`) is re-run there.
+
+### Fixed
+
+`server/tests/test_usage_db.py` still asserted the sessionless bucket as a
+session (`by[""]`, three sessions) — the contract `6d17b39` changed to a separate
+`loose` row. It now checks `loose` and two sessions.
+
 
 ## [0.13.2] — 2026-09-30
 

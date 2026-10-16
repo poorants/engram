@@ -56,9 +56,11 @@ def test_the_report_adds_up_per_session_and_counts_escalations(conn):
     assert a["tokens"] > 700            # 400 + 800 + 2000 chars, at ~4 per token
     assert (b["searches"], b["writes"], b["tier1"], b["escalated"], b["tier1_hit_rate"]) == (1, 1, 1, 0, 1.0)
     assert b["tokens"] >= 1000          # the put's body counts, not its receipt
-    assert by[""]["calls"] == 1 and by[""]["tier1_hit_rate"] is None
+    # The sessionless call is not a session: it sits apart, but its usage counts.
+    assert "" not in by
+    assert r["loose"]["calls"] == 1 and r["loose"]["tier1_hit_rate"] is None
     t = r["totals"]
-    assert (t["sessions"], t["calls"], t["tier1"], t["escalated"]) == (3, 8, 3, 1)
+    assert (t["sessions"], t["calls"], t["tier1"], t["escalated"]) == (2, 8, 3, 1)
     assert t["tier1_hit_rate"] == pytest.approx(2 / 3, abs=0.001)
     # q1 was asked in two sessions: a document waiting to be written.
     assert [x["q"] for x in r["repeated"]] == ["q1"]

@@ -217,9 +217,22 @@ def write_doc(conn: psycopg.Connection, path: str, body: str,
 
         n_chunks = rederive(cur, doc_id, d)
         relinked = _relink_incoming(cur, doc_id, path)
+        # Links in THIS body that resolve to nothing. Broken links are born at
+        # write time, so this is where the writer is told — while they still
+        # know what they meant. A later brain_integrity sweep reaches someone
+        # who does not.
+        cur.execute("SELECT dst_name, kind FROM links WHERE src = %s AND dst IS NULL"
+                    " ORDER BY dst_name", (doc_id,))
+        broken = [{"to": r[0], "kind": r[1]} for r in cur.fetchall()]
     conn.commit()
-    return {"path": path, "status": status, "doc_id": doc_id,
-            "chunks": n_chunks, "relinked": relinked}
+    out = {"path": path, "status": status, "doc_id": doc_id,
+           "chunks": n_chunks, "relinked": relinked}
+    if broken:
+        out["broken_links"] = broken
+        out["warning"] = (f"{len(broken)} link(s) in this document resolve to no document. "
+                          "Fix them now: point each at an existing document, or turn it "
+                          "into plain text.")
+    return out
 
 
 def delete_doc(conn: psycopg.Connection, path: str,

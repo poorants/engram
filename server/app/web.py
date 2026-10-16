@@ -1160,6 +1160,12 @@ def api_integrity(request: Request, limit: int = Query(50, ge=1, le=500)) -> dic
               "truncated": len(broken) >= limit or len(orphans) >= limit,
               "counts": {"broken": n_broken, "orphans": n_orphan,
                          "weak": n_weak, "by_kind": by_kind}}
+    if n_broken:
+        # A broken link is a defect wherever it sits, not "someone else's
+        # document". Without this line a caller reads the list and moves on.
+        result["next"] = ("Fix every broken link listed — whoever wrote it: point it at "
+                          "the existing document it meant (brain_search), or turn it into "
+                          "plain text. Orphans and weak nodes are advice; broken links are not.")
     log_call(request, "integrity", "", result)
     return result
 
