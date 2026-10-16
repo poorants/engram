@@ -8,6 +8,9 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+
+## [0.15.0] — 2026-10-16
+
 ### Changed — the plugin installs the hook binary itself
 
 The capture hooks no longer run an `engram` that a person installed and has to
@@ -863,7 +866,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.14.0...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.15.0...HEAD
+[0.15.0]: https://github.com/poorants/engram/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/poorants/engram/compare/v0.13.2...v0.14.0
 [0.13.2]: https://github.com/poorants/engram/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/poorants/engram/compare/v0.13.0...v0.13.1
