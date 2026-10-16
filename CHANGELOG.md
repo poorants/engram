@@ -8,6 +8,9 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+
+## [0.14.0] — 2026-10-16
+
 ### Added — a write names the broken links it just made
 
 `PUT` and `PATCH /api/doc/…` (and so `brain_put` / `brain_patch`) now answer
@@ -833,7 +836,8 @@ and measured against its own bench.
   no delete.
 - The Claude Code skill, its references and the capture hooks.
 
-[Unreleased]: https://github.com/poorants/engram/compare/v0.13.2...HEAD
+[Unreleased]: https://github.com/poorants/engram/compare/v0.14.0...HEAD
+[0.14.0]: https://github.com/poorants/engram/compare/v0.13.2...v0.14.0
 [0.13.2]: https://github.com/poorants/engram/compare/v0.13.1...v0.13.2
 [0.13.1]: https://github.com/poorants/engram/compare/v0.13.0...v0.13.1
 [0.13.0]: https://github.com/poorants/engram/compare/v0.12.0...v0.13.0
