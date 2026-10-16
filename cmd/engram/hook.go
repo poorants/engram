@@ -196,7 +196,8 @@ func captureInstruction(info *brainInfo, wrapup bool) string {
 	record := "If there is, record it through the engram skill into the right PARA area — " +
 		"**via the store** (the brain_put MCP tool, or brain_patch for part of an existing " +
 		"document; a note is required), never by writing a file. Weave links into the prose " +
-		"where the idea comes up, and check brain_integrity afterwards. " +
+		"where the idea comes up, then run brain_integrity and fix every broken link it " +
+		"reports — yours or not: a broken link is a defect, not someone else's document. " +
 		// The read-side half of the loop. A session that found its answer
 		// in the brain and says so makes the next session's first page
 		// right more often; this is the moment it still remembers which

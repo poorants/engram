@@ -147,7 +147,7 @@ func Register(server *mcp.Server, cfg brain.Config, authorOf AuthorFunc) {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "brain_integrity",
 		Description: "Health of the brain's link graph — broken links, orphans, and weak nodes (documents reachable only from a folder MOC). " +
-			"Use it before tidying the brain to see where to start.",
+			"Use it before tidying the brain to see where to start. Broken links are defects: fix every one it lists, whoever wrote it.",
 		Annotations: readOnly,
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in integrityIn) (*mcp.CallToolResult, any, error) {
 		out, err := c.Integrity(ctx, in.Limit)
@@ -168,7 +168,8 @@ func Register(server *mcp.Server, cfg brain.Config, authorOf AuthorFunc) {
 		Name: "brain_put",
 		Description: "Save a document to the shared brain (create and update are the same call — an upsert). The previous body stays in revisions, so a write is reversible. " +
 			"A path whose owner group the store does not admit is refused with 403 — say so; there is no other place to save it. " +
-			"An unchanged body is reported as 'unchanged' rather than written again.",
+			"An unchanged body is reported as 'unchanged' rather than written again. " +
+			"A result carrying broken_links names links in this body that resolve to no document — fix them before moving on.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in putIn) (*mcp.CallToolResult, any, error) {
 		if in.DryRun {
@@ -217,7 +218,8 @@ func Register(server *mcp.Server, cfg brain.Config, authorOf AuthorFunc) {
 			"Address each edit by section (a heading and what is under it), by anchor (an exact substring that occurs exactly once), or by line range — and pass `expect`, the current text of that range, so a misaimed edit is refused instead of applied. " +
 			"Ambiguity is never resolved by guessing: an address matching two places comes back as a conflict listing both. " +
 			"Every edit lands or none does, and the result is one ordinary revision, so it stays reversible exactly like a put. " +
-			"A 409 means the document disagrees with the request — re-read it and re-aim rather than retrying unchanged.",
+			"A 409 means the document disagrees with the request — re-read it and re-aim rather than retrying unchanged. " +
+			"A result carrying broken_links names links in the patched body that resolve to no document — fix them before moving on.",
 		Annotations: &mcp.ToolAnnotations{DestructiveHint: ptr(true), OpenWorldHint: ptr(true)},
 	}, func(ctx context.Context, _ *mcp.CallToolRequest, in patchIn) (*mcp.CallToolResult, any, error) {
 		req := brain.PatchRequest{
