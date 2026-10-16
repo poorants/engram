@@ -16,6 +16,8 @@
 *.json      text eol=lf
 *.md        text eol=lf
 Makefile    text eol=lf
+bin/*       text eol=lf
+engram.version text eol=lf
 Dockerfile  text eol=lf
 .env.example text eol=lf
 

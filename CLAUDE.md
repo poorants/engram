@@ -70,10 +70,20 @@ claude plugin marketplace update engram
 claude plugin update engram@engram   # applies after a Claude Code restart
 ```
 
-A binary change reaches machines when they re-run the installer (or
-`/mcp__engram__setup`) — there is no self-update; the serve host re-runs it
-with `--dir /opt/engram-serve/bin` and restarts `engram-serve`. `go build` output in the tree
-is not what the plugin's `engram hook` runs.
+**The plugin installs the hook binary (0.15.0).** Every hook runs
+`bin/engram-launch` (POSIX sh, via `git -c alias.…=!sh …` so Windows runs it
+too), which keeps `${CLAUDE_PLUGIN_DATA}/bin/engram` at the release pinned in
+`engram.version` and execs it. A change to what `engram hook` says is therefore
+**a release, then a pin bump — in that order**: tag, wait for the release to
+publish every asset plus `SHA256SUMS`, and only then write the tag into
+`engram.version` and push. A pin with no release leaves every machine on its old
+binary (the launcher keeps it, then falls back to an `engram` on `PATH`). The
+binary never updates itself; the serve host still re-runs `install.sh --dir
+/opt/engram-serve/bin` and restarts `engram-serve`. `go build` output in the
+tree is not what the plugin's hooks run.
+
+`bin/*` and `engram.version` must stay LF (`.gitattributes`): sh reads them,
+also on Windows.
 
 ## Knowledge lives in the brain, not in files
 

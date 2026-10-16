@@ -75,8 +75,8 @@ filler.
 
 These hooks ship with the plugin and need no per-machine setup:
 
-- `.claude-plugin/marketplace.json` registers the command `engram hook` on
-  `SessionStart`, `UserPromptSubmit` and `Stop`. One command for all three:
+- `.claude-plugin/marketplace.json` registers `engram hook` — through the
+  plugin's `bin/engram-launch` — on `SessionStart`, `UserPromptSubmit` and `Stop`. One command for all three:
   Claude Code puts `hook_event_name` in the payload, so the binary branches on it.
 - **It is the binary, not a script.** The hook used to be `python3 …
   brain_reflect.py`, which meant the capture loop was silently dead on every
@@ -92,11 +92,10 @@ These hooks ship with the plugin and need no per-machine setup:
   something each script has to remember — so a Korean wrap-up phrase survives a
   cp949 console.
 
-The plugin therefore needs the `engram` binary on `PATH` —
-`/mcp__engram__setup` installs it (`install.sh` / `install.ps1`; re-running is
-the upgrade). A 0.11-or-earlier binary still answers, but decides from the old
-local store settings and points at CLI verbs that no longer exist; one older
-than v0.4.0 does not know the `hook` verb at all.
+The plugin installs the binary itself: `bin/engram-launch` moves the copy in the
+plugin's data directory to the release pinned in `engram.version` on session
+start, so a plugin update carries new hook text to every machine. An `engram`
+on `PATH` from the old installer is only the fallback when that download fails.
 
 Env knobs:
 

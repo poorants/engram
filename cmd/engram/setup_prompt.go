@@ -9,8 +9,8 @@ import (
 
 // The setup prompt is `/mcp__engram__setup`. Once a person has registered this
 // server and logged in, one slash command finishes the machine: it checks the
-// registration, installs the plugin (the skill and the capture-loop hooks) and
-// the engram binary those hooks run.
+// registration and installs the plugin (the skill and the capture-loop hooks);
+// the plugin installs the engram binary those hooks run by itself.
 //
 // The procedure lives here, on the server, rather than in a README or an
 // installer, so every machine reads the same current version of it — and it is
@@ -31,11 +31,8 @@ const setupPromptTemplate = `Set up this machine for engram, the shared brain se
        claude plugin marketplace update engram
        claude plugin install engram@engram --scope user    (claude plugin update engram@engram if it is already installed)
 
-3. The engram binary the hooks run (` + "`engram hook`" + `). Run ` + "`engram version`" + `. If it is missing, older than the latest release on https://github.com/poorants/engram/releases, or prints a "+noupdate" suffix, install the latest release:
-       Linux / macOS:  curl -fsSL https://raw.githubusercontent.com/poorants/engram/main/install.sh | sh
-       Windows (PowerShell):  irm https://raw.githubusercontent.com/poorants/engram/main/install.ps1 | iex
-   Re-running the installer is the upgrade; the same version is a no-op. The binary only runs the hooks: it holds no store address and no token, and it never reaches the network — the brain is used only through this MCP server. If the installer warns about leftovers from an older client (~/.claude/engram/config.json, store.token), tell me; do not delete them yourself.
-   Then confirm ` + "`engram version`" + ` resolves on PATH in a new shell. If ~/.local/bin (Windows: %LOCALAPPDATA%\engram\bin) is not on PATH, tell me how to add it.
+3. The engram binary the hooks run (` + "`engram hook`" + `). Nothing to install: since engram 0.15.0 the plugin installs it itself — its hooks go through bin/engram-launch, which on session start puts the release pinned in the plugin's engram.version into the plugin's data directory, and a plugin update moves every machine to the next pin. It needs git (which brings sh, curl, tar and unzip on Windows) and curl on PATH; check ` + "`git --version`" + ` and ` + "`curl --version`" + `.
+   An ` + "`engram`" + ` on PATH from the old installer (install.sh / install.ps1) is only a fallback now. Leave it, but tell me if ` + "`engram version`" + ` reports one older than 0.14.0 so I can remove it. If it warns about leftovers from an older client (~/.claude/engram/config.json, store.token), tell me; do not delete them yourself.
 
 4. Report a short table with one row per step and ok / fixed / needs you, and finish by telling me to restart Claude Code so the plugin's skill and hooks load.`
 
@@ -48,7 +45,7 @@ func addSetupPrompt(server *mcp.Server, issuer string) {
 	text := setupPrompt(issuer)
 	server.AddPrompt(&mcp.Prompt{
 		Name:        "setup",
-		Description: "Finish setting up this machine for engram: check the MCP registration, install the plugin (skill + hooks) and the engram binary the hooks run",
+		Description: "Finish setting up this machine for engram: check the MCP registration, install the plugin (skill + hooks), which installs the engram binary its hooks run",
 	}, func(context.Context, *mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
 		return &mcp.GetPromptResult{
 			Description: "engram machine setup",

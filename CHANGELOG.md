@@ -8,6 +8,33 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Changed — the plugin installs the hook binary itself
+
+The capture hooks no longer run an `engram` that a person installed and has to
+remember to upgrade. They run the plugin's `bin/engram-launch`, which keeps the
+binary in the plugin's data directory at the release pinned in
+`engram.version` (now `v0.14.0`) and execs `engram hook`:
+
+- **SessionStart** may download: curl the release archive, verify it against
+  `SHA256SUMS`, unpack, check `engram version` reports the pin, swap by rename.
+  Once it is there the check is one file read — no fork, no network.
+- **UserPromptSubmit** and **Stop** pass `--no-update` and never download.
+- On failure it keeps the binary it has, then falls back to an `engram` on
+  `PATH` (the old installer's), and otherwise exits 0 — a hook never breaks a
+  session.
+- It is POSIX sh reached through `git -c alias.…=!sh …`, so the same hook line
+  runs on Windows, where git brings sh, curl, tar and unzip.
+
+Why: 0.14.0 changed the reflection wording, and it reached no machine until
+someone re-ran an installer there. A plugin update now carries a pin bump, and
+the pin carries the binary.
+
+`/mcp__engram__setup` no longer installs the binary (step 3 checks git and curl
+instead), and the docs say where the binary now lives. **This is a plugin
+change**: machines pick it up with the marketplace's auto-update, or
+`claude plugin marketplace update engram && claude plugin update engram@engram`
+and a restart. `install.sh` / `install.ps1` stay for the serve host.
+
 
 ## [0.14.0] — 2026-10-16
 

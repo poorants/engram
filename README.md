@@ -87,7 +87,7 @@ Restart Claude Code afterwards.
 | **[`server/`](server/)** | the store: FastAPI + Postgres 17, one compose file | once, on a machine everyone can reach |
 | **`engram serve`** | the remote MCP server — the `brain_*` tools over HTTP, with its own OAuth | once, beside the store |
 | **[`skills/engram/`](skills/engram/)** + hooks | the Claude Code plugin — the judgement, the workflows, and the capture loop | `/mcp__engram__setup`, per machine |
-| **`engram`** on a person's machine | one static binary that runs the plugin's hooks and nothing else | `/mcp__engram__setup` ([`install.sh`](install.sh) / [`install.ps1`](install.ps1)) |
+| **`engram`** on a person's machine | one static binary that runs the plugin's hooks and nothing else | the plugin itself — [`bin/engram-launch`](bin/engram-launch) installs the release pinned in [`engram.version`](engram.version) |
 
 There is exactly **one surface** to the brain: the remote MCP server. No CLI,
 no local MCP server, no local copy — a setting on a person's machine is a

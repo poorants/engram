@@ -1,0 +1,158 @@
+#!/bin/sh
+# engram launcher — how the engram plugin's hooks reach the engram binary.
+#
+# The plugin's text auto-updates with every commit to main; the binary is a GitHub release. Left
+# to an installer each person re-runs by hand, the two drift: a hook text change ships in the
+# binary and reaches nobody (0.14.0's reflection wording did exactly that). So the plugin pins the
+# release it needs (../engram.version) and every hook goes through this file, which makes sure
+# the binary in the plugin's data directory is that release and then execs `engram hook`.
+#
+#   fast path   the stamp next to the binary equals the pin → exec. No fork, no network.
+#   slow path   download the pinned release archive with curl, verify it against SHA256SUMS,
+#               unpack, check it reports the pinned version, swap it in by renames, write the
+#               stamp, exec. Only the SessionStart hook may take it.
+#   failure     keep the binary that is there. With none, fall back to an `engram` on PATH (what
+#               install.sh put there before 0.15.0); with none of those either, exit 0 silently —
+#               a hook must never break a session.
+#
+#   engram-launch [--no-update] <args…>   --no-update: never download (UserPromptSubmit, Stop)
+#
+# POSIX sh because that is what runs it everywhere: the hooks call it through
+# `git -c alias.…=!sh …`, and git brings its own sh (with curl, tar, unzip, sha256sum) on Windows.
+# Keep it LF (.gitattributes) — a CRLF copy breaks sh on the first line.
+set -u
+
+repo=poorants/engram
+here=${0%/*}
+[ "$here" = "$0" ] && here=.
+root=${here%/*}
+[ "$root" = "$here" ] && root=$here/..
+
+case ${OS:-} in Windows_NT) ext=.exe ;; *) ext= ;; esac
+data=${CLAUDE_PLUGIN_DATA:-${CLAUDE_CONFIG_DIR:-$HOME/.claude}/plugins/data/engram-engram}
+bindir=$data/bin
+bin=$bindir/engram$ext
+stamp=$bindir/installed-version
+
+no_update=0
+if [ "${1:-}" = --no-update ]; then no_update=1; shift; fi
+
+pin=
+[ -r "$root/engram.version" ] && read -r pin _ < "$root/engram.version"
+case $pin in *[!0-9A-Za-z.+-]) pin=${pin%?} ;; esac # a stray CR
+have=
+[ -r "$stamp" ] && read -r have _ < "$stamp"
+
+# Fast path — every hook call lands here once the pinned release is installed.
+if [ -n "$pin" ] && [ "$have" = "$pin" ] && [ -x "$bin" ]; then exec "$bin" "$@"; fi
+
+fallback() {
+  [ -x "$bin" ] && exec "$bin" "$@"
+  old=$(command -v engram 2>/dev/null) && [ -n "$old" ] && exec "$old" "$@"
+  exit 0
+}
+[ "$no_update" = 1 ] && fallback "$@"
+
+err=
+locked=
+tmp=
+fail() { err=$*; return 1; }
+cleanup() {
+  [ -n "$tmp" ] && rm -rf "$tmp"
+  [ -n "$locked" ] && rmdir "$lock" 2>/dev/null
+  trap - EXIT INT TERM HUP
+}
+
+# Hash stdin, not a named file: GNU sha256sum escapes a path holding a backslash and prefixes the
+# line with `\` — every path on Windows — so the hash never matches.
+sha256() {
+  if command -v sha256sum >/dev/null 2>&1; then sha256sum < "$1" | awk '{print $1}'
+  else shasum -a 256 < "$1" | awk '{print $1}'; fi
+}
+
+asset() {
+  case $(uname -s) in
+    Linux) os=linux ;;
+    Darwin) os=darwin ;;
+    MINGW* | MSYS* | CYGWIN*) os=windows ;;
+    *) fail "unsupported OS $(uname -s)"; return 1 ;;
+  esac
+  case $(uname -m) in
+    x86_64 | amd64) arch=amd64 ;;
+    arm64 | aarch64) arch=arm64 ;;
+    *) fail "unsupported CPU $(uname -m)"; return 1 ;;
+  esac
+  [ "$os" = darwin ] && [ "$arch" = amd64 ] && { fail "Intel Macs are not built"; return 1; }
+  if [ "$os" = windows ]; then name=engram_${pin}_windows_${arch}.zip
+  else name=engram_${pin}_${os}_${arch}.tar.gz; fi
+}
+
+# install_pinned — put release $pin at $bin. Never leaves $bin worse than it found it: everything
+# is staged in $bindir and only renames touch the live name.
+install_pinned() {
+  case $pin in v[0-9]*) ;; *) fail "no valid pin in $root/engram.version"; return 1 ;; esac
+  command -v curl >/dev/null 2>&1 || { fail "curl not found"; return 1; }
+  asset || return 1
+  mkdir -p "$bindir" || { fail "cannot create $bindir"; return 1; }
+
+  # One installer at a time; a second SessionStart waits for it and takes its result.
+  lock=$bindir/.lock
+  if ! mkdir "$lock" 2>/dev/null; then
+    if [ -n "$(find "$lock" -maxdepth 0 -mmin +3 2>/dev/null)" ]; then
+      rmdir "$lock" 2>/dev/null # left by a killed run
+      mkdir "$lock" 2>/dev/null || { fail "another install holds $lock"; return 1; }
+    else
+      i=0
+      while [ -d "$lock" ] && [ "$i" -lt 25 ]; do sleep 1; i=$((i + 1)); done
+      have=
+      [ -r "$stamp" ] && read -r have _ < "$stamp"
+      [ "$have" = "$pin" ] && [ -x "$bin" ] && return 0
+      fail "another install of $pin did not finish"; return 1
+    fi
+  fi
+  locked=1
+  tmp=$bindir/.dl-$$
+  trap cleanup EXIT INT TERM HUP
+  rm -rf "$tmp" && mkdir "$tmp" || { fail "cannot create $tmp"; return 1; }
+  rm -f "$bin".old-* 2>/dev/null # parked by an earlier swap; still-running ones stay
+
+  base=https://github.com/$repo/releases/download/$pin
+  curl -fsSL --retry 2 -o "$tmp/$name" "$base/$name" 2>"$tmp/err" &&
+    curl -fsSL --retry 2 -o "$tmp/SHA256SUMS" "$base/SHA256SUMS" 2>>"$tmp/err" ||
+    { fail "download of $pin failed: $(head -c 300 "$tmp/err" | tr '\n' ' ')"; return 1; }
+  want=$(awk -v a="$name" '$2 == a || $2 == "*"a {print $1}' "$tmp/SHA256SUMS")
+  [ -n "$want" ] || { fail "SHA256SUMS of $pin has no $name — not installing"; return 1; }
+  [ "$want" = "$(sha256 "$tmp/$name")" ] || { fail "checksum mismatch for $name — not installing"; return 1; }
+
+  mkdir "$tmp/x" || { fail "cannot create $tmp/x"; return 1; }
+  case $name in
+    *.zip) unzip -q -o "$tmp/$name" -d "$tmp/x" 2>>"$tmp/err" ;;
+    *) tar -xzf "$tmp/$name" -C "$tmp/x" 2>>"$tmp/err" ;;
+  esac || { fail "could not unpack $name"; return 1; }
+  new=$tmp/x/engram$ext
+  [ -f "$new" ] || { fail "$name has no engram$ext"; return 1; }
+  chmod 755 "$new"
+  says=$("$new" version 2>/dev/null | awk '{print $2}')
+  [ "$says" = "$pin" ] || { fail "downloaded binary reports '$says', not $pin"; return 1; }
+
+  # Push the live binary aside first: Windows refuses to overwrite a running exe but lets it be
+  # renamed. Put it back if the new one cannot take the name.
+  parked=
+  if [ -e "$bin" ]; then
+    parked=$bin.old-$$
+    mv -f "$bin" "$parked" || { fail "cannot move the running $bin aside"; return 1; }
+  fi
+  if ! mv -f "$new" "$bin"; then
+    [ -n "$parked" ] && mv -f "$parked" "$bin"
+    fail "cannot put the new binary at $bin"; return 1
+  fi
+  printf '%s\n' "$pin" > "$stamp.tmp" && mv -f "$stamp.tmp" "$stamp"
+  [ -n "$parked" ] && rm -f "$parked" 2>/dev/null
+  printf '[engram] engram %s installed at %s\n' "$pin" "$bin" >&2
+  return 0
+}
+
+if install_pinned; then cleanup; exec "$bin" "$@"; fi
+cleanup
+printf '[engram] could not install the pinned engram %s: %s\n' "$pin" "$err" >&2
+fallback "$@"

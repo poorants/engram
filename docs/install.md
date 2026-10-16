@@ -43,7 +43,7 @@ ssh -L 33418:localhost:33418 <remote machine>
 
 The server serves this prompt with its own address written in. It checks the
 registration (and tells you how to replace a leftover stdio one), installs the
-plugin, installs or upgrades the `engram` binary, and ends with a table of
+plugin (which installs the `engram` binary its hooks run), and ends with a table of
 what was ok, what it fixed and what needs you. Restart Claude Code afterwards so
 the skill and the hooks load.
 
@@ -53,13 +53,28 @@ how to classify; the **capture hooks** (`SessionStart`, `UserPromptSubmit`,
 `Stop`) keep the brain fed without anyone remembering to. The skill and the
 hooks ship in the plugin; the hooks run `engram hook`.
 
+**The plugin installs that binary itself (0.15.0).** Every hook goes through
+[`bin/engram-launch`](../bin/engram-launch), a POSIX sh launcher reached through
+`git -c alias.…=!sh …` so it runs on Windows too (git brings sh, curl, tar and
+unzip there). On `SessionStart` it makes sure the binary in the plugin's data
+directory is the release pinned in [`engram.version`](../engram.version) —
+download, verify against `SHA256SUMS`, check the version it reports, swap by
+rename — then execs it; once it is there the check is one file read and no
+network. `UserPromptSubmit` and `Stop` never download. A plugin update that
+moves the pin moves every machine with it, so nobody re-runs an installer to
+pick up new hook text. If the download fails the launcher keeps the binary it
+has, then an `engram` on `PATH`, and otherwise stays silent — a hook never
+breaks a session.
+
 **Register at user scope.** The brain is not a property of one checkout, and a
 per-project registration makes the tools vanish the first time someone opens a
 different repo.
 
 ### The binary alone
 
-What step 3 runs, if you want it by hand:
+The installers below are what the serve host uses (`--dir /opt/engram-serve/bin`),
+and what a person's machine used before 0.15.0. There an `engram` on `PATH` is
+now only the launcher's fallback:
 
 ```bash
 # Linux · macOS — into ~/.local/bin
