@@ -138,6 +138,11 @@ func newServeConfig(store string, env func(string) string) (*serveConfig, error)
 	return s, nil
 }
 
+// sessionIdleTimeout closes an MCP session after this long without a request.
+// A day bounds memory to roughly one day of sessions while leaving an editor
+// left open overnight connected.
+const sessionIdleTimeout = 24 * time.Hour
+
 func (s *serveConfig) handler() http.Handler {
 	mux := http.NewServeMux()
 	s.oauth.register(mux)
@@ -148,7 +153,13 @@ func (s *serveConfig) handler() http.Handler {
 	// loopback listener, and a proxy that cannot rewrite Host (tailscale
 	// serve) then gets 403 on every call. The same guard is kept here, aimed
 	// at the one name this server answers to: the issuer's.
-	mcpHandler := mcp.NewStreamableHTTPHandler(s.newServer, &mcp.StreamableHTTPOptions{DisableLocalhostProtection: true})
+	// Every session holds its own *mcp.Server, and a client that goes away
+	// without a DELETE leaves it behind: with no timeout the SDK keeps it
+	// forever, and the process grows by every editor session ever opened.
+	mcpHandler := mcp.NewStreamableHTTPHandler(s.newServer, &mcp.StreamableHTTPOptions{
+		DisableLocalhostProtection: true,
+		SessionTimeout:             sessionIdleTimeout,
+	})
 	mux.Handle("/mcp", s.onlyIssuerHost(gate(mcpHandler)))
 	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, _ *http.Request) { fmt.Fprintln(w, "ok") })
 	return mux

@@ -9,6 +9,16 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 ## [Unreleased]
 
 
+## [0.15.1] — 2026-10-26
+
+### Fixed
+
+- `engram serve` closes an MCP session after 24 hours without a request. The
+  SDK keeps a session until the client sends DELETE, which editors rarely do, so
+  every session ever opened stayed in memory: on the vultr host the process grew
+  to ~145 MB in ten days (1,462 sessions), and the previous run peaked at 216 MB
+  plus 175 MB in swap before its restart.
+
 ## [0.15.0] — 2026-10-16
 
 ### Changed — the plugin installs the hook binary itself
@@ -867,6 +877,7 @@ and measured against its own bench.
 - The Claude Code skill, its references and the capture hooks.
 
 [Unreleased]: https://github.com/poorants/engram/compare/v0.15.0...HEAD
+[0.15.1]: https://github.com/poorants/engram/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/poorants/engram/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/poorants/engram/compare/v0.13.2...v0.14.0
 [0.13.2]: https://github.com/poorants/engram/compare/v0.13.1...v0.13.2
