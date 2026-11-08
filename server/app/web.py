@@ -93,7 +93,8 @@ if not TOKEN:
 # the removal is for.
 if os.environ.get("ENGRAM_PUBLIC_READS", "").strip().lower() in ("1", "true", "yes", "on"):
     print("[config] WARNING: ENGRAM_PUBLIC_READS is no longer supported and is IGNORED --"
-          " every read now needs the token (header X-Engram-Token) or a signed-in"
+          " every read now needs the token (X-Engram-Token or Authorization: Bearer)"
+          " or a signed-in"
           " browser. Remove the line from .env.", file=sys.stderr, flush=True)
 
 # The cookie the viewer trades the token for. A browser cannot put a header on
@@ -220,17 +221,28 @@ def is_unauthenticated_path(path: str) -> bool:
     return path in UNAUTHENTICATED_PATHS or path.startswith(UNAUTHENTICATED_PREFIXES)
 
 
+def _bearer(request: Request) -> str:
+    """The credential in `Authorization: Bearer <token>`, or "". The scheme
+    name is case-insensitive (RFC 9110 §11.1)."""
+    scheme, _, cred = request.headers.get("authorization", "").partition(" ")
+    return cred.strip() if scheme.lower() == "bearer" else ""
+
+
+def program_credential(request: Request) -> str:
+    """What a program presented: `X-Engram-Token`, or the standard
+    `Authorization: Bearer` that HTTP clients and API tooling send by
+    themselves. The same one token either way."""
+    return request.headers.get("x-engram-token", "") or _bearer(request)
+
+
 def presented_token(request: Request) -> str:
-    """The credential this request carries, from either place a caller can put
-    it: the header a program sets, or the cookie a browser was given at /login.
+    """The credential this request carries, from any place a caller can put
+    it: a header a program sets, or the cookie a browser was given at /login.
 
     One function, so there is exactly one answer to "is this caller
     authenticated" and no route can accidentally accept something the others
     reject."""
-    header = request.headers.get("x-engram-token", "")
-    if header:
-        return header
-    return request.cookies.get(SESSION_COOKIE, "")
+    return program_credential(request) or request.cookies.get(SESSION_COOKIE, "")
 
 
 def token_ok(supplied: str) -> bool:
@@ -327,7 +339,7 @@ def _authenticated_by_cookie(request: Request) -> bool:
     """True when the credential came in the cookie and not the header. Only a
     browser session is renewed; a program presenting the header has no session
     to extend and would be handed a Set-Cookie it never asked for."""
-    return not request.headers.get("x-engram-token") and token_ok(
+    return not program_credential(request) and token_ok(
         request.cookies.get(SESSION_COOKIE, ""))
 
 
@@ -361,6 +373,18 @@ async def authentication(request: Request, call_next):
     return response
 
 
+# A 401 must carry a challenge (RFC 9110 §15.5.2). Bearer, because that is the
+# scheme the token is also accepted in; error="invalid_token" only when a
+# credential was presented and refused, none when there was none (RFC 6750 §3.1).
+REALM = 'Bearer realm="engram"'
+
+
+def challenge(request: Request | None = None) -> dict:
+    if request is not None and program_credential(request):
+        return {"WWW-Authenticate": REALM + ', error="invalid_token"'}
+    return {"WWW-Authenticate": REALM}
+
+
 def _unauthenticated_response(request: Request):
     """A browser gets a page it can act on; a program gets JSON it can branch
     on. One body for both means one of them is parsing an error written for the
@@ -373,8 +397,9 @@ def _unauthenticated_response(request: Request):
         here = request.url.path + (("?" + request.url.query) if request.url.query else "")
         return RedirectResponse("/login?" + urllib.parse.urlencode({"next": here}), status_code=303)
     return JSONResponse(
-        {"detail": "this store requires a token — send it as X-Engram-Token"},
-        status_code=401)
+        {"detail": "this store requires a token — send it as X-Engram-Token"
+                   " or Authorization: Bearer"},
+        status_code=401, headers=challenge(request))
 
 
 def _local(nxt: str) -> str:
@@ -409,7 +434,7 @@ def auth_callback(request: Request, ticket: str = "", next: str = "/"):
     if not claims or claims.get("jti") in _spent_tickets:
         return templates.TemplateResponse(request, "login.html", {
             "error": "That sign-in expired or was already used — try again.", "next": _local(next)},
-            status_code=401)
+            status_code=401, headers=challenge())
     _spent_tickets[claims.get("jti", "")] = float(claims.get("exp", now))
     resp = RedirectResponse(_local(next), status_code=303)
     set_person_cookie(resp, request, claims)
@@ -434,7 +459,8 @@ async def login(request: Request):
     if not (TOKEN and secrets.compare_digest(supplied, TOKEN)):
         return templates.TemplateResponse(
             request, "login.html",
-            {"error": "That token was not accepted.", "next": nxt}, status_code=401)
+            {"error": "That token was not accepted.", "next": nxt}, status_code=401,
+            headers=challenge())
     resp = RedirectResponse(nxt, status_code=303)
     set_session_cookie(resp, request)
     return resp
@@ -874,7 +900,7 @@ def require_auth(request: Request) -> None:
     a browser's session cookie. One credential, one way of checking it.
     """
     if not authenticated(request):
-        raise HTTPException(401, "invalid or missing token")
+        raise HTTPException(401, "invalid or missing token", headers=challenge(request))
 
 
 @app.post("/api/feedback")

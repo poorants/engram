@@ -18,6 +18,10 @@ OUT="$DIR/engram-$STAMP.sql.gz"
 # 0.16.0 this ran with the default umask and left each dump world-readable.
 umask 077
 mkdir -p "$DIR"
+# umask covers new files only. Dumps written before it are fixed here on every
+# run, which is idempotent and costs nothing.
+chmod 700 "$DIR"
+find "$DIR" -maxdepth 1 -name 'engram-*.sql.gz' -perm /077 -exec chmod 600 {} +
 # pg_dump is run INSIDE the container: no postgres client has to be installed on
 # the host, and the dump tool can never be a different version from the server.
 docker exec "$CONTAINER" pg_dump -U engram -d engram --clean --if-exists \

@@ -8,9 +8,10 @@
 # line in engram-backup.service, so re-copying the shipped unit cannot quietly
 # drop the upload step.
 #
-# The remote is any rclone remote; the reference deployment uses Backblaze B2
-# (`<remote>:<bucket>`). Settings come from the environment, which the drop-in
-# reads from /etc/engram/backup.env (root, 0600) — see README.md, "Backups".
+# The remote is any rclone remote (`<remote>:<bucket>[/prefix]`); the reference
+# deployment uses Backblaze B2. Settings come from the environment, which the
+# drop-in reads from /etc/engram/backup.env (root, 0600) —
+# deploy/backup.env.example lists them, README.md "Backups" explains them.
 #
 # **No client-side encryption, deliberately.** Vaultwarden goes through an
 # rclone crypt wrapper because losing that vault is the critical case; engram
@@ -28,24 +29,43 @@
 # so the script would be holding N generations spanning more than N days while
 # the lifecycle quietly hid the older ones. Two authorities only disagree on the
 # days something else already went wrong.
+#
+# What a lifecycle rule MAY do is the last step: on B2 a pruned generation is
+# only hidden (hard_delete=false), and `daysFromHidingToDeleting` on the bucket
+# can purge hidden versions after a grace period. That decides nothing about
+# WHICH generations survive, so it is not a second authority — and it lets the
+# job run with a key that cannot delete (writeFiles hides; only deleteFiles
+# destroys), so a stolen key cannot destroy the backups either.
 set -euo pipefail
 
 DIR=${ENGRAM_BACKUP_DIR:-/srv/engram/backups}
-REMOTE=${ENGRAM_BACKUP_REMOTE:-b2:poorants-engram-backup}
-KEEP=${ENGRAM_BACKUP_KEEP_REMOTE:-14}          # newest N generations: two weeks of dailies
-# Also keep the FIRST generation of each of the last N calendar months, on top
-# of the dailies. 0 (the default) keeps the dailies only.
+# No default: a built-in bucket is somebody else's bucket.
+REMOTE=${ENGRAM_BACKUP_REMOTE:-}
+# Generations, not days (the same names restic's `forget --keep-daily /
+# --keep-monthly` uses): the newest N, plus the newest of each of the last M
+# calendar months that have one, the current month included. 0 monthly (the
+# default) keeps the dailies only. ENGRAM_BACKUP_KEEP_REMOTE is the pre-0.16
+# name of KEEP_DAILY.
+KEEP=${ENGRAM_BACKUP_KEEP_DAILY:-${ENGRAM_BACKUP_KEEP_REMOTE:-14}}
 KEEP_MONTHLY=${ENGRAM_BACKUP_KEEP_MONTHLY:-0}
+# true: purge the hidden versions right away (`rclone cleanup`, needs a key
+# with deleteFiles). false: leave them to the bucket's daysFromHidingToDeleting
+# rule — the setting for a key without deleteFiles.
+PURGE_HIDDEN=${ENGRAM_BACKUP_PURGE_HIDDEN:-true}
 
-case "$KEEP" in ''|*[!0-9]*|0) echo "ENGRAM_BACKUP_KEEP_REMOTE must be a positive integer, got '$KEEP'" >&2; exit 1 ;; esac
+[ -n "$REMOTE" ] || { echo "ENGRAM_BACKUP_REMOTE is not set (e.g. in /etc/engram/backup.env) — nothing was uploaded" >&2; exit 1; }
+case "$KEEP" in ''|*[!0-9]*|0) echo "ENGRAM_BACKUP_KEEP_DAILY must be a positive integer, got '$KEEP'" >&2; exit 1 ;; esac
 case "$KEEP_MONTHLY" in ''|*[!0-9]*) echo "ENGRAM_BACKUP_KEEP_MONTHLY must be a non-negative integer, got '$KEEP_MONTHLY'" >&2; exit 1 ;; esac
 
-# --max-age keeps the scan to what this run just produced; --immutable refuses
-# to overwrite a name that already exists, so a clock skew or a re-run can never
-# silently replace yesterday's snapshot with today's.
+case "$PURGE_HIDDEN" in true|false) ;; *) echo "ENGRAM_BACKUP_PURGE_HIDDEN must be true or false, got '$PURGE_HIDDEN'" >&2; exit 1 ;; esac
+
+# --immutable refuses to overwrite a name that already exists, so a clock skew
+# or a re-run can never silently replace yesterday's snapshot with today's.
+# --max-age 7d: a day whose upload failed is caught up by the next run, while a
+# dump older than the daily window is never re-uploaded only to be pruned.
 rclone copy "$DIR" "$REMOTE" \
   --include "engram-*.sql.gz" \
-  --max-age 6h \
+  --max-age 7d \
   --immutable \
   --stats-one-line \
   --log-level NOTICE
@@ -54,14 +74,15 @@ rclone copy "$DIR" "$REMOTE" \
 # chronological order, and characters 8-13 are the month.
 ALL=$(rclone lsf "$REMOTE" --files-only --include "engram-*.sql.gz" | sort)
 
-# What survives: the newest KEEP, plus (when KEEP_MONTHLY > 0) the oldest of
+# What survives: the newest KEEP, plus (when KEEP_MONTHLY > 0) the newest of
 # each of the newest KEEP_MONTHLY months. Everything else is retired.
 KEEPSET=$(
   {
     printf '%s\n' "$ALL" | tail -n "$KEEP"
     if [ "$KEEP_MONTHLY" -gt 0 ]; then
-      printf '%s\n' "$ALL" | awk 'NF { m = substr($0, 8, 6); if (!(m in seen)) { seen[m] = 1; print } }' \
-        | tail -n "$KEEP_MONTHLY"
+      # Newest first, so the first file seen of a month is its newest.
+      printf '%s\n' "$ALL" | sort -r \
+        | awk -v k="$KEEP_MONTHLY" 'NF { m = substr($0, 8, 6); if (!(m in seen) && n < k) { seen[m] = 1; n++; print } }'
     fi
   } | sed '/^$/d' | sort -u
 )
@@ -75,11 +96,13 @@ if [ -n "$OLD" ]; then
     echo "retiring: $f"
     rclone deletefile "$REMOTE/$f"
   done <<< "$OLD"
-  # hard_delete is false, so deletefile only HIDES. Without this the hidden
-  # versions accumulate forever now that the bucket has no lifecycle rule to
-  # sweep them.
-  rclone cleanup "$REMOTE"
+  # hard_delete is false, so deletefile only HIDES. Either this purges the
+  # hidden versions now, or the bucket's daysFromHidingToDeleting rule does
+  # later; with neither they accumulate forever.
+  if [ "$PURGE_HIDDEN" = true ]; then
+    rclone cleanup "$REMOTE"
+  fi
 fi
 
 echo "on the remote: $(rclone lsf "$REMOTE" --files-only --include "engram-*.sql.gz" | wc -l) generation(s)," \
-     "keeping ${KEEP} newest + first of the last ${KEEP_MONTHLY} month(s)"
+     "keeping ${KEEP} newest + newest of the last ${KEEP_MONTHLY} month(s)"

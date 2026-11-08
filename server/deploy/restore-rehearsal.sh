@@ -11,10 +11,14 @@
 #   2. restore it into a THROWAWAY postgres container (no network, memory
 #      capped, removed on exit whatever happens) with ON_ERROR_STOP, so a dump
 #      that half-restores fails rather than passing;
-#   3. compare the restore with the live database:
-#      - revisions are append-only, so every revision up to the newest one in
-#        the dump must be in live, identical (count and a sha256 over
-#        id, path and body sha256, in id order);
+#   3. check the restore against itself: every body's sha256, recomputed
+#      from the restored text, must match the hash stored beside it;
+#   4. compare the restore with the live database:
+#      - revisions are append-only, so every restored revision must be in live,
+#        identical (id, path and the RECOMPUTED body hash); a live revision
+#        inside the dump's id range that the restore lacks is reported (ids are
+#        not assigned in commit order, so one committed just after the dump
+#        can sit below its highest id);
 #      - documents, keyed by id: none of the restored ids may be missing from
 #        live, and every live document with no write since the dump must have
 #        the same body sha256 in the restore;
@@ -24,7 +28,7 @@
 # host's monitoring reports. It never writes to the live database.
 set -euo pipefail
 
-REMOTE=${ENGRAM_BACKUP_REMOTE:-b2:poorants-engram-backup}
+REMOTE=${ENGRAM_BACKUP_REMOTE:-}
 DIR=${ENGRAM_BACKUP_DIR:-/srv/engram/backups}
 LIVE=${ENGRAM_DB_CONTAINER:-engram-db-1}
 IMAGE=${ENGRAM_REHEARSAL_IMAGE:-postgres:17}
@@ -53,6 +57,7 @@ if [ $# -ge 1 ]; then
   cp "$SRC" "$WORK/$GEN"
   echo "generation: $GEN (local file)"
 else
+  [ -n "$REMOTE" ] || fail "ENGRAM_BACKUP_REMOTE is not set (e.g. in /etc/engram/backup.env); pass a dump file to rehearse a local one"
   GEN=$(rclone lsf "$REMOTE" --files-only --include "engram-*.sql.gz" | sort | tail -n 1)
   [ -n "$GEN" ] || fail "no engram-*.sql.gz generation on $REMOTE"
   rclone copyto "$REMOTE/$GEN" "$WORK/$GEN"
@@ -103,25 +108,35 @@ gzip -dc "$DUMP" | docker exec -i "$NAME" psql -X -q -U engram -d engram -v ON_E
   || fail "the dump did not restore cleanly"
 echo "restored in $(( $(date +%s) - T0 ))s${ROLES:+ (roles created: $(printf '%s' "$ROLES" | tr '\n' ' '))}"
 
-# -- 3. compare with live ----------------------------------------------------
+# -- 3. the restore against itself --------------------------------------------
 MAXREV=$(q "SELECT coalesce(max(id), 0) FROM revisions")
 MAXDOC=$(q "SELECT coalesce(max(id), 0) FROM docs")
 [ "$MAXDOC" -gt 0 ] || fail "the restore holds no documents"
 
-REV_DIGEST="SELECT count(*) || ' ' || encode(sha256(convert_to(coalesce(
-  string_agg(id || ':' || path || ':' || sha256, E'\n' ORDER BY id), ''), 'UTF8')), 'hex')
-  FROM revisions WHERE id <= $MAXREV"
-R_REV=$(q "$REV_DIGEST")
-L_REV=$(ql "$REV_DIGEST")
-[ "$R_REV" = "$L_REV" ] || fail "revisions up to #$MAXREV differ — restored: $R_REV, live: $L_REV"
-echo "revisions: ${R_REV%% *} up to #$MAXREV, identical to live (sha256 ${R_REV#* })"
+BODYHASH="encode(sha256(convert_to(body, 'UTF8')), 'hex')"
+BAD=$(q "SELECT (SELECT count(*) FROM docs WHERE $BODYHASH <> sha256)
+              + (SELECT count(*) FROM revisions WHERE $BODYHASH <> sha256)")
+[ "$BAD" -eq 0 ] || fail "$BAD restored body/bodies do not match their stored sha256"
+
+# -- 4. compare with live ----------------------------------------------------
+REVROWS="SELECT id || ' ' || path || ' ' || $BODYHASH FROM revisions WHERE id <= $MAXREV"
+q  "$REVROWS" | sort > "$WORK/rev-restored"
+ql "$REVROWS" | sort > "$WORK/rev-live"
+R_ONLY=$(comm -23 "$WORK/rev-restored" "$WORK/rev-live" | wc -l)
+L_ONLY=$(comm -13 "$WORK/rev-restored" "$WORK/rev-live" | wc -l)
+[ "$R_ONLY" -eq 0 ] || fail "$R_ONLY restored revision(s) are missing from live or differ from it"
+REVS=$(wc -l < "$WORK/rev-restored")
+echo "revisions: $REVS up to #$MAXREV, all identical in live (sha256 of the list $(sha256sum "$WORK/rev-restored" | cut -c1-16)…)"
+[ "$L_ONLY" -eq 0 ] || echo "note: $L_ONLY live revision(s) at or below #$MAXREV are not in the dump (committed during it)"
 
 q  "SELECT id || ' ' || sha256 FROM docs ORDER BY id" | sort > "$WORK/restored"
 ql "SELECT id FROM docs WHERE id <= $MAXDOC ORDER BY id" | sort > "$WORK/live-ids"
-# A document written or deleted after the dump has a revision newer than it;
-# a move or an undelete changes neither the id nor the body.
+# A document written or deleted after the dump has a revision the dump lacks
+# (above its highest id, or one of the late commits noted above); a move or an
+# undelete changes neither the id nor the body.
+LATE=$(comm -13 "$WORK/rev-restored" "$WORK/rev-live" | cut -d' ' -f1 | paste -sd, -)
 ql "SELECT id || ' ' || sha256 FROM docs WHERE id <= $MAXDOC AND id NOT IN (
-      SELECT doc_id FROM revisions WHERE id > $MAXREV AND doc_id IS NOT NULL)
+      SELECT doc_id FROM revisions WHERE (id > $MAXREV OR id IN (${LATE:-0})) AND doc_id IS NOT NULL)
     ORDER BY id" | sort > "$WORK/live-stable"
 
 MISSING=$(cut -d' ' -f1 "$WORK/restored" | sort | comm -23 - "$WORK/live-ids" | wc -l)

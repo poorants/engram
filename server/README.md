@@ -55,9 +55,11 @@ through the remote MCP server; like every page it is behind the login. Set
 `ENGRAM_MCP_URL` so it prints the right address.
 
 **Every read needs the credential.** A program sends `ENGRAM_TOKEN` as the
-`X-Engram-Token` header; a browser signs in (Google, or the token at `/login`)
+`X-Engram-Token` header (or `Authorization: Bearer`); a browser signs in (Google, or the token at `/login`)
 and holds a session cookie. Without either, `/api/*` answers `401` with a JSON
-`detail`, and a page redirects to `/login?next=<page>`. Only `/healthz`, the
+`detail` and a `WWW-Authenticate: Bearer realm="engram"` challenge, and a page
+redirects to `/login?next=<page>`. `Authorization: Bearer <token>` is accepted
+as well as `X-Engram-Token` — the same token. Only `/healthz`, the
 login and sign-in legs and `/static/` answer anyone — `/healthz` says whether
 the store is up and how many documents it has, nothing about what they say.
 There is no setting that opens reads: `ENGRAM_PUBLIC_READS` was removed in
@@ -207,7 +209,7 @@ else. Three pieces, all under `deploy/`:
 | | runs | does |
 |---|---|---|
 | `backup.sh` | daily, `engram-backup.service` | `pg_dump` inside the database container to `/srv/engram/backups` (root-only), checks the dump has tables, keeps 14 days |
-| `backup-upload.sh` | right after it, the same unit's second `ExecStart` (drop-in `engram-backup.service.d/upload.conf`) | `rclone copy --immutable` of the new dump to an off-machine remote, then trims the remote to the newest 14 generations (+ the first of each of the last `ENGRAM_BACKUP_KEEP_MONTHLY` months) |
+| `backup-upload.sh` | right after it, the same unit's second `ExecStart` (drop-in `engram-backup.service.d/upload.conf`) | `rclone copy --immutable` of the new dumps to an off-machine remote, then prunes the remote to the newest `ENGRAM_BACKUP_KEEP_DAILY` generations plus the newest of each of the last `ENGRAM_BACKUP_KEEP_MONTHLY` months (restic's `--keep-daily` / `--keep-monthly`) |
 | `restore-rehearsal.sh` | monthly, `engram-restore-rehearsal.timer` | restores the newest **remote** generation into a throwaway postgres container and compares it with live — see the script's header |
 
 **The local dump sits on the same disk.** It covers a document deleted by
@@ -215,19 +217,25 @@ mistake and nothing if the disk dies; the upload is what makes it a backup. The
 upload runs after the dump in the same unit on purpose: a failed upload still
 leaves the local dump, and marks the unit failed.
 
-Settings live in `/etc/engram/backup.env` (root, `0600`), read by both units:
-
-```bash
-ENGRAM_BACKUP_REMOTE=b2:poorants-engram-backup   # any rclone remote:path
-ENGRAM_BACKUP_KEEP_REMOTE=14                     # newest N generations
-ENGRAM_BACKUP_KEEP_MONTHLY=0                     # + first of each of the last N months
-#RCLONE_CONFIG=/root/.config/rclone/rclone.conf  # where the remote's credentials are
-```
+Settings live in `/etc/engram/backup.env` (root, `0600`), read by both units;
+[`deploy/backup.env.example`](deploy/backup.env.example) lists them.
+`ENGRAM_BACKUP_REMOTE` is required — with it unset the upload fails loudly
+rather than quietly uploading nowhere.
 
 The dumps are uploaded **without client-side encryption**, deliberately: a lost
-encryption password is the one failure that makes every backup unreadable.
-Turn on the provider's at-rest encryption (Backblaze B2: bucket default
-encryption, SSE-B2) and give the job a key scoped to its one bucket.
+encryption password is the one failure that makes every backup unreadable. The
+consequence is that **access to the bucket is read access to the whole brain**.
+So, on Backblaze B2:
+
+- give the job an application key restricted to its one bucket, with
+  `listBuckets, listFiles, readFiles, writeFiles` and **no `deleteFiles`**. A
+  pruned generation is then only hidden (`b2_hide_file` needs `writeFiles`),
+  set `ENGRAM_BACKUP_PURGE_HIDDEN=false`, and let a bucket lifecycle rule with
+  only `daysFromHidingToDeleting` (e.g. 30) purge hidden versions. A stolen key
+  can hide backups, not destroy them, and a hidden one is restorable for 30 days;
+- check the bucket's default encryption is SSE-B2 (at rest, keys held by
+  Backblaze — nothing to lose; the default for new buckets);
+- turn on two-factor sign-in for the account.
 
 Install or update the units:
 

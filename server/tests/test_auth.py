@@ -164,6 +164,43 @@ def test_a_wrong_token_is_rejected(monkeypatch):
                  headers={"X-Engram-Token": TOKEN[:-1]}).status_code == 401
 
 
+def test_authorization_bearer_authenticates_like_the_header(monkeypatch):
+    """The standard header HTTP clients and API tooling send by themselves.
+    The same one token, not a second credential."""
+    web = load_app(monkeypatch)
+    c = client(web.app)
+    assert c.get("/api/search?q=x", headers={"Authorization": f"Bearer {TOKEN}"}).status_code != 401
+    assert c.get("/api/search?q=x", headers={"Authorization": f"bearer {TOKEN}"}).status_code != 401
+    assert c.get("/api/search?q=x", headers={"Authorization": "Bearer wrong"}).status_code == 401
+    # Basic is not a way in, even carrying the token.
+    assert c.get("/api/search?q=x", headers={"Authorization": f"Basic {TOKEN}"}).status_code == 401
+
+
+def test_a_program_presenting_bearer_is_not_handed_a_cookie(monkeypatch):
+    web = load_app(monkeypatch)
+    c = client(web.app)
+    c.cookies.set(web.SESSION_COOKIE, TOKEN)
+    r = c.get("/api/docs", headers={"Authorization": f"Bearer {TOKEN}"})
+    assert r.status_code == 200
+    assert "set-cookie" not in r.headers
+
+
+def test_every_401_carries_a_challenge(monkeypatch):
+    """RFC 9110 §15.5.2: a 401 MUST include WWW-Authenticate. invalid_token
+    only when a credential was presented (RFC 6750 §3.1)."""
+    web = load_app(monkeypatch)
+    c = client(web.app)
+    none = c.get("/api/search?q=x")
+    assert none.status_code == 401
+    assert none.headers["www-authenticate"] == 'Bearer realm="engram"'
+    bad = c.get("/api/search?q=x", headers={"X-Engram-Token": "wrong"})
+    assert bad.headers["www-authenticate"] == 'Bearer realm="engram", error="invalid_token"'
+    write = c.put("/api/doc/acme/repo/resources/x.md")
+    assert write.status_code == 401 and "www-authenticate" in write.headers
+    login = c.post("/login", data={"token": "wrong"}, follow_redirects=False)
+    assert login.status_code == 401 and "www-authenticate" in login.headers
+
+
 # -- the deliberate exceptions -----------------------------------------------
 
 def test_healthz_is_reachable_without_a_token(monkeypatch):

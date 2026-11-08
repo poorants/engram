@@ -41,6 +41,13 @@ reachable without it. The opt-out that used to serve reads to anyone,
 it. A store that serves a document to an unauthenticated caller is a
 vulnerability — please report it.
 
+**Off-machine backups are plaintext by design.** `server/deploy/backup-upload.sh`
+uploads the nightly `pg_dump` without client-side encryption, because a lost
+encryption password would make every backup unreadable. Whoever can read the
+backup bucket can read the whole brain; the bucket's key, its scope and the
+account's sign-in are part of the store's attack surface. `server/README.md`,
+"Backups", says how to scope them.
+
 **The byline is a claim, not a proof.** The recorded author is whatever the
 client said. Forging a byline is possible by design; proving identity would mean
 accounts, issuing and revocation, which is a different system. Reports that
