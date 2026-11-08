@@ -59,8 +59,7 @@ type Config struct {
 	BaseURL string
 	// Token is the store's one credential (header X-Engram-Token). Empty is a
 	// legitimate configuration but a limited one: writes refuse locally, and
-	// reads reach only a store that was deliberately configured to serve them
-	// unauthenticated (ENGRAM_PUBLIC_READS).
+	// reads are refused by the store, which requires the token for every read.
 	Token string
 	// Timeout bounds one request. Zero means DefaultTimeout.
 	Timeout time.Duration
@@ -183,8 +182,7 @@ func (e *TransportError) Unwrap() error { return e.Err }
 // requiresToken says the call CANNOT succeed without one, which is what makes
 // "this machine has no token" a better error than relaying the store's 401. It
 // does not decide whether the header is sent: the token goes on every request
-// whenever this machine has one, because the store requires it for reads too
-// unless that deployment set ENGRAM_PUBLIC_READS.
+// whenever this machine has one, because the store requires it for reads too.
 func (c *Client) do(ctx context.Context, method, path string, q url.Values, body any, requiresToken bool, out any) error {
 	if c.baseURL == "" {
 		return ErrNoStore

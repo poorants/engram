@@ -8,6 +8,61 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Changed — every read needs the credential (contract change)
+
+`ENGRAM_PUBLIC_READS` is removed. It was the opt-out that served reads to any
+caller with no token; it has been off by default since 0.12.0, and no
+deployment needs it. Now an unauthenticated read of `/api/*` is a `401` with a
+JSON `detail`, and an unauthenticated page view is a `303` to
+`/login?next=<page>` — whatever the environment says. Programs send
+`ENGRAM_TOKEN` (`engram serve` already does); browsers sign in with Google or
+the token. `/healthz`, the login and sign-in legs and `/static/` stay open.
+
+A store started with `ENGRAM_PUBLIC_READS=true` left in its `.env` does not
+refuse to start: it starts with reads **closed** and prints a warning naming
+the variable on every boot. Remove the line. `setup.sh --public-reads` is now
+an error.
+
+**Who is affected:** only a store that set `ENGRAM_PUBLIC_READS=true` and has a
+reader sending no token. Such a reader now gets `401` and needs the token.
+
+### Added — `Authorization: Bearer`, and a challenge on every 401
+
+The token is also accepted as `Authorization: Bearer <token>`, the header HTTP
+clients and API tooling send by themselves. `X-Engram-Token` is unchanged. Every
+`401` now carries `WWW-Authenticate: Bearer realm="engram"` (RFC 9110 requires
+a challenge), with `error="invalid_token"` when a credential was presented and
+refused. A program presenting either header is never handed a session cookie.
+
+### Added — the off-machine backup and a monthly restore rehearsal ship in the repo
+
+- `deploy/backup-upload.sh` and its drop-in `deploy/engram-backup.service.d/upload.conf`:
+  the off-machine copy (`rclone copy --immutable` to any rclone remote, pruning
+  by the script alone). It ran on the reference host but lived only there.
+  Settings in `/etc/engram/backup.env` (root, 0600; `deploy/backup.env.example`):
+  - `ENGRAM_BACKUP_REMOTE` is **required** — no built-in bucket;
+  - `ENGRAM_BACKUP_KEEP_DAILY` (default 14; the old `ENGRAM_BACKUP_KEEP_REMOTE`
+    still works) and **new** `ENGRAM_BACKUP_KEEP_MONTHLY` (default 0): also keep
+    the newest generation of each of the last N months, like restic's
+    `--keep-monthly`;
+  - **new** `ENGRAM_BACKUP_PURGE_HIDDEN` (default `true`, today's behaviour):
+    `false` leaves hidden versions to the bucket's `daysFromHidingToDeleting`
+    rule, so the job can run with a key that cannot delete;
+  - the upload considers dumps up to 7 days old (was 6 hours), so a day whose
+    upload failed is caught up the next night.
+- `deploy/restore-rehearsal.sh` with `engram-restore-rehearsal.{service,timer}`
+  (monthly): restores the newest **remote** generation into a throwaway,
+  network-less postgres container; recomputes every restored body's sha256
+  against the stored one; requires every restored revision to be identical in
+  live and every document unchanged since the dump to have the same body; and
+  reports the document counts. Any mismatch fails the unit.
+  `restore-rehearsal.sh <file>` rehearses a given dump.
+- `backup.sh` writes its dumps root-only and fixes the mode of older ones on
+  every run. They were world-readable.
+
+Units are installed by hand on the serve host — see `server/README.md`,
+"Backups". Nothing here changes `engram serve`, the hook binary or the plugin.
+
 
 ## [0.15.1] — 2026-10-26
 

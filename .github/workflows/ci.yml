@@ -96,6 +96,14 @@ jobs:
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq shellcheck
           shellcheck -s sh install.sh server/setup.sh
+      # The backup scripts run unattended at night; a syntax error there is a
+      # backup that silently stops. They are bash (process substitution, <<<).
+      - name: backup scripts
+        run: |
+          for f in server/deploy/backup-upload.sh server/deploy/restore-rehearsal.sh; do
+            bash -n "$f" || exit 1
+          done
+          shellcheck -s bash server/deploy/backup-upload.sh server/deploy/restore-rehearsal.sh
       - name: the help text must render without a release
         run: sh install.sh --help && sh server/setup.sh --help
       - name: powershell syntax

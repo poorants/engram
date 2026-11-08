@@ -74,20 +74,28 @@ if not TOKEN:
         " authenticate anyone. Generate one with `openssl rand -hex 24`, or"
         " run server/setup.sh, which does it for you.")
 
-# Whether an unauthenticated caller may read.
+# Every read needs the credential. There is no opt-out.
 #
-# The default is closed. The store's own premise used to be that reads need no
-# token — the owner allow-list is the boundary, and what must not be readable
-# is never let in — and that holds exactly as long as the port is on a trusted
-# network. It stops holding the moment the service is reachable from the
-# internet, and it stops holding silently: nothing about a wide-open store
-# looks wrong until the day it matters. A default that is only correct under a
-# condition the software cannot check is not a safe default.
+# The store's original premise was that reads need no token -- the owner
+# allow-list is the boundary, and what must not be readable is never let in --
+# and that holds exactly as long as the port is on a trusted network. It stops
+# holding the moment the service is reachable from somewhere else, and it stops
+# holding silently: nothing about a wide-open store looks wrong until the day
+# it matters. ENGRAM_PUBLIC_READS was the deliberate way back to that premise,
+# closed by default since 0.12.0 and removed in 0.16.0: no deployment needed
+# it, every reader already holds the token or a browser session, and a switch
+# that turns the whole brain into a public page is one line of .env away from
+# being on by mistake.
 #
-# ENGRAM_PUBLIC_READS=true is the deliberate opt-out for the deployment where
-# everyone who can reach the port is already allowed to read everything.
-PUBLIC_READS = os.environ.get("ENGRAM_PUBLIC_READS", "").strip().lower() in (
-    "1", "true", "yes", "on")
+# A store upgraded with the variable still set starts anyway, with reads
+# CLOSED, and says so on every boot. Refusing to start would be an outage over
+# a setting whose safe reading is obvious; honouring it would be the very thing
+# the removal is for.
+if os.environ.get("ENGRAM_PUBLIC_READS", "").strip().lower() in ("1", "true", "yes", "on"):
+    print("[config] WARNING: ENGRAM_PUBLIC_READS is no longer supported and is IGNORED --"
+          " every read now needs the token (X-Engram-Token or Authorization: Bearer)"
+          " or a signed-in"
+          " browser. Remove the line from .env.", file=sys.stderr, flush=True)
 
 # The cookie the viewer trades the token for. A browser cannot put a header on
 # a plain navigation, so the alternatives are a cookie or the token in every
@@ -188,7 +196,7 @@ app = FastAPI(title="engram store", docs_url="/api/docs", redoc_url=None, lifesp
 
 # -- the authentication gate -------------------------------------------------
 
-# Reachable without authenticating, whatever ENGRAM_PUBLIC_READS says.
+# Reachable without authenticating.
 #
 # /healthz is what the container's own healthcheck and setup.sh's wait loop
 # call: gating it produces a store that reports itself permanently unhealthy
@@ -213,17 +221,28 @@ def is_unauthenticated_path(path: str) -> bool:
     return path in UNAUTHENTICATED_PATHS or path.startswith(UNAUTHENTICATED_PREFIXES)
 
 
+def _bearer(request: Request) -> str:
+    """The credential in `Authorization: Bearer <token>`, or "". The scheme
+    name is case-insensitive (RFC 9110 §11.1)."""
+    scheme, _, cred = request.headers.get("authorization", "").partition(" ")
+    return cred.strip() if scheme.lower() == "bearer" else ""
+
+
+def program_credential(request: Request) -> str:
+    """What a program presented: `X-Engram-Token`, or the standard
+    `Authorization: Bearer` that HTTP clients and API tooling send by
+    themselves. The same one token either way."""
+    return request.headers.get("x-engram-token", "") or _bearer(request)
+
+
 def presented_token(request: Request) -> str:
-    """The credential this request carries, from either place a caller can put
-    it: the header a program sets, or the cookie a browser was given at /login.
+    """The credential this request carries, from any place a caller can put
+    it: a header a program sets, or the cookie a browser was given at /login.
 
     One function, so there is exactly one answer to "is this caller
     authenticated" and no route can accidentally accept something the others
     reject."""
-    header = request.headers.get("x-engram-token", "")
-    if header:
-        return header
-    return request.cookies.get(SESSION_COOKIE, "")
+    return program_credential(request) or request.cookies.get(SESSION_COOKIE, "")
 
 
 def token_ok(supplied: str) -> bool:
@@ -320,7 +339,7 @@ def _authenticated_by_cookie(request: Request) -> bool:
     """True when the credential came in the cookie and not the header. Only a
     browser session is renewed; a program presenting the header has no session
     to extend and would be handed a Set-Cookie it never asked for."""
-    return not request.headers.get("x-engram-token") and token_ok(
+    return not program_credential(request) and token_ok(
         request.cookies.get(SESSION_COOKIE, ""))
 
 
@@ -334,17 +353,15 @@ async def authentication(request: Request, call_next):
     somebody else. Forgetting to add a genuinely public route to the list here
     fails the other way: it stops working, loudly, for whoever added it.
 
-    Writes are gated here too, not only by require_auth on each write route.
-    That is deliberate belt-and-braces: this gate is what makes an unlisted
-    route closed by default, and the per-route check is what keeps writes
-    closed even if this list ever grows an entry it should not have.
+    Every method is gated here, reads and writes alike, and the write routes
+    carry require_auth as well. That is deliberate belt-and-braces: this gate
+    is what makes an unlisted route closed by default, and the per-route check
+    is what keeps writes closed even if this list ever grows an entry it
+    should not have.
     """
     path = request.url.path
     if not is_unauthenticated_path(path):
-        is_write = request.method not in ("GET", "HEAD", "OPTIONS")
-        # Reads may be waved through when the deployment says so; writes never.
-        needs_auth = is_write or not PUBLIC_READS
-        if needs_auth and not authenticated(request):
+        if not authenticated(request):
             return _unauthenticated_response(request)
     response = await call_next(request)
     # Renew the browser session on use (see SESSION_TTL). Not on /logout, whose
@@ -354,6 +371,18 @@ async def authentication(request: Request, call_next):
     if path not in ("/logout", "/auth/callback") and (who := person(request)):
         set_person_cookie(response, request, who)
     return response
+
+
+# A 401 must carry a challenge (RFC 9110 §15.5.2). Bearer, because that is the
+# scheme the token is also accepted in; error="invalid_token" only when a
+# credential was presented and refused, none when there was none (RFC 6750 §3.1).
+REALM = 'Bearer realm="engram"'
+
+
+def challenge(request: Request | None = None) -> dict:
+    if request is not None and program_credential(request):
+        return {"WWW-Authenticate": REALM + ', error="invalid_token"'}
+    return {"WWW-Authenticate": REALM}
 
 
 def _unauthenticated_response(request: Request):
@@ -368,8 +397,9 @@ def _unauthenticated_response(request: Request):
         here = request.url.path + (("?" + request.url.query) if request.url.query else "")
         return RedirectResponse("/login?" + urllib.parse.urlencode({"next": here}), status_code=303)
     return JSONResponse(
-        {"detail": "this store requires a token — send it as X-Engram-Token"},
-        status_code=401)
+        {"detail": "this store requires a token — send it as X-Engram-Token"
+                   " or Authorization: Bearer"},
+        status_code=401, headers=challenge(request))
 
 
 def _local(nxt: str) -> str:
@@ -404,7 +434,7 @@ def auth_callback(request: Request, ticket: str = "", next: str = "/"):
     if not claims or claims.get("jti") in _spent_tickets:
         return templates.TemplateResponse(request, "login.html", {
             "error": "That sign-in expired or was already used — try again.", "next": _local(next)},
-            status_code=401)
+            status_code=401, headers=challenge())
     _spent_tickets[claims.get("jti", "")] = float(claims.get("exp", now))
     resp = RedirectResponse(_local(next), status_code=303)
     set_person_cookie(resp, request, claims)
@@ -429,7 +459,8 @@ async def login(request: Request):
     if not (TOKEN and secrets.compare_digest(supplied, TOKEN)):
         return templates.TemplateResponse(
             request, "login.html",
-            {"error": "That token was not accepted.", "next": nxt}, status_code=401)
+            {"error": "That token was not accepted.", "next": nxt}, status_code=401,
+            headers=challenge())
     resp = RedirectResponse(nxt, status_code=303)
     set_session_cookie(resp, request)
     return resp
@@ -550,10 +581,10 @@ def signed_in_as(request: Request) -> str:
 
 
 def may_read(request: Request) -> bool:
-    """Whether this caller would be let through the gate for a read. Pages the
-    gate leaves open (/setup) use it to decide whether brain data — the
-    sidebar's repository list, the footer's counts — may appear on them."""
-    return PUBLIC_READS or authenticated(request)
+    """Whether this caller would be let through the gate for a read. A page
+    the gate leaves open uses it to decide whether brain data — the sidebar's
+    repository list, the footer's counts — may appear on it."""
+    return authenticated(request)
 
 
 def _display_zone():
@@ -869,7 +900,7 @@ def require_auth(request: Request) -> None:
     a browser's session cookie. One credential, one way of checking it.
     """
     if not authenticated(request):
-        raise HTTPException(401, "invalid or missing token")
+        raise HTTPException(401, "invalid or missing token", headers=challenge(request))
 
 
 @app.post("/api/feedback")

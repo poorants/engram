@@ -20,9 +20,8 @@ python bench/eval_index.py --url http://localhost:8081 --prefix acme/shared
 ```
 
 `eval_index.py` exits non-zero when the pass mark is missed (recall@5 ≥ 90% at
-≤ 3,000 tokens per question), so it can gate a change. Reads are closed by
-default, so pass `--token` unless the store was started with
-`ENGRAM_PUBLIC_READS=true`.
+≤ 3,000 tokens per question), so it can gate a change. Every read needs the
+token, so pass `--token`.
 
 Run both before and after touching the ranking, the chunking, or the lexeme
 rules. `baseline_grep.py naive` recomputes the baseline with mechanically

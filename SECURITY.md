@@ -33,11 +33,20 @@ of a personal access token: not per-user, not scopeable, and revoking it means
 rotating it for everyone. A machine set up without one is read-only because it
 cannot authenticate for a write, not because it holds a lesser credential.
 
-**Reads are closed by default and can be opened deliberately.** A store requires
-the token to read unless `ENGRAM_PUBLIC_READS=true` is set. If it is set, every
-document is readable by anyone who can reach the port — that is what the setting
-means, and a report that a store configured that way serves reads is not a
-vulnerability. A store that serves reads *without* that setting is.
+**Every read needs the token.** A store answers reads only to a caller that
+presents `ENGRAM_TOKEN` (header `X-Engram-Token`) or a browser signed in to the
+viewer. Only `/healthz`, the login and sign-in legs, and the static assets are
+reachable without it. The opt-out that used to serve reads to anyone,
+`ENGRAM_PUBLIC_READS`, was removed in 0.16.0; a store with it still set ignores
+it. A store that serves a document to an unauthenticated caller is a
+vulnerability — please report it.
+
+**Off-machine backups are plaintext by design.** `server/deploy/backup-upload.sh`
+uploads the nightly `pg_dump` without client-side encryption, because a lost
+encryption password would make every backup unreadable. Whoever can read the
+backup bucket can read the whole brain; the bucket's key, its scope and the
+account's sign-in are part of the store's attack surface. `server/README.md`,
+"Backups", says how to scope them.
 
 **The byline is a claim, not a proof.** The recorded author is whatever the
 client said. Forging a byline is possible by design; proving identity would mean

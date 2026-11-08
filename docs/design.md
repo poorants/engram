@@ -52,7 +52,10 @@ readable is never let in. That holds exactly as long as the port is on a trusted
 network — and it stops holding silently, because nothing about a wide-open store
 looks wrong until the day it matters. A default that is only correct under a
 condition the software cannot check is not a safe default.
-`ENGRAM_PUBLIC_READS=true` is the deliberate opt-out.
+The opt-out that existed for it, `ENGRAM_PUBLIC_READS`, was removed in 0.16.0:
+no deployment needed it, and a switch that turns the whole brain into a public
+page is one line of `.env` away from being on by mistake. A store that still has
+it set starts with reads closed and warns at every boot.
 
 The gate is middleware with a named list of unauthenticated paths, not a
 dependency on each route. Forgetting a dependency leaves a route serving

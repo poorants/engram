@@ -1,0 +1,12 @@
+[Unit]
+Description=run the engram restore rehearsal monthly
+
+[Timer]
+# Early on the 1st, after the nightly dump (03:20) has been uploaded and
+# outside the hours anyone is writing.
+OnCalendar=*-*-01 05:15:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

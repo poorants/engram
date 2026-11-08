@@ -27,17 +27,15 @@ everything to everyone, or refuse everything while appearing healthy.
 | `GET /api/scopes` | which owner groups are admitted, and what is present |
 | `GET /api/export` | every live document, verbatim |
 
-All of them need the token unless the deployment sets
-`ENGRAM_PUBLIC_READS=true`, which serves reads to anyone who can reach the port.
-That is sound on a network where everyone who can reach it is already allowed to
-read everything, and it is not sound anywhere else — so it is off by default.
+All of them need the token. There is no setting that serves them without it:
+`ENGRAM_PUBLIC_READS`, which used to, was removed, and a store that still has it
+set ignores it.
 
 ## Writes
 
 `PUT /api/doc/{path}`, `POST /api/doc/{path}/move`, `DELETE /api/doc/{path}`,
 `POST /api/doc/{path}/restore`, `POST /api/rederive` and `POST /api/index`
-always need the token. `ENGRAM_PUBLIC_READS` does not affect them; opening reads
-must not open writes as a side effect.
+always need the token, and carry a second check of their own on top of the gate.
 
 ## Reachable without the token
 
