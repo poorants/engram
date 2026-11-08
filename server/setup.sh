@@ -37,7 +37,6 @@ TZ_VALUE=""
 DATA=""
 FORCE=0
 NO_START=0
-PUBLIC_READS=false
 TLS=0
 DOMAIN=""
 
@@ -51,16 +50,13 @@ usage: ./setup.sh [options]
   --data <dir>     where the database files live (default ./data)
   --tls [name]     serve HTTPS — for a host with a PUBLIC IP, see below
   --force          overwrite an existing .env — THIS ROTATES BOTH SECRETS
-  --public-reads   serve reads to callers with no token — LAN only, see below
   --no-start       write .env and stop; do not run docker compose
   -h, --help       this
 
 With no --owners and no existing .env, you are asked for the owner groups.
 
-Reads require the token by default, and the viewer asks for it once, keeping a
-session cookie. --public-reads serves reads to anyone who can reach the port,
-which is sound only on a network where everyone who can is already allowed to
-read everything in the store.
+Every read requires the token (or a signed-in browser); the viewer asks for it
+once and keeps a session cookie. There is no way to serve reads without it.
 
 --tls puts Caddy in front of the store with a Let's Encrypt certificate and
 publishes the store on 443 only. It needs a name that resolves to this host and
@@ -83,7 +79,10 @@ while [ $# -gt 0 ]; do
       # An optional value: the next word is the name unless it is another option.
       if [ $# -gt 0 ] && [ "${1#--}" = "$1" ]; then DOMAIN="$1"; shift; fi ;;
     --force)  FORCE=1; shift ;;
-    --public-reads) PUBLIC_READS=true; shift ;;
+    --public-reads)
+      printf 'setup: --public-reads was removed in 0.16.0 — every read needs the token.\n' >&2
+      printf '       Readers send it as X-Engram-Token; browsers sign in at /login.\n' >&2
+      exit 1 ;;
     --no-start) NO_START=1; shift ;;
     -h|--help) usage; exit 0 ;;
     *) printf 'setup: unknown option %s\n\n' "$1" >&2; usage >&2; exit 1 ;;
@@ -224,10 +223,6 @@ ASK
 POSTGRES_PASSWORD=$(gen_secret)
 ENGRAM_TOKEN=$TOKEN
 ENGRAM_OWNERS=$OWNERS
-# Reads need the token too. Closed by default -- a store readable by anyone who
-# can reach the port is fine on a LAN and is not fine on a public IP, and which
-# of the two this is is not something the software can check.
-ENGRAM_PUBLIC_READS=$PUBLIC_READS
 ENGRAM_DATA=$DATA
 ENGRAM_PORT=${PORT:-8081}
 ENGRAM_TZ=${TZ_VALUE:-UTC}

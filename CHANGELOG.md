@@ -8,6 +8,45 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+### Changed — every read needs the credential (contract change)
+
+`ENGRAM_PUBLIC_READS` is removed. It was the opt-out that served reads to any
+caller with no token; it has been off by default since 0.12.0, and no
+deployment needs it. Now an unauthenticated read of `/api/*` is a `401` with a
+JSON `detail`, and an unauthenticated page view is a `303` to
+`/login?next=<page>` — whatever the environment says. Programs send
+`ENGRAM_TOKEN` as `X-Engram-Token` (`engram serve` already does); browsers sign
+in with Google or the token. `/healthz`, the login and sign-in legs and
+`/static/` stay open.
+
+A store started with `ENGRAM_PUBLIC_READS=true` left in its `.env` does not
+refuse to start: it starts with reads **closed** and prints a warning naming
+the variable on every boot. Remove the line. `setup.sh --public-reads` is now
+an error.
+
+**Who is affected:** only a store that set `ENGRAM_PUBLIC_READS=true` and has a
+reader sending no token. Such a reader now gets `401` and needs the token.
+
+### Changed — backups: the off-machine copy and a restore rehearsal ship in the repo
+
+- `deploy/backup-upload.sh` and its drop-in `deploy/engram-backup.service.d/upload.conf`
+  — the off-machine copy (`rclone copy --immutable` to any rclone remote,
+  retention of the newest 14 generations by the script alone). It ran on the
+  reference host but lived only there. New: `ENGRAM_BACKUP_KEEP_MONTHLY=<n>`
+  also keeps the first generation of each of the last `n` months (default 0,
+  today's behaviour). Settings in `/etc/engram/backup.env` (root, 0600).
+- `deploy/restore-rehearsal.sh` with `engram-restore-rehearsal.{service,timer}`
+  (monthly): restores the newest **remote** generation into a throwaway,
+  network-less postgres container and compares it with live — revisions up to
+  the dump identical by count and sha256, every document unchanged since the
+  dump identical by body sha256, no document missing. Any mismatch fails the
+  unit. `restore-rehearsal.sh <file>` rehearses a given dump.
+- `backup.sh` writes its dumps with `umask 077`. They were world-readable.
+  Existing files keep their mode until `chmod 600` (or until they age out).
+
+Units are installed by hand on the serve host — see `server/README.md`,
+"Backups". Nothing here changes the client or the plugin.
+
 
 ## [0.15.1] — 2026-10-26
 

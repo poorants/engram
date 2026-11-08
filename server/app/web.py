@@ -74,20 +74,27 @@ if not TOKEN:
         " authenticate anyone. Generate one with `openssl rand -hex 24`, or"
         " run server/setup.sh, which does it for you.")
 
-# Whether an unauthenticated caller may read.
+# Every read needs the credential. There is no opt-out.
 #
-# The default is closed. The store's own premise used to be that reads need no
-# token — the owner allow-list is the boundary, and what must not be readable
-# is never let in — and that holds exactly as long as the port is on a trusted
-# network. It stops holding the moment the service is reachable from the
-# internet, and it stops holding silently: nothing about a wide-open store
-# looks wrong until the day it matters. A default that is only correct under a
-# condition the software cannot check is not a safe default.
+# The store's original premise was that reads need no token -- the owner
+# allow-list is the boundary, and what must not be readable is never let in --
+# and that holds exactly as long as the port is on a trusted network. It stops
+# holding the moment the service is reachable from somewhere else, and it stops
+# holding silently: nothing about a wide-open store looks wrong until the day
+# it matters. ENGRAM_PUBLIC_READS was the deliberate way back to that premise,
+# closed by default since 0.12.0 and removed in 0.16.0: no deployment needed
+# it, every reader already holds the token or a browser session, and a switch
+# that turns the whole brain into a public page is one line of .env away from
+# being on by mistake.
 #
-# ENGRAM_PUBLIC_READS=true is the deliberate opt-out for the deployment where
-# everyone who can reach the port is already allowed to read everything.
-PUBLIC_READS = os.environ.get("ENGRAM_PUBLIC_READS", "").strip().lower() in (
-    "1", "true", "yes", "on")
+# A store upgraded with the variable still set starts anyway, with reads
+# CLOSED, and says so on every boot. Refusing to start would be an outage over
+# a setting whose safe reading is obvious; honouring it would be the very thing
+# the removal is for.
+if os.environ.get("ENGRAM_PUBLIC_READS", "").strip().lower() in ("1", "true", "yes", "on"):
+    print("[config] WARNING: ENGRAM_PUBLIC_READS is no longer supported and is IGNORED --"
+          " every read now needs the token (header X-Engram-Token) or a signed-in"
+          " browser. Remove the line from .env.", file=sys.stderr, flush=True)
 
 # The cookie the viewer trades the token for. A browser cannot put a header on
 # a plain navigation, so the alternatives are a cookie or the token in every
@@ -188,7 +195,7 @@ app = FastAPI(title="engram store", docs_url="/api/docs", redoc_url=None, lifesp
 
 # -- the authentication gate -------------------------------------------------
 
-# Reachable without authenticating, whatever ENGRAM_PUBLIC_READS says.
+# Reachable without authenticating.
 #
 # /healthz is what the container's own healthcheck and setup.sh's wait loop
 # call: gating it produces a store that reports itself permanently unhealthy
@@ -334,17 +341,15 @@ async def authentication(request: Request, call_next):
     somebody else. Forgetting to add a genuinely public route to the list here
     fails the other way: it stops working, loudly, for whoever added it.
 
-    Writes are gated here too, not only by require_auth on each write route.
-    That is deliberate belt-and-braces: this gate is what makes an unlisted
-    route closed by default, and the per-route check is what keeps writes
-    closed even if this list ever grows an entry it should not have.
+    Every method is gated here, reads and writes alike, and the write routes
+    carry require_auth as well. That is deliberate belt-and-braces: this gate
+    is what makes an unlisted route closed by default, and the per-route check
+    is what keeps writes closed even if this list ever grows an entry it
+    should not have.
     """
     path = request.url.path
     if not is_unauthenticated_path(path):
-        is_write = request.method not in ("GET", "HEAD", "OPTIONS")
-        # Reads may be waved through when the deployment says so; writes never.
-        needs_auth = is_write or not PUBLIC_READS
-        if needs_auth and not authenticated(request):
+        if not authenticated(request):
             return _unauthenticated_response(request)
     response = await call_next(request)
     # Renew the browser session on use (see SESSION_TTL). Not on /logout, whose
@@ -550,10 +555,10 @@ def signed_in_as(request: Request) -> str:
 
 
 def may_read(request: Request) -> bool:
-    """Whether this caller would be let through the gate for a read. Pages the
-    gate leaves open (/setup) use it to decide whether brain data — the
-    sidebar's repository list, the footer's counts — may appear on them."""
-    return PUBLIC_READS or authenticated(request)
+    """Whether this caller would be let through the gate for a read. A page
+    the gate leaves open uses it to decide whether brain data — the sidebar's
+    repository list, the footer's counts — may appear on it."""
+    return authenticated(request)
 
 
 def _display_zone():

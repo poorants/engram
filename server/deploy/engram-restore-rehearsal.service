@@ -1,0 +1,19 @@
+[Unit]
+Description=engram restore rehearsal (newest off-machine backup into a throwaway postgres, compared with live)
+After=docker.service network-online.target
+Requires=docker.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+# The same settings file as the upload (ENGRAM_BACKUP_REMOTE, RCLONE_CONFIG),
+# plus the optional ENGRAM_REHEARSAL_* knobs. Root-only (0600).
+EnvironmentFile=-/etc/engram/backup.env
+ExecStart=/opt/engram/server/deploy/restore-rehearsal.sh
+# A restore of a few hundred MB on a small VPS. Generous, but bounded: a hung
+# rehearsal must end as a failure, not as a unit that is "activating" forever.
+TimeoutStartSec=1h
+Nice=10
+IOSchedulingClass=idle
+StandardOutput=journal
+StandardError=journal

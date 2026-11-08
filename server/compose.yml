@@ -84,9 +84,10 @@ services:
       # that keeps the wrong repos out. Empty means nothing can be written — a
       # deployment that forgot to configure it closes rather than opens.
       ENGRAM_OWNERS: ${ENGRAM_OWNERS:-}
-      # Serve reads without a token. Off unless asked for -- the default has
-      # to be the one that is safe on the network the software cannot see.
-      ENGRAM_PUBLIC_READS: ${ENGRAM_PUBLIC_READS:-false}
+      # Removed in 0.16.0: every read needs the token. Passed through only so a
+      # value left in an old .env reaches the app, which ignores it and says so
+      # on every boot instead of the leftover vanishing without a trace.
+      ENGRAM_PUBLIC_READS: ${ENGRAM_PUBLIC_READS:-}
       ENGRAM_TZ: ${ENGRAM_TZ:-UTC}
       TZ: ${ENGRAM_TZ:-UTC}
       # The remote MCP address the viewer's /setup page shows. Display only.

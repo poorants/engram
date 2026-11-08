@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "app"))
 TOKEN = "test-token-0123456789abcdef"
 
 
-def load_app(monkeypatch, *, public_reads=False, token=TOKEN, mcp_url="", viewer_key=""):
+def load_app(monkeypatch, *, public_reads=None, token=TOKEN, mcp_url="", viewer_key=""):
     """Import web.py under a given configuration.
 
     It is re-imported per test rather than configured at runtime because the
@@ -30,7 +30,12 @@ def load_app(monkeypatch, *, public_reads=False, token=TOKEN, mcp_url="", viewer
     never be in.
     """
     monkeypatch.setenv("ENGRAM_TOKEN", token)
-    monkeypatch.setenv("ENGRAM_PUBLIC_READS", "true" if public_reads else "false")
+    # The removed opt-out. None leaves it unset, as a fresh deployment would;
+    # a string sets it, as an .env left over from before 0.16.0 would.
+    if public_reads is None:
+        monkeypatch.delenv("ENGRAM_PUBLIC_READS", raising=False)
+    else:
+        monkeypatch.setenv("ENGRAM_PUBLIC_READS", public_reads)
     monkeypatch.setenv("ENGRAM_DSN", "postgresql://engram:x@127.0.0.1:1/engram")
     if mcp_url:
         monkeypatch.setenv("ENGRAM_MCP_URL", mcp_url)
@@ -93,14 +98,41 @@ def test_writes_are_closed_without_a_token(monkeypatch, method, path):
     assert getattr(client(web.app), method)(path).status_code == 401
 
 
-def test_writes_stay_closed_even_when_reads_are_public(monkeypatch):
-    """ENGRAM_PUBLIC_READS opens reads. It must not open anything else -- the
-    two are separate questions and one flag answering both would be a way to
-    make a store writable by accident."""
-    web = load_app(monkeypatch, public_reads=True)
-    c = client(web.app)
-    assert c.get("/api/search?q=x").status_code != 401
-    assert c.put("/api/doc/acme/repo/resources/x.md").status_code == 401
+# -- the removed opt-out ----------------------------------------------------
+
+@pytest.mark.parametrize("value", ["true", "1", "yes", "on", "TRUE"])
+@pytest.mark.parametrize("path", ["/api/search?q=x", "/api/doc/acme/repo/resources/x.md",
+                                  "/api/export", "/"])
+def test_reads_stay_closed_when_the_removed_public_reads_is_still_set(monkeypatch, value, path):
+    """ENGRAM_PUBLIC_READS used to open reads. An .env from before its removal
+    must not keep the brain readable to anyone who can reach the port."""
+    web = load_app(monkeypatch, public_reads=value)
+    assert client(web.app).get(path).status_code == 401
+
+
+def test_writes_stay_closed_when_the_removed_public_reads_is_still_set(monkeypatch):
+    web = load_app(monkeypatch, public_reads="true")
+    assert client(web.app).put("/api/doc/acme/repo/resources/x.md").status_code == 401
+
+
+def test_a_leftover_public_reads_is_reported_loudly_at_boot(monkeypatch, capsys):
+    """Ignored, but never silently: the operator who set it has to learn that
+    the readers who relied on it now need the token."""
+    load_app(monkeypatch, public_reads="true")
+    err = capsys.readouterr().err
+    assert "ENGRAM_PUBLIC_READS" in err and "IGNORED" in err
+
+
+def test_no_warning_when_public_reads_is_unset_or_false(monkeypatch, capsys):
+    load_app(monkeypatch)
+    load_app(monkeypatch, public_reads="false")
+    assert "ENGRAM_PUBLIC_READS" not in capsys.readouterr().err
+
+
+def test_the_module_has_no_public_reads_switch_left(monkeypatch):
+    """Nothing to flip at runtime either: the gate has no branch for it."""
+    web = load_app(monkeypatch, public_reads="true")
+    assert not hasattr(web, "PUBLIC_READS")
 
 
 # -- what the token opens ----------------------------------------------------
@@ -198,11 +230,6 @@ def test_static_serves_nothing_outside_its_directory(monkeypatch):
         r = c.get(probe)
         assert r.status_code in (401, 404), probe
         assert "TOKEN" not in r.text, probe
-
-
-def test_public_reads_opens_reads(monkeypatch):
-    web = load_app(monkeypatch, public_reads=True)
-    assert client(web.app).get("/api/search?q=x").status_code != 401
 
 
 # -- how a rejection is reported ---------------------------------------------

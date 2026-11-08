@@ -27,7 +27,6 @@ kept, so it doubles as "bring the store back up".
 | `--data <dir>` | where the database files live (default `./data`) |
 | `--tls [name]` | HTTPS via Let's Encrypt, for a host with a public IP — see [Reaching it from outside](#reaching-it-from-outside) |
 | `--no-start` | write `.env` and stop |
-| `--public-reads` | serve reads without a token — LAN only |
 | `--force` | rewrite `.env` — **this rotates both secrets** |
 
 `--force` on a store that has data in it will break every client's token and
@@ -52,9 +51,17 @@ thirty days is never asked again. Rotating the token ends every session.
 The viewer is laid out like GitHub: a dashboard (`/`), repositories as file
 trees with their hub README underneath (`/browse`), a timeline of every write
 (`/changes`), search, and usage. `/setup` is the guide for connecting a machine
-through the remote MCP server; it is the one page open without the token,
-because it is read before anyone can sign in, and it shows no brain data.
-Set `ENGRAM_MCP_URL` so it prints the right address.
+through the remote MCP server; like every page it is behind the login. Set
+`ENGRAM_MCP_URL` so it prints the right address.
+
+**Every read needs the credential.** A program sends `ENGRAM_TOKEN` as the
+`X-Engram-Token` header; a browser signs in (Google, or the token at `/login`)
+and holds a session cookie. Without either, `/api/*` answers `401` with a JSON
+`detail`, and a page redirects to `/login?next=<page>`. Only `/healthz`, the
+login and sign-in legs and `/static/` answer anyone — `/healthz` says whether
+the store is up and how many documents it has, nothing about what they say.
+There is no setting that opens reads: `ENGRAM_PUBLIC_READS` was removed in
+0.16.0, and a store that still has it set ignores it and warns at every boot.
 
 ## Configuration
 
@@ -62,7 +69,6 @@ Set `ENGRAM_MCP_URL` so it prints the right address.
 |---|---|
 | `POSTGRES_PASSWORD` | database password — `openssl rand -hex 24` |
 | `ENGRAM_TOKEN` | the store's one credential — `openssl rand -hex 24`. Required; the store will not start without it. |
-| `ENGRAM_PUBLIC_READS` | serve reads to callers with no token (default `false`) |
 | `ENGRAM_OWNERS` | comma-separated owner groups admitted. **Empty admits nothing.** |
 | `ENGRAM_DATA` | where the database files live (default `./data`) |
 | `ENGRAM_PORT` | published port (default 8081) |
@@ -196,17 +202,61 @@ reports it as `skipped_newer`.
 ## Backups
 
 The canonical copy is `docs.body` and `revisions`, and there is no copy anywhere
-else. `deploy/backup.sh` runs `pg_dump` inside the database container, verifies
-the dump actually contains tables, and prunes old ones.
+else. Three pieces, all under `deploy/`:
 
-**The dump sits on the same disk.** That covers a document deleted by mistake and
-covers nothing if the disk dies — add the off-machine copy as a second
-`ExecStart` in `deploy/engram-backup.service`. Install the timer with:
+| | runs | does |
+|---|---|---|
+| `backup.sh` | daily, `engram-backup.service` | `pg_dump` inside the database container to `/srv/engram/backups` (root-only), checks the dump has tables, keeps 14 days |
+| `backup-upload.sh` | right after it, the same unit's second `ExecStart` (drop-in `engram-backup.service.d/upload.conf`) | `rclone copy --immutable` of the new dump to an off-machine remote, then trims the remote to the newest 14 generations (+ the first of each of the last `ENGRAM_BACKUP_KEEP_MONTHLY` months) |
+| `restore-rehearsal.sh` | monthly, `engram-restore-rehearsal.timer` | restores the newest **remote** generation into a throwaway postgres container and compares it with live — see the script's header |
+
+**The local dump sits on the same disk.** It covers a document deleted by
+mistake and nothing if the disk dies; the upload is what makes it a backup. The
+upload runs after the dump in the same unit on purpose: a failed upload still
+leaves the local dump, and marks the unit failed.
+
+Settings live in `/etc/engram/backup.env` (root, `0600`), read by both units:
 
 ```bash
-sudo cp deploy/engram-backup.{service,timer} /etc/systemd/system/
-sudo systemctl enable --now engram-backup.timer
+ENGRAM_BACKUP_REMOTE=b2:poorants-engram-backup   # any rclone remote:path
+ENGRAM_BACKUP_KEEP_REMOTE=14                     # newest N generations
+ENGRAM_BACKUP_KEEP_MONTHLY=0                     # + first of each of the last N months
+#RCLONE_CONFIG=/root/.config/rclone/rclone.conf  # where the remote's credentials are
 ```
+
+The dumps are uploaded **without client-side encryption**, deliberately: a lost
+encryption password is the one failure that makes every backup unreadable.
+Turn on the provider's at-rest encryption (Backblaze B2: bucket default
+encryption, SSE-B2) and give the job a key scoped to its one bucket.
+
+Install or update the units:
+
+```bash
+sudo install -d -m 0700 /etc/engram
+sudo cp deploy/engram-backup.{service,timer} deploy/engram-restore-rehearsal.{service,timer} /etc/systemd/system/
+sudo install -d /etc/systemd/system/engram-backup.service.d
+sudo cp deploy/engram-backup.service.d/upload.conf /etc/systemd/system/engram-backup.service.d/
+sudo systemctl daemon-reload
+sudo systemctl enable --now engram-backup.timer engram-restore-rehearsal.timer
+sudo systemctl start engram-restore-rehearsal.service   # once, now: prove it before trusting it
+journalctl -u engram-restore-rehearsal.service -n 20
+```
+
+**Restoring** is the rehearsal's first half done for real: take a generation
+(`rclone lsf "$ENGRAM_BACKUP_REMOTE"`, then `rclone copyto`), stop the app, and
+feed it to `psql` inside the database container — the dump is `--clean
+--if-exists`, so it replaces what is there:
+
+```bash
+docker compose stop app
+gzip -dc engram-YYYYmmdd-HHMMSS.sql.gz \
+  | docker exec -i engram-db-1 psql -X -q -U engram -d engram -v ON_ERROR_STOP=1
+docker compose start app
+```
+
+Rehearse a specific file without touching live with
+`deploy/restore-rehearsal.sh <file>`. The secrets in `.env` are not in the dump;
+they are reissued, not restored.
 
 ## Layout
 
@@ -221,7 +271,7 @@ sql/schema.sql   idempotent; applied on every boot
 bin/             seeding
 bench/           the search bench and an example brain
 tests/           rules that need no database
-deploy/          backup script and systemd units
+deploy/          backup, upload and restore-rehearsal scripts; systemd units
 ```
 
 ## Tests
