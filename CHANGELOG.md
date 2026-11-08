@@ -8,6 +8,9 @@ Releases are cut by tagging `vX.Y.Z`, which builds and publishes the binaries.
 
 ## [Unreleased]
 
+
+## [0.16.0] — 2026-11-08
+
 ### Changed — every read needs the credential (contract change)
 
 `ENGRAM_PUBLIC_READS` is removed. It was the opt-out that served reads to any
@@ -932,6 +935,7 @@ and measured against its own bench.
 - The Claude Code skill, its references and the capture hooks.
 
 [Unreleased]: https://github.com/poorants/engram/compare/v0.15.0...HEAD
+[0.16.0]: https://github.com/poorants/engram/compare/v0.15.1...v0.16.0
 [0.15.1]: https://github.com/poorants/engram/compare/v0.15.0...v0.15.1
 [0.15.0]: https://github.com/poorants/engram/compare/v0.14.0...v0.15.0
 [0.14.0]: https://github.com/poorants/engram/compare/v0.13.2...v0.14.0
