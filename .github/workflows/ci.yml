@@ -60,25 +60,32 @@ jobs:
             echo "skills/engram/scripts is back — the skill must stay interpreter-free"
             exit 1
           fi
-      - name: every hook command must be a verb this binary implements
+      - name: every hook goes through the launcher and names a verb this binary implements
+        # Since 0.15.0 a hook is `git -C <root> -c alias.engram-launch=!sh <root>/bin/engram-launch
+        # engram-launch <verb>` (so Windows runs the POSIX launcher too). The launcher execs
+        # `engram <verb>`, so the verb is what must exist.
         run: |
           set -eu
           go build -o "$RUNNER_TEMP/engram" ./cmd/engram
-          jq -r '[.plugins[].hooks // {} | to_entries[] | .value[].hooks[].command] | unique[]' \
-            .claude-plugin/marketplace.json > "$RUNNER_TEMP/hookcmds"
-          test -s "$RUNNER_TEMP/hookcmds"
-          while read -r cmd; do
-            echo "checking: $cmd"
-            case "$cmd" in
-              "engram "*) ;;
-              *) echo "a hook command must be the engram binary, got: $cmd"; exit 1 ;;
-            esac
-            verb=$(printf '%s\n' "$cmd" | cut -d' ' -f2)
+          jq -c '[.plugins[].hooks // {} | to_entries[] | .value[].hooks[]] | unique[]' \
+            .claude-plugin/marketplace.json > "$RUNNER_TEMP/hooks"
+          test -s "$RUNNER_TEMP/hooks"
+          while read -r h; do
+            echo "checking: $h"
+            [ "$(printf '%s' "$h" | jq -r .command)" = git ] || { echo "a hook must run git (the launcher alias), got: $h"; exit 1; }
+            printf '%s' "$h" | jq -e '.args | any(test("^alias\\.engram-launch=!sh .*/bin/engram-launch\""))' > /dev/null \
+              || { echo "the hook does not define the engram-launch alias to bin/engram-launch: $h"; exit 1; }
+            # The verb is the first non-flag argument after `engram-launch` (launcher flags such as
+            # --no-update come first).
+            verb=$(printf '%s' "$h" | jq -r '.args | (index("engram-launch") // error("no engram-launch")) as $i | .[$i+1:] | map(select(startswith("-") | not)) | .[0] // empty') \
+              || { echo "the hook must invoke engram-launch: $h"; exit 1; }
+            [ -n "$verb" ] || { echo "the hook names no verb: $h"; exit 1; }
             if ! "$RUNNER_TEMP/engram" "$verb" < /dev/null > /dev/null 2>&1; then
               echo "the binary does not implement the hook verb: $verb"
               exit 1
             fi
-          done < "$RUNNER_TEMP/hookcmds"
+          done < "$RUNNER_TEMP/hooks"
+          test -f bin/engram-launch
 
   # The installers are the first thing a stranger runs, and nothing else in this
   # repository exercises them. A syntax error here is invisible until it is in
